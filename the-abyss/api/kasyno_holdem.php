@@ -22,6 +22,7 @@
 declare(strict_types=1);
 session_start();
 require_once __DIR__.'/../db.php';
+require_once __DIR__.'/../includes/kasyno_core.php';
 require_once __DIR__.'/../includes/holdem_engine.php';
 require_once __DIR__.'/../includes/holdem_bot.php';
 
@@ -72,21 +73,10 @@ function kh_gracz_id(): int {
 }
 
 /* --------------------------- PIENIĄDZE ---------------------------
-   Jedyna droga do zmiany gotówki i żetonów. Blokuje wiersz gracza,
-   sprawdza wypłacalność i zapisuje wynik w ledgerze.
-   Wołać wyłącznie w transakcji.                                     */
+   Deleguje do kc_kasa() z includes/kasyno_core.php — jedna droga do
+   zmiany kasy dla wszystkich gier kasyna. Wołać wyłącznie w transakcji. */
 function kh_kasa(int $gid, int $dGotowka, int $dZetony, string $powod, ?string $refTyp = null, ?int $refId = null): array {
-  $g = kh_row('SELECT gotowka, zetony FROM gracze WHERE id=? FOR UPDATE', [$gid], 'i');
-  if (!$g) kh_blad('Nie ma takiego gracza.', 404);
-  $gotowka = (int)$g['gotowka'] + $dGotowka;
-  $zetony  = (int)$g['zetony']  + $dZetony;
-  if ($gotowka < 0) kh_blad('Za mało gotówki.', 409);
-  if ($zetony  < 0) kh_blad('Za mało żetonów.', 409);
-  kh_q('UPDATE gracze SET gotowka=?, zetony=? WHERE id=?', [$gotowka, $zetony, $gid], 'iii');
-  kh_q('INSERT INTO kasyno_ledger (gracz_id,delta_gotowka,delta_zetony,gotowka_po,zetony_po,powod,ref_typ,ref_id)
-        VALUES (?,?,?,?,?,?,?,?)',
-    [$gid,$dGotowka,$dZetony,$gotowka,$zetony,$powod,$refTyp,$refId], 'iiiiissi');
-  return ['gotowka'=>$gotowka, 'zetony'=>$zetony];
+  return kc_kasa($gid, $dGotowka, $dZetony, $powod, $refTyp, $refId);
 }
 
 function kh_tx(callable $fn) {
@@ -491,7 +481,7 @@ function kh_zakoncz_rozdanie(array $stol, bool $showdown): void {
         kh_q('INSERT INTO kasyno_udzial (rozdanie_id,gracz_id,wplacil,wzial,uklad) VALUES (?,?,?,?,?)',
           [(int)$stol['rozdanie_id'], $gid, (int)$m['wplata_rozdanie'], $wygral,
            $sily[$nr]['nazwa'] ?? null], 'iiiis');
-        kh_sprawdz_wade($gid);
+        kc_sprawdz_wade($gid);
       }
       if (in_array($m['status'], ['gra','allin'], true)) {
         $wynik[] = ['miejsce'=>$nr,
@@ -512,20 +502,6 @@ function kh_zakoncz_rozdanie(array $stol, bool $showdown): void {
     kh_q('UPDATE kasyno_stoly SET faza="sprzatanie", faza_do=DATE_ADD(NOW(), INTERVAL 6 SECOND),
             aktywne_miejsce=NULL, pula=0, zaklad_biezacy=0, ostatni_podbil=NULL, wersja=wersja+1 WHERE id=?', [$stolId], 'i');
   });
-}
-
-/** Wada hazardzisty: 200 rozdań w ciągu tygodnia. Mija po tygodniu bez gry. */
-function kh_sprawdz_wade(int $gid): void {
-  $g = kh_row('SELECT wady, kasyno_wada_od, kasyno_ostatnia_gra FROM gracze WHERE id=?', [$gid], 'i');
-  if (!$g) return;
-  $ile = (int)(kh_row('SELECT COUNT(*) n FROM kasyno_udzial WHERE gracz_id=? AND czas >= DATE_SUB(NOW(), INTERVAL 7 DAY)', [$gid], 'i')['n'] ?? 0);
-  $ma = $g['kasyno_wada_od'] !== null;
-
-  if (!$ma && $ile >= 200) {
-    $wady = trim((string)$g['wady']);
-    if (stripos($wady, 'Hazardzista') === false) $wady = $wady === '' ? 'Hazardzista' : $wady.', Hazardzista';
-    kh_q('UPDATE gracze SET wady=?, kasyno_wada_od=NOW() WHERE id=?', [$wady, $gid], 'si');
-  }
 }
 
 /* ------------------------------ BOT ------------------------------ */

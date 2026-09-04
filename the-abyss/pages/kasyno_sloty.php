@@ -115,7 +115,7 @@ $trafienia = $polaczenie->query("SELECT g.login, l.kwota FROM kasyno_jackpot_log
     <a href="game.php?page=kasyno">🃏 Hold'em</a>
     <a href="game.php?page=kasyno&gra=videopoker">🎴 Video Poker</a>
     <a href="game.php?page=kasyno&gra=sloty" class="on">🎰 Sloty</a>
-    <a href="#" class="soon">🎲 Ruletka</a>
+    <a href="game.php?page=kasyno&gra=ruletka">🎲 Ruletka</a>
   </div>
 
 <?php if (!$wpuszczony): ?>

@@ -1,0 +1,145 @@
+/* the-abyss/css/kasyno_ruletka.css
+   Skóra stołu ruletki. Zmienne dziedziczone z game.php (--neon-red itd.)
+   z lokalnymi wartościami awaryjnymi, żeby plik działał też samodzielnie
+   w podglądzie poza grą. */
+.rl{--red:var(--neon-red,#ff1744);--red-hot:var(--neon-red-hot,#ff3d5e);--red-deep:var(--neon-red-deep,#b3001b);--gold:var(--neon-gold,#ffd700);--cyan:var(--neon-cyan,#4ad6ff);--green:var(--neon-green,#5aff9a);--txt:var(--txt-main,#e8e1e8);--dim:var(--txt-dim,#8a818e);--mute:var(--txt-mute,#5a525a);--glass:rgba(10,8,14,.55);--edge:rgba(255,23,68,.18);--edge-mid:rgba(255,23,68,.38);width:100%;font-family:'Rajdhani',sans-serif;color:var(--txt)}
+.rl *{box-sizing:border-box}
+.rl-panel{background:var(--glass);backdrop-filter:blur(10px) saturate(140%);-webkit-backdrop-filter:blur(10px) saturate(140%);border:1px solid var(--edge);border-radius:3px;position:relative}
+.rl-panel::before{content:'';position:absolute;top:-1px;left:14px;width:34px;height:1px;background:var(--red);box-shadow:0 0 8px var(--red)}
+.rl-tyt{font-family:'JetBrains Mono',monospace;font-size:.68em;letter-spacing:3px;text-transform:uppercase;color:var(--mute);padding:12px 14px 0}
+/* nagłówek */
+.rl-head{margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--edge);position:relative}
+.rl-head::after{content:'';position:absolute;bottom:-1px;left:0;width:120px;height:1px;background:var(--red);box-shadow:0 0 8px var(--red)}
+.rl-head .eyebrow{font-family:'JetBrains Mono',monospace;font-size:.72em;color:var(--red);letter-spacing:4px;text-transform:uppercase;margin-bottom:6px;text-shadow:0 0 6px rgba(255,23,68,.5)}
+.rl-head h1{font-family:'Oswald',sans-serif;font-weight:500;font-size:2.3em;text-transform:uppercase;letter-spacing:3px;color:#fff;line-height:1;margin:0;text-shadow:0 0 22px rgba(255,23,68,.35)}
+.rl-head .lead{margin-top:8px;color:var(--dim);font-size:1.02em}
+/* nawigacja gier */
+.rl-nav{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
+.rl-nav a{text-decoration:none;font-family:'Oswald',sans-serif;font-size:.88em;text-transform:uppercase;letter-spacing:2px;padding:9px 18px;color:var(--dim);border:1px solid transparent;border-bottom:1px solid var(--edge);transition:.25s}
+.rl-nav a:hover{color:#fff;border-color:var(--edge-mid)}
+.rl-nav a.on{color:#fff;background:linear-gradient(180deg,rgba(255,23,68,.16),transparent);border:1px solid var(--edge-mid);border-radius:2px;text-shadow:0 0 8px rgba(255,23,68,.7)}
+.rl-nav a.soon{opacity:.3;pointer-events:none}
+/* pasek portfela */
+.rl-bar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 16px;margin-bottom:16px;flex-wrap:wrap}
+.rl-bar .grp{display:flex;gap:24px}
+.rl-bar .kw{font-family:'JetBrains Mono',monospace;font-size:.68em;letter-spacing:2px;text-transform:uppercase;color:var(--mute)}
+.rl-bar .kw b{display:block;font-family:'Oswald',sans-serif;font-size:1.9em;letter-spacing:0;margin-top:1px;font-weight:500}
+.rl-bar .kw.cash b{color:var(--neon-ember,#ff7a3d);text-shadow:0 0 8px rgba(255,122,61,.45)}
+.rl-bar .kw.zet b{color:var(--gold);text-shadow:0 0 10px rgba(255,215,0,.4)}
+.rl-bar .rep{font-family:'JetBrains Mono',monospace;font-size:.7em;letter-spacing:2px;text-transform:uppercase;color:var(--red);border:1px solid var(--edge-mid);padding:6px 12px}
+/* górna sekcja: koło + wynik */
+.rl-gora{display:grid;grid-template-columns:360px 1fr;gap:16px;margin-bottom:16px}
+.rl-kolo-box{padding:18px;display:flex;flex-direction:column;align-items:center;gap:12px}
+.rl-tarcza-wrap{position:relative;width:100%;max-width:310px;aspect-ratio:1}
+#rl-tarcza{position:absolute;inset:0;transform-origin:50% 50%;will-change:transform}
+#rl-canvas{width:100%;height:100%;display:block;filter:drop-shadow(0 12px 40px rgba(0,0,0,.85))}
+#rl-kulka{position:absolute;width:12px;height:12px;border-radius:50%;background:radial-gradient(circle at 32% 28%,#fff,#cfd3dd 55%,#7f8592);box-shadow:0 0 10px rgba(255,255,255,.75),0 2px 6px rgba(0,0,0,.7);transform:translate(-50%,-50%);opacity:0;transition:opacity .3s;pointer-events:none;z-index:3}
+.rl-wskaz{position:absolute;top:-3px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:11px solid var(--red);filter:drop-shadow(0 0 6px var(--red));z-index:4}
+/* prawa kolumna */
+.rl-prawo{display:flex;flex-direction:column;gap:16px}
+.rl-wynik{padding:16px;display:flex;align-items:center;gap:18px}
+.rl-wynik-krag{width:88px;height:88px;flex:0 0 88px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Oswald',sans-serif;font-size:2.6em;font-weight:600;color:#fff;background:rgba(0,0,0,.5);border:2px solid rgba(255,255,255,.08);transition:.4s}
+.rl-wynik.red .rl-wynik-krag{background:radial-gradient(circle at 35% 30%,#c4152e,#6d0716);border-color:var(--red-hot);box-shadow:0 0 34px rgba(255,23,68,.5)}
+.rl-wynik.black .rl-wynik-krag{background:radial-gradient(circle at 35% 30%,#23202c,#0a080e);border-color:rgba(255,255,255,.3);box-shadow:0 0 26px rgba(0,0,0,.9)}
+.rl-wynik.zero .rl-wynik-krag{background:radial-gradient(circle at 35% 30%,#128a4d,#054023);border-color:var(--green);box-shadow:0 0 34px rgba(90,255,154,.4)}
+.rl-dealer{flex:1;font-size:1.02em;line-height:1.5;color:var(--dim);min-height:3em;display:flex;align-items:center}
+.rl-dealer b{color:#fff}
+.rl-dealer.praca{color:var(--cyan)}
+.rl-dealer.wygrana{color:var(--green)}
+.rl-dealer.przegrana{color:var(--red-hot)}
+.rl-dealer.uwaga{color:var(--neon-ember,#ff7a3d)}
+.rl-plus{color:var(--green)}
+/* historia */
+.rl-hist{padding:0 14px 14px}
+.rl-hist-row{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.rl-h{font-family:'JetBrains Mono',monospace;font-size:.82em;min-width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;border-radius:2px;position:relative;border:1px solid rgba(255,255,255,.08)}
+.rl-h.red{background:rgba(196,21,46,.5);color:#ffd9df}
+.rl-h.black{background:rgba(20,18,26,.85);color:#dcd6e0}
+.rl-h.zero{background:rgba(18,138,77,.45);color:#d6ffe8}
+.rl-h i{position:absolute;top:-5px;right:-5px;font-style:normal;font-size:.62em;background:var(--red);color:#fff;border-radius:2px;padding:0 3px}
+.rl-puste{color:var(--mute);font-size:.85em}
+/* ── STÓŁ ─────────────────────────────────────────────────────── */
+#rl-stol{padding:16px 18px 18px;background:linear-gradient(180deg,rgba(8,6,10,.7),rgba(4,3,6,.85));border:1px solid var(--edge);border-radius:3px;position:relative;overflow:hidden}
+#rl-stol::after{content:'';position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse 90% 70% at 50% 40%,transparent 45%,rgba(0,0,0,.55) 100%)}
+.rl-filc{background:radial-gradient(ellipse at 50% 30%,#0f1a14 0%,#0a1310 55%,#060a08 100%);border:1px solid rgba(255,215,0,.14);box-shadow:inset 0 0 70px rgba(0,0,0,.9);padding:14px 16px 16px;position:relative;z-index:1}
+.rl-plansza{display:grid;grid-template-columns:44px 1fr 52px;grid-template-rows:auto auto auto auto;gap:4px}
+#rl-ulice{grid-column:2;grid-row:1;position:relative;height:16px}
+#rl-zero{grid-column:1;grid-row:2;display:flex}
+.rl-numery-wrap{grid-column:2;grid-row:2;position:relative}
+#rl-numery{display:grid;grid-template-columns:repeat(12,1fr);grid-template-rows:repeat(3,1fr);gap:3px}
+#rl-splity{position:absolute;inset:0;z-index:2;pointer-events:none}
+#rl-splity>*{pointer-events:auto}
+#rl-kolumny{grid-column:3;grid-row:2;display:grid;grid-template-rows:repeat(3,1fr);gap:3px}
+#rl-tuziny{grid-column:2;grid-row:3;display:grid;grid-template-columns:repeat(3,1fr);gap:3px;margin-top:3px}
+#rl-proste{grid-column:2;grid-row:4;display:grid;grid-template-columns:repeat(6,1fr);gap:3px}
+/* pola liczb */
+.rl-num{position:relative;height:52px;display:flex;align-items:center;justify-content:center;font-family:'Oswald',sans-serif;font-size:1.15em;font-weight:500;color:#fff;cursor:pointer;border:1px solid rgba(255,255,255,.10);border-radius:2px;transition:box-shadow .2s,border-color .2s;user-select:none}
+.rl-czerwone{background:linear-gradient(160deg,#a8122a,#6d0a18)}
+.rl-czarne{background:linear-gradient(160deg,#1c1a24,#0b0a10)}
+.rl-zielone{background:linear-gradient(160deg,#0d7a44,#054a27)}
+.rl-n0{flex:1;height:auto;font-size:1.5em}
+.rl-num:hover,.rl-num.hover{border-color:var(--red-hot);box-shadow:inset 0 0 22px rgba(255,61,94,.35)}
+.rl-num.wygral{border-color:var(--gold);box-shadow:0 0 0 2px var(--gold),0 0 28px rgba(255,215,0,.6);z-index:3}
+/* pola zewnętrzne */
+.rl-zewn{height:38px;display:flex;align-items:center;justify-content:center;font-family:'Oswald',sans-serif;font-size:.78em;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim);cursor:pointer;border:1px solid rgba(255,255,255,.09);border-radius:2px;background:rgba(255,255,255,.02);transition:.2s;position:relative;user-select:none}
+.rl-zewn:hover{color:#fff;border-color:var(--red-hot);background:rgba(255,23,68,.10)}
+.rl-zewn.wygral{border-color:var(--gold);box-shadow:0 0 0 2px var(--gold),0 0 24px rgba(255,215,0,.5)}
+.rl-kol{height:auto;font-family:'JetBrains Mono',monospace;font-size:.78em}
+.rl-romb{width:15px;height:15px;transform:rotate(45deg);display:block}
+.rl-p-red .rl-romb{background:linear-gradient(160deg,#c4152e,#7d0c1c);box-shadow:0 0 12px rgba(255,23,68,.5)}
+.rl-p-black .rl-romb{background:linear-gradient(160deg,#26232f,#0a090e);box-shadow:0 0 10px rgba(0,0,0,.8);border:1px solid rgba(255,255,255,.18)}
+/* punkty na splity, narożniki, ulice */
+.rl-hot{position:absolute;transform:translate(-50%,-50%);cursor:pointer;border-radius:2px;background:transparent;transition:background .15s,box-shadow .15s;z-index:2}
+.rl-hot:hover{background:rgba(255,61,94,.4);box-shadow:0 0 14px rgba(255,61,94,.7)}
+.rl-split-h{width:20px;height:32px}
+.rl-split-v{width:40px;height:18px}
+.rl-naroznik{width:20px;height:18px}
+.rl-ulica{width:38px;height:16px;top:50%}
+.rl-szostka{width:18px;height:16px;top:50%}
+.rl-hot.obstawione{background:rgba(255,215,0,.10)}
+.rl-hot.wygral{background:rgba(255,215,0,.3);box-shadow:0 0 18px var(--gold)}
+/* żetony */
+.rl-chip{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:.62em;font-weight:700;color:#fff;pointer-events:none;z-index:5;box-shadow:0 3px 8px rgba(0,0,0,.8),inset 0 0 0 2px rgba(255,255,255,.22),inset 0 0 0 4px rgba(0,0,0,.25)}
+.rl-chip.n0{background:radial-gradient(circle at 35% 30%,#ff4d68,#a80d22)}
+.rl-chip.n1{background:radial-gradient(circle at 35% 30%,#3a3644,#0c0b10);color:#e8e1e8}
+.rl-chip.n2{background:radial-gradient(circle at 35% 30%,#6fe0ff,#0d6d8e)}
+.rl-chip.n3{background:radial-gradient(circle at 35% 30%,#ffe680,#a37f00);color:#241a00}
+.rl-chip.n4{background:radial-gradient(circle at 35% 30%,#cf9dff,#5b2a9e)}
+.rl-hot .rl-chip{width:24px;height:24px;font-size:.55em}
+/* sterowanie
+   Flex, nie grid: pasek ma się łamać według WŁASNEJ szerokości, nie
+   szerokości okna. W grze siedzi w kolumnie treści między dwoma panelami
+   bocznymi, więc przy oknie 1366 px ma tylko ~758 px — żaden @media na
+   viewport tego nie złapie. */
+.rl-ster{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px 16px;padding:14px 16px;margin-top:16px}
+.rl-nom-box{flex:0 0 auto}
+.rl-nom-box .lbl{font-family:'JetBrains Mono',monospace;font-size:.66em;letter-spacing:2px;text-transform:uppercase;color:var(--mute);margin-bottom:7px}
+/* nowrap: taca żetonów nigdy nie rozjedzie się na dwa rzędy */
+#rl-nominaly{display:flex;gap:8px;flex-wrap:nowrap}
+.rl-chip-btn{width:46px;height:46px;flex:0 0 46px;border-radius:50%;border:none;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:.76em;font-weight:700;color:#fff;transition:transform .18s,box-shadow .18s;box-shadow:0 3px 10px rgba(0,0,0,.8),inset 0 0 0 3px rgba(255,255,255,.2),inset 0 0 0 6px rgba(0,0,0,.22)}
+.rl-chip-btn:hover{transform:translateY(-3px)}
+.rl-chip-btn.on{box-shadow:0 0 0 2px var(--gold),0 0 22px rgba(255,215,0,.6),inset 0 0 0 3px rgba(255,255,255,.25);transform:translateY(-3px)}
+.rl-chip-btn.n0{background:radial-gradient(circle at 35% 28%,#ff4d68,#a80d22)}
+.rl-chip-btn.n1{background:radial-gradient(circle at 35% 28%,#3a3644,#0c0b10)}
+.rl-chip-btn.n2{background:radial-gradient(circle at 35% 28%,#6fe0ff,#0d6d8e)}
+.rl-chip-btn.n3{background:radial-gradient(circle at 35% 28%,#ffe680,#a37f00);color:#241a00}
+.rl-chip-btn.n4{background:radial-gradient(circle at 35% 28%,#cf9dff,#5b2a9e)}
+.rl-suma-box{flex:0 0 auto;text-align:right;font-family:'JetBrains Mono',monospace;font-size:.66em;letter-spacing:2px;text-transform:uppercase;color:var(--mute)}
+.rl-suma-box b{display:block;font-family:'Oswald',sans-serif;font-size:2.1em;letter-spacing:0;color:#fff;margin-top:2px;white-space:nowrap}
+.rl-btns{display:flex;flex:1 1 auto;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:wrap}
+.rl-b{font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:2px;font-size:.82em;padding:11px 16px;border-radius:2px;cursor:pointer;border:1px solid var(--edge-mid);background:rgba(255,23,68,.06);color:var(--txt);transition:.2s}
+.rl-b:hover:not(:disabled){background:var(--red);color:#fff;box-shadow:0 0 18px rgba(255,23,68,.6)}
+.rl-b:disabled{opacity:.3;cursor:default}
+.rl-b.duzy{font-size:1.05em;padding:15px 34px;background:linear-gradient(180deg,var(--red),var(--red-deep));border:none;color:#fff;font-weight:600;box-shadow:0 6px 24px rgba(255,23,68,.45)}
+.rl-b.duzy:hover:not(:disabled){background:linear-gradient(180deg,var(--red-hot),var(--red));box-shadow:0 6px 34px rgba(255,23,68,.75)}
+#rl-podpowiedz{font-family:'JetBrains Mono',monospace;font-size:.72em;letter-spacing:1px;color:var(--cyan);min-height:1.2em;margin-top:8px;text-align:center}
+.rl-limity{font-family:'JetBrains Mono',monospace;font-size:.68em;letter-spacing:1px;color:var(--mute);text-align:center;margin-top:10px;line-height:1.7}
+.rl-limity b{color:var(--dim);font-weight:400}
+.rl-zamkniete{padding:46px 36px;text-align:center}
+.rl-zamkniete h2{font-family:'Oswald',sans-serif;color:var(--red-hot);text-transform:uppercase;letter-spacing:2px;margin:0 0 12px;font-size:1.4em}
+.rl-zamkniete p{color:var(--dim);line-height:1.8;max-width:520px;margin:0 auto}
+.rl-zamkniete b{color:var(--gold)}
+@media(max-width:900px){.rl-gora{grid-template-columns:1fr}.rl-num{height:42px;font-size:.95em}.rl-plansza{grid-template-columns:36px 1fr 44px}}
+/* Bardzo wąska kolumna treści: żetony schodzą o włos, żeby taca zmieściła
+   się w jednym rzędzie nawet przy ~600 px. */
+@media(max-width:620px){.rl-chip-btn{width:40px;height:40px;flex:0 0 40px;font-size:.7em}#rl-nominaly{gap:6px}.rl-btns{justify-content:flex-start}}
