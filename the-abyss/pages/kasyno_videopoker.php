@@ -125,6 +125,7 @@ $trafienia = $polaczenie->query("SELECT login, wyplata, uklad FROM v_kasyno_solo
 
   <div class="vp-nav">
     <a href="game.php?page=kasyno">🃏 Hold'em</a>
+    <a href="game.php?page=kasyno&gra=blackjack">🂡 Blackjack</a>
     <a href="game.php?page=kasyno&gra=videopoker" class="on">🎴 Video Poker</a>
     <a href="game.php?page=kasyno&gra=sloty">🎰 Sloty</a>
     <a href="game.php?page=kasyno&gra=ruletka">🎲 Ruletka</a>

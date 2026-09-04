@@ -201,6 +201,66 @@ $MIASTA_DANE = [
         'kraj' => 'AUSTRALIA', 'flaga' => '🇦🇺', 'strefa' => 'Australia/Melbourne',
         'opis'  => 'Kawiarnie, sztuka uliczna, syndykaty z brytyjskim akcentem.',
     ],
+
+    /* ── 🇸🇪 SZWECJA ──────────────────────────────────────────── */
+    'STOCKHOLM' => [
+        'lat' => 59.3293, 'lng' => 18.0686, 'shard' => 'STO-01',
+        'kraj' => 'SZWECJA', 'flaga' => '🇸🇪', 'strefa' => 'Europe/Stockholm',
+        'opis'  => 'Czternaście wysp, czternaście układów. Porządek jest tu towarem.',
+    ],
+    'GOTHENBURG' => [
+        'lat' => 57.7089, 'lng' => 11.9746, 'shard' => 'GOT-01',
+        'kraj' => 'SZWECJA', 'flaga' => '🇸🇪', 'strefa' => 'Europe/Stockholm',
+        'opis'  => 'Stoczniowy zachód — dźwigi, kontenery i nic, co nie ma ceny.',
+    ],
+
+    /* ── 🇳🇴 NORWEGIA ─────────────────────────────────────────── */
+    'OSLO' => [
+        'lat' => 59.9139, 'lng' => 10.7522, 'shard' => 'OSL-01',
+        'kraj' => 'NORWEGIA', 'flaga' => '🇳🇴', 'strefa' => 'Europe/Oslo',
+        'opis'  => 'Najczystsze miasto Północy. Brud zszedł piętro niżej.',
+    ],
+    'BERGEN' => [
+        'lat' => 60.3913, 'lng' => 5.3221, 'shard' => 'BGO-01',
+        'kraj' => 'NORWEGIA', 'flaga' => '🇳🇴', 'strefa' => 'Europe/Oslo',
+        'opis'  => 'Deszcz dwieście dni w roku i pamięć dłuższa niż akta.',
+    ],
+
+    /* ── 🇩🇰 DANIA ────────────────────────────────────────────── */
+    'COPENHAGEN' => [
+        'lat' => 55.6761, 'lng' => 12.5683, 'shard' => 'CPH-01',
+        'kraj' => 'DANIA', 'flaga' => '🇩🇰', 'strefa' => 'Europe/Copenhagen',
+        'opis'  => 'Rowery, design i najcichsze interesy w tej części mapy.',
+    ],
+    'AARHUS' => [
+        'lat' => 56.1629, 'lng' => 10.2039, 'shard' => 'AAR-01',
+        'kraj' => 'DANIA', 'flaga' => '🇩🇰', 'strefa' => 'Europe/Copenhagen',
+        'opis'  => 'Port, uniwersytet i dwa światy, które nigdy się nie mieszają.',
+    ],
+
+    /* ── 🇨🇿 CZECHY ───────────────────────────────────────────── */
+    'PRAGUE' => [
+        'lat' => 50.0755, 'lng' => 14.4378, 'shard' => 'PRG-01',
+        'kraj' => 'CZECHY', 'flaga' => '🇨🇿', 'strefa' => 'Europe/Prague',
+        'opis'  => 'Sto wież i tyle samo piwnic, o których się nie mówi.',
+    ],
+    'BRNO' => [
+        'lat' => 49.1951, 'lng' => 16.6068, 'shard' => 'BRQ-01',
+        'kraj' => 'CZECHY', 'flaga' => '🇨🇿', 'strefa' => 'Europe/Prague',
+        'opis'  => 'Techniczne serce Moraw — laboratoria z obiema licencjami.',
+    ],
+
+    /* ── 🇧🇪 BELGIA ───────────────────────────────────────────── */
+    'BRUSSELS' => [
+        'lat' => 50.8503, 'lng' => 4.3517, 'shard' => 'BRU-01',
+        'kraj' => 'BELGIA', 'flaga' => '🇧🇪', 'strefa' => 'Europe/Brussels',
+        'opis'  => 'Urzędy, tłumacze i korytarze, w których zapadają decyzje.',
+    ],
+    'ANTWERP' => [
+        'lat' => 51.2194, 'lng' => 4.4025, 'shard' => 'ANR-01',
+        'kraj' => 'BELGIA', 'flaga' => '🇧🇪', 'strefa' => 'Europe/Brussels',
+        'opis'  => 'Diamenty na górze, kontenery na dole. Przez port idzie wszystko.',
+    ],
 ];
 
 /* ═══════════════════════════════════════════════════════════════════

@@ -38,6 +38,7 @@ $reputacja = $netto >= 25000 ? 'Rekin stołów' : ($netto <= -25000 ? 'Frajer ka
 
   <div class="rl-nav">
     <a href="game.php?page=kasyno">Hold'em</a>
+    <a href="game.php?page=kasyno&gra=blackjack">Blackjack</a>
     <a href="game.php?page=kasyno&gra=videopoker">Video Poker</a>
     <a href="game.php?page=kasyno&gra=sloty">Sloty</a>
     <a href="game.php?page=kasyno&gra=ruletka" class="on">Ruletka</a>
