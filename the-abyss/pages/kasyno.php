@@ -146,7 +146,7 @@ $pule    = $polaczenie->query("SELECT nr, pula, board FROM v_kasyno_pule_dnia LI
   <div class="kh-nav">
     <a href="game.php?page=kasyno" class="on">🃏 Hold'em</a>
     <a href="game.php?page=kasyno&gra=videopoker">🎴 Video Poker</a>
-    <a href="#" class="soon">🎰 Sloty</a>
+    <a href="game.php?page=kasyno&gra=sloty">🎰 Sloty</a>
     <a href="#" class="soon">🎲 Ruletka</a>
   </div>
 
