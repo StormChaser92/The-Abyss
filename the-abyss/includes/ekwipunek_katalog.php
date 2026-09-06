@@ -16,31 +16,12 @@
    Wkład w zdolność uniku:  szybkosc · 0,45 + unik      (patrz arena_zdolnosc_uniku)
    Ciężki pancerz ma `unik` UJEMNY — chroni, ale spowalnia. */
 
-/** Broń: atak (bonus_atak), szybkosc (bonus_szybkosc), cios (kategoria vs typ wroga). */
-function eq_katalog_broni(): array {
-    return [
-        // Lombard i podstawy
-        'eq_widelec'         => ['nazwa'=>'Zardzewiały Widelec',      'atak'=>1,   'szybkosc'=>26, 'cios'=>'ostrze', 'ikona'=>'🍴'],
-        'eq_noz'             => ['nazwa'=>'Tępy Nóż Kuchenny',        'atak'=>2,   'szybkosc'=>28, 'cios'=>'ostrze', 'ikona'=>'🔪'],
-        'eq_kij'             => ['nazwa'=>'Kij Baseballowy',          'atak'=>4,   'szybkosc'=>18, 'cios'=>'tepe',   'ikona'=>'🏏'],
-        'eq_lancuch'         => ['nazwa'=>'Łańcuch Rowerowy',         'atak'=>6,   'szybkosc'=>14, 'cios'=>'tepe',   'ikona'=>'⛓️'],
-        'eq_kastet'          => ['nazwa'=>'Stary Kastet',             'atak'=>8,   'szybkosc'=>24, 'cios'=>'piesc',  'ikona'=>'👊'],
-        // Broń biała
-        'noz_kabar'          => ['nazwa'=>'Nóż bojowy KA-BAR',        'atak'=>10,  'szybkosc'=>30, 'cios'=>'ostrze', 'ikona'=>'🔪'],
-        'maczeta_kukri'      => ['nazwa'=>'Maczeta Kukri',            'atak'=>14,  'szybkosc'=>22, 'cios'=>'ostrze', 'ikona'=>'🔪'],
-        // Broń palna
-        'glock_17'           => ['nazwa'=>'Glock 17 (9 mm)',          'atak'=>16,  'szybkosc'=>24, 'cios'=>'palna',  'ikona'=>'🔫'],
-        'pm_uzi'             => ['nazwa'=>'Uzi',                      'atak'=>22,  'szybkosc'=>20, 'cios'=>'palna',  'ikona'=>'💨'],
-        'desert_eagle'       => ['nazwa'=>'Desert Eagle .50',         'atak'=>26,  'szybkosc'=>14, 'cios'=>'palna',  'ikona'=>'🔫'],
-        'pm_p90'             => ['nazwa'=>'FN P90',                   'atak'=>32,  'szybkosc'=>18, 'cios'=>'palna',  'ikona'=>'💨'],
-        'karabin_ak47'       => ['nazwa'=>'AK-47',                    'atak'=>35,  'szybkosc'=>12, 'cios'=>'palna',  'ikona'=>'🎯'],
-        'karabin_m4a1'       => ['nazwa'=>'M4A1',                     'atak'=>36,  'szybkosc'=>13, 'cios'=>'palna',  'ikona'=>'🎯'],
-        'strzelba_mossberg'  => ['nazwa'=>'Mossberg 500',             'atak'=>40,  'szybkosc'=>9,  'cios'=>'palna',  'ikona'=>'💥'],
-        'snajperka_awp'      => ['nazwa'=>'Karabin wyborowy AWP',     'atak'=>60,  'szybkosc'=>5,  'cios'=>'palna',  'ikona'=>'🔭'],
-        'lmg_m249'           => ['nazwa'=>'M249 SAW',                 'atak'=>70,  'szybkosc'=>3,  'cios'=>'palna',  'ikona'=>'🔥'],
-        'wyrzutnia_rpg7'     => ['nazwa'=>'Wyrzutnia RPG-7',          'atak'=>100, 'szybkosc'=>1,  'cios'=>'palna',  'ikona'=>'🚀'],
-    ];
-}
+/** Broń: katalog przeniesiony do includes/bronie_katalog.php (60 pozycji).
+    Ta funkcja zostaje jako alias, żeby stary kod nie musiał się zmieniać naraz. */
+require_once __DIR__.'/bronie_katalog.php';
+require_once __DIR__.'/warsztat_logika.php';   // eq_ma(), eq_stopien(), bron_atak()
+
+function eq_katalog_broni(): array { return bronie_katalog(); }
 
 /** Pancerz: obrona (bonus_obrona), unik (bonus_unik — ciężki na minusie). */
 function eq_katalog_pancerzy(): array {
@@ -78,23 +59,28 @@ function eq_zaloz_bron(mysqli $db, int $gid, string $kod): array {
     $katalog = eq_katalog_broni();
     if (!isset($katalog[$kod])) return [false, 'Nie znam takiej broni.'];
 
-    // Posiadanie: przedmioty żyją jako kolumny w `gracze` (eq_*, glock_17, ...).
-    $kol = preg_replace('/[^a-z0-9_]/', '', $kod);
-    $r = $db->query("SELECT `$kol` AS ile FROM gracze WHERE id=$gid");
-    if (!$r || !$r->num_rows || (int)$r->fetch_assoc()['ile'] <= 0)
-        return [false, 'Nie masz tego przy sobie.'];
+    // Posiadanie czyta z tabeli `ekwipunek_gracza` (migracja_warsztat.sql).
+    if (eq_ma($db, $gid, $kod) < 1) return [false, 'Nie masz tego przy sobie.'];
 
     $b = $katalog[$kod];
     $n = $db->real_escape_string($b['nazwa']);
+
+    // Stopień ulepszenia tej sztuki (+0…+10) dolicza się do ataku bazowego.
+    $st   = eq_stopien($db, $gid, $kod);
+    $atak = bron_atak($b, $st);
+
     $db->query("UPDATE gracze SET
         bron_zalozona  = '$n',
-        bonus_atak     = {$b['atak']},
+        bonus_atak     = $atak,
+        bron_stopien   = $st,
         bonus_szybkosc = {$b['szybkosc']},
         arena_cios     = '{$b['cios']}',
         bron_ulepszona = 0,
         bron_trwalosc  = bron_trwalosc_max
         WHERE id = $gid");
-    return [true, "Bierzesz w dłonie: <b>{$b['nazwa']}</b> (+{$b['atak']} atak, +{$b['szybkosc']} szybkość, "
+
+    $plus = $st > 0 ? " +$st" : '';
+    return [true, "Bierzesz w dłonie: <b>{$b['nazwa']}</b>$plus (+$atak atak, +{$b['szybkosc']} szybkość, "
                  . eq_nazwa_ciosu($b['cios']) . ')'];
 }
 
@@ -106,10 +92,7 @@ function eq_zaloz_pancerz(mysqli $db, int $gid, string $kod): array {
     $katalog = eq_katalog_pancerzy();
     if (!isset($katalog[$kod])) return [false, 'Nie znam takiego pancerza.'];
 
-    $kol = preg_replace('/[^a-z0-9_]/', '', $kod);
-    $r = $db->query("SELECT `$kol` AS ile FROM gracze WHERE id=$gid");
-    if (!$r || !$r->num_rows || (int)$r->fetch_assoc()['ile'] <= 0)
-        return [false, 'Nie masz tego przy sobie.'];
+    if (eq_ma($db, $gid, $kod) < 1) return [false, 'Nie masz tego przy sobie.'];
 
     $p = $katalog[$kod];
     $n = $db->real_escape_string($p['nazwa']);
