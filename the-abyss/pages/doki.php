@@ -242,13 +242,24 @@ $ROLE = arena_role();
 .bestiar{background:rgba(10,6,12,.55);border:1px solid var(--border-soft);border-radius:2px;overflow:hidden}
 .bestiar-h{padding:14px 18px;background:rgba(0,0,0,.4);border-bottom:1px solid var(--border-soft);font-family:'Oswald',sans-serif;color:#fff;text-transform:uppercase;letter-spacing:2.5px;display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:baseline}
 .bestiar-h .note{font-family:'JetBrains Mono',monospace;font-size:.72em;color:var(--txt-dim);letter-spacing:1px;text-transform:none}
-.t-scroll{overflow-x:auto}
-.t-wr{width:100%;border-collapse:collapse;font-size:.92em;min-width:900px}
+.t-scroll{overflow-x:visible}
+.t-wr{width:100%;border-collapse:collapse;font-size:.92em}
 .t-wr th{background:rgba(0,0,0,.5);padding:11px 12px;text-align:left;color:var(--neon-red);font-family:'Oswald',sans-serif;text-transform:uppercase;font-size:.72em;letter-spacing:1.6px;border-bottom:1px solid var(--border-mid);font-weight:500;line-height:1.35}
 .t-wr td{padding:11px 12px;border-bottom:1px dashed rgba(255,23,68,.07);color:var(--txt-main);vertical-align:middle}
 .t-wr tr.w-row:hover td{background:rgba(255,23,68,.06);color:#fff}
-.td-nazwa{font-family:'Oswald',sans-serif;font-size:1.02em;color:#fff;min-width:190px}
-.td-nazwa .opis{display:block;font-family:'Rajdhani',sans-serif;font-size:.84em;color:var(--txt-dim);letter-spacing:0;line-height:1.4;margin-top:2px;max-width:34ch}
+.td-nazwa{font-family:'Oswald',sans-serif;font-size:1.02em;color:#fff;min-width:180px}
+.td-nazwa .opis{display:block;font-family:'Rajdhani',sans-serif;font-size:.84em;color:var(--txt-dim);letter-spacing:0;line-height:1.4;margin-top:2px;max-width:38ch}
+.td-nazwa .mini{display:block;font-family:'JetBrains Mono',monospace;font-size:.68em;color:var(--txt-mute);letter-spacing:1px;margin-top:4px}
+.td-nazwa .mini .s-hp{color:rgba(255,61,94,.75)}
+.td-nazwa .mini .s-atk{color:rgba(255,122,61,.75)}
+.td-nazwa .mini .s-un{color:rgba(74,214,255,.75)}
+.td-hit{font-family:'JetBrains Mono',monospace;white-space:nowrap}
+.td-hit .duzy{font-size:1.32em;color:var(--neon-green)}
+.td-hit .duzy.sredni{color:var(--neon-ember)}
+.td-hit .duzy.slaby{color:var(--neon-red-hot)}
+.td-hit .pod{display:block;font-size:.7em;color:var(--txt-mute);letter-spacing:1px;margin-top:2px}
+.td-hit .farm{display:block;font-size:.7em;letter-spacing:1px;margin-top:3px;color:var(--txt-mute)}
+.td-hit .farm b{color:var(--neon-cyan);font-weight:500}
 .td-lvl{font-family:'JetBrains Mono',monospace;color:var(--neon-ember)}
 .td-stats{font-family:'JetBrains Mono',monospace;font-size:.84em;line-height:1.5;white-space:nowrap}
 .td-stats .s-hp{color:var(--neon-red-hot)}.td-stats .s-atk{color:var(--neon-ember)}.td-stats .s-un{color:var(--neon-cyan)}
@@ -422,8 +433,8 @@ $ROLE = arena_role();
     <div class="t-scroll">
     <table class="t-wr">
         <thead><tr>
-            <th>Cel</th><th>Lvl</th><th>Typ</th><th>Rola</th><th>Staty</th>
-            <th>Rundy</th><th>Uniki / WB</th><th>Trafienia</th><th>Nagroda</th><th>Ocena</th><th style="text-align:right">Akcja</th>
+            <th>Cel</th><th>Lvl</th><th>Typ</th><th>Rola</th>
+            <th>Trafienia<br>ja / on</th><th>Nagroda</th><th>Ocena</th><th style="text-align:right">Akcja</th>
         </tr></thead>
         <tbody>
         <?php foreach ($lista_wrogow as $id_w => $wrog):
@@ -436,6 +447,13 @@ $ROLE = arena_role();
                 <td class="td-nazwa">
                     <?php echo htmlspecialchars($wrog['nazwa']); ?>
                     <?php if (!empty($wrog['opis'])): ?><span class="opis"><?php echo htmlspecialchars($wrog['opis']); ?></span><?php endif; ?>
+                    <span class="mini">
+                        <span class="s-hp">HP <?php echo number_format((int)$wrog['hp'], 0, '', ' '); ?></span> ·
+                        <span class="s-atk">ATK <?php echo (int)$wrog['atak']; ?></span> ·
+                        OBR <?php echo (int)$wrog['obrona']; ?> ·
+                        <span class="s-un">UNIK <?php echo (int)$wrog['unik']; ?></span> ·
+                        CEL <?php echo (int)$wrog['celnosc']; ?>
+                    </span>
                 </td>
                 <td class="td-lvl"><?php echo (int)$wrog['poziom']; ?></td>
                 <td>
@@ -446,15 +464,12 @@ $ROLE = arena_role();
                     <span class="badge-rola"><?php echo htmlspecialchars($rol['nazwa'] ?? $wrog['rola']); ?></span>
                     <?php if ($rol): ?><span class="farmi">farmi: <?php echo htmlspecialchars($rol['farmi']); ?></span><?php endif; ?>
                 </td>
-                <td class="td-stats">
-                    <span class="s-hp">HP <?php echo number_format((int)$wrog['hp'], 0, '', ' '); ?></span><br>
-                    <span class="s-atk">ATK <?php echo (int)$wrog['atak']; ?></span> ·
-                    OBR <?php echo (int)$wrog['obrona']; ?><br>
-                    <span class="s-un">UNIK <?php echo (int)$wrog['unik']; ?></span> · CEL <?php echo (int)$wrog['celnosc']; ?>
+                <td class="td-hit">
+                    <?php $kl = $a['moj_hit'] >= 60 ? '' : ($a['moj_hit'] >= 25 ? ' sredni' : ' slaby'); ?>
+                    <span class="duzy<?php echo $kl; ?>"><?php echo $a['moj_hit']; ?>%</span>
+                    <span class="pod">on trafia <?php echo $a['jego_hit']; ?>%<?php echo $a['rundy'] > ARENA_RUNDY ? ' · remis' : ' · '.round($a['rundy']).' rund'; ?></span>
+                    <span class="farm">farma: <b><?php echo $a['uniki_est']; ?></b> uników · <b><?php echo $a['wb_est']; ?></b> WB</span>
                 </td>
-                <td class="td-stats"><?php echo $a['rundy'] > ARENA_RUNDY ? '<span style="color:#ffd700">remis</span>' : round($a['rundy']); ?></td>
-                <td class="td-stats"><span class="s-un"><?php echo $a['uniki_est']; ?></span> / <?php echo $a['wb_est']; ?></td>
-                <td class="td-stats"><?php echo $a['moj_hit']; ?>%<br><span style="color:var(--txt-mute)"><?php echo $a['jego_hit']; ?>%</span></td>
                 <td class="td-stats"><?php echo (int)$wrog['exp']; ?> PD<br><span style="color:var(--neon-ember)"><?php echo number_format((int)$wrog['kasa'], 0, '', ' '); ?> $</span></td>
                 <td>
                     <span class="rating-mini rm-<?php echo $a['ocena'][0]; ?>"><?php echo $a['ocena'][1]; ?></span>
