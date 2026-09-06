@@ -1,6 +1,10 @@
 <?php
 require_once "db.php";
+require_once "config/pochodzenia.php";   // pochodzenie_bonus() — bonusy Belga
 $id_gracza = $_SESSION['id_gracza'];
+
+// Prowizja Czarnego Rynku: potrącana sprzedawcy przy transakcji.
+const RYNEK_PROWIZJA = 0.05;
 
 $komunikat = "";
 $zakladka = isset($_GET['zakladka']) ? $_GET['zakladka'] : 'materialy';
@@ -43,6 +47,10 @@ $slownik_przedmiotow = [
 
 $kategoria_materialy = ['zlom_stalowy', 'czesci_mechaniczne', 'syntetyki', 'elektronika'];
 
+// --- STRAGAN ODCZYNNIKÓW (chemia pod warkę substancji w melinie) ---
+require_once "includes/rynek_odczynniki.php";
+$komunikat .= odczynniki_obsluz($polaczenie, $id_gracza);
+
 // 2. LOGIKA: WYSTAWIANIE OFERTY
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['wystaw_oferte'])) {
     $co_sprzedaje = $polaczenie->real_escape_string($_POST['przedmiot']);
@@ -80,11 +88,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['kup_oferte'])) {
         } elseif ($gracz['gotowka'] < $calkowity_koszt) {
             $komunikat = "<div class='blad'>Brak gotówki! Potrzebujesz $calkowity_koszt $.</div>";
         } else {
+            // Wypłata dla sprzedawcy: cena plus jego bonus handlowy, minus prowizja rynku.
+            // Belg ma tańszą prowizję i wyższą cenę sprzedaży (config/pochodzenia.php).
+            $sprz = $polaczenie->query("SELECT pochodzenie FROM gracze WHERE id = $sprzedawca_id")->fetch_assoc();
+            $cena_sprzedazy = round($calkowity_koszt * pochodzenie_bonus($sprz, 'rynek_cena_sprzedazy_mult', 1.0));
+            $prowizja       = round($cena_sprzedazy * RYNEK_PROWIZJA * pochodzenie_bonus($sprz, 'rynek_prowizja_mult', 1.0));
+            $wyplata        = max(0, $cena_sprzedazy - $prowizja);
+
             $polaczenie->query("UPDATE gracze SET gotowka = gotowka - $calkowity_koszt, $przedmiot = $przedmiot + $ilosc WHERE id = $id_gracza");
-            $polaczenie->query("UPDATE gracze SET gotowka = gotowka + $calkowity_koszt WHERE id = $sprzedawca_id");
+            $polaczenie->query("UPDATE gracze SET gotowka = gotowka + $wyplata WHERE id = $sprzedawca_id");
             $polaczenie->query("DELETE FROM rynek_oferty WHERE id = $id_oferty");
-            $prowizja = round($prowizja * pochodzenie_bonus($gracz_r, 'rynek_prowizja_mult', 1.0));
-$cena_sprzedazy = round($cena_sprzedazy * pochodzenie_bonus($gracz_r, 'rynek_cena_sprzedazy_mult', 1.0));
             
             $nazwa_wys = isset($slownik_przedmiotow[$przedmiot]) ? $slownik_przedmiotow[$przedmiot] : $przedmiot;
             $komunikat = "<div class='sukces'>Transakcja udana! Kupiłeś $ilosc x $nazwa_wys za $calkowity_koszt $.</div>";
@@ -147,12 +160,22 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['anuluj_oferte'])) {
 <div class="rynek-nav">
     <a href="game.php?page=rynek&zakladka=materialy" class="rynek-tab <?php if($zakladka=='materialy') echo 'aktywny'; ?>">📦 Rynek Materiałów</a>
     <a href="game.php?page=rynek&zakladka=przedmioty" class="rynek-tab <?php if($zakladka=='przedmioty') echo 'aktywny'; ?>">🔫 Rynek Przedmiotów</a>
+    <a href="game.php?page=rynek&zakladka=odczynniki" class="rynek-tab <?php if($zakladka=='odczynniki') echo 'aktywny'; ?>">⚗️ Odczynniki</a>
     <a href="game.php?page=rynek&zakladka=moje_oferty" class="rynek-tab <?php if($zakladka=='moje_oferty' || $zakladka=='wystaw') echo 'aktywny'; ?>">Moje Oferty</a>
 </div>
 
 <?php echo $komunikat; ?>
 
-<?php if ($zakladka == 'materialy' || $zakladka == 'przedmioty'): 
+<?php if ($zakladka == 'odczynniki'): ?>
+    <div class="rynek-panel">
+        <div class="rynek-header">
+            <h2>Stragan Chemika</h2>
+            <span style="color: #888;">Twoja gotówka: <b style="color: #00ff00;"><?php echo number_format($gracz['gotowka'], 0, '', ' '); ?> $</b></span>
+        </div>
+        <?php odczynniki_render($polaczenie, $id_gracza); ?>
+    </div>
+
+<?php elseif ($zakladka == 'materialy' || $zakladka == 'przedmioty'): 
     $typ_szukany = ($zakladka == 'materialy') ? 'material' : 'przedmiot';
 ?>
     <div class="rynek-panel">
