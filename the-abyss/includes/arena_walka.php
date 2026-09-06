@@ -53,6 +53,22 @@ function arena_rekomendowany_cios(string $typ): string {
     return 'piesc';
 }
 
+/** Kraj miasta z config/miasta.php. Klucze $MIASTA_DANE są WIELKIMI literami. */
+function arena_miasto_kraj(?string $miasto, string $domyslny = 'USA'): string {
+    global $MIASTA_DANE;
+    if (!$miasto || !is_array($MIASTA_DANE ?? null)) return $domyslny;
+    $k = mb_strtoupper(trim($miasto));
+    if (isset($MIASTA_DANE[$k]['kraj'])) return $MIASTA_DANE[$k]['kraj'];
+    foreach ($MIASTA_DANE as $nazwa => $d)          // tolerancja dla zapisu z bazy
+        if (mb_strtoupper($nazwa) === $k) return $d['kraj'] ?? $domyslny;
+    return $domyslny;
+}
+
+/** Nazwa kategorii ciosu do wyświetlenia — używana też przez doki.php. */
+function arena_nazwa_ciosu(string $cios): string {
+    return ['ostrze'=>'Ostrze', 'tepe'=>'Tępe narzędzie', 'palna'=>'Broń palna', 'piesc'=>'Goła pięść'][$cios] ?? 'Goła pięść';
+}
+
 /* ── progi umiejętności ────────────────────────────────────────────── */
 
 function arena_prog_dla_skilla(float $skill): int {
