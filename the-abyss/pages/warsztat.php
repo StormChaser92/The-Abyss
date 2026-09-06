@@ -1,253 +1,307 @@
 <?php
-require_once "db.php";
-$id_gracza = $_SESSION['id_gracza'];
+/* the-abyss/pages/warsztat.php
+   Warsztat Inżynieryjny — wytwarzanie, ulepszanie +1…+10, cennik i zlecenia.
+   Logika: includes/warsztat_logika.php (nic nie liczymy tutaj).
+   Usunięty martwy blok pochodzenie_bonus($gracz_r, …) — bonusy idą w $mod. */
 
+require_once "db.php";
+require_once "config/pochodzenia.php";
+require_once "includes/bronie_katalog.php";
+require_once "includes/warsztat_logika.php";
+
+$id_gracza = $_SESSION['id_gracza'];
 $komunikat = "";
 
-// 1. POBIERANIE DANYCH GRACZA
-$wynik = $polaczenie->query("SELECT * FROM gracze WHERE id=$id_gracza");
-$gracz = $wynik->fetch_assoc();
-$posiadane_pokoje = !empty($gracz['pokoje_specjalne']) ? json_decode($gracz['pokoje_specjalne'], true) : [];
+$gracz = $polaczenie->query("SELECT * FROM gracze WHERE id=$id_gracza")->fetch_assoc();
+$pokoje = !empty($gracz['pokoje_specjalne']) ? json_decode($gracz['pokoje_specjalne'], true) : [];
 
-if ($gracz['klasa'] !== 'Inżynier' || !in_array("Warsztat Inżynieryjny", $posiadane_pokoje)) {
-    echo "<div style='padding: 50px; text-align: center; color: #ff3333; font-family: Oswald; font-size: 2em;'>Brak uprawnień lub brak Warsztatu!</div>";
+if ($gracz['klasa'] !== 'Inżynier' || !in_array("Warsztat Inżynieryjny", (array)$pokoje, true)) {
+    echo "<div style='padding:50px; text-align:center; color:#ff3333; font-family:Oswald,sans-serif; font-size:1.8em;'>
+            Ulepszać broń może tylko Inżynier z własnym warsztatem.<br>
+            <span style='font-size:.55em; color:#888;'>Jeśli szukasz ulepszenia, złóż zlecenie u kogoś, kto go ma.</span>
+          </div>";
     exit;
 }
 
-// 2. POBIERANIE ŁUPÓW GRACZA (Do elitarnych broni)
-$lupy_q = $polaczenie->query("SELECT nazwa, ilosc FROM przedmioty_gracze WHERE gracz_id = $id_gracza");
-$posiadane_lupy = [];
-while($r = $lupy_q->fetch_assoc()) { $posiadane_lupy[$r['nazwa']] = $r['ilosc']; }
-
-// ---------------------------------------------------------
-// 3. PEŁEN KATALOG SCHEMATÓW INŻYNIERA
-// Podział na 3 poziomy trudności i technologii
-// ---------------------------------------------------------
-$katalog_schematow = [
-    "🛠️ TIER I: Sprzęt Podstawowy (Złom i Części)" => [
-        "noz_kabar" => ["nazwa" => "Nóż bojowy KA-BAR", "stal" => 3, "czesci" => 0, "syn" => 1, "elek" => 0, "loot" => null, "en" => 3, "trudnosc" => 5],
-        "pistolet_samorobka" => ["nazwa" => "Pistolet Samoróbka 9mm", "stal" => 5, "czesci" => 2, "syn" => 0, "elek" => 0, "loot" => null, "en" => 5, "trudnosc" => 10],
-        "glock_17" => ["nazwa" => "Glock 17 (9mm)", "stal" => 8, "czesci" => 4, "syn" => 1, "elek" => 0, "loot" => null, "en" => 8, "trudnosc" => 15],
-        "pm_uzi" => ["nazwa" => "Klasyczne Uzi", "stal" => 12, "czesci" => 8, "syn" => 2, "elek" => 1, "loot" => null, "en" => 10, "trudnosc" => 20],
-        "strzelba_mossberg" => ["nazwa" => "Mossberg 500", "stal" => 14, "czesci" => 5, "syn" => 3, "elek" => 0, "loot" => null, "en" => 12, "trudnosc" => 25],
-        "karabin_szturmowy" => ["nazwa" => "Stary Karabin Szturmowy", "stal" => 18, "czesci" => 8, "syn" => 2, "elek" => 2, "loot" => null, "en" => 15, "trudnosc" => 30],
-        "karabin_ak47" => ["nazwa" => "AK-47 (Wschód)", "stal" => 20, "czesci" => 6, "syn" => 3, "elek" => 0, "loot" => null, "en" => 15, "trudnosc" => 35]
-    ],
-    
-    "🧪 TIER II: Sprzęt Zaawansowany (Modyfikacje i Pancerze)" => [
-        "maczeta_kukri" => ["nazwa" => "Zatruta Maczeta Kukri (Tox)", "stal" => 8, "czesci" => 2, "syn" => 4, "elek" => 0, "loot" => "Kwas Żołądkowy Mutanta", "en" => 15, "trudnosc" => 40],
-        "desert_eagle" => ["nazwa" => "Desert Eagle .50 (AP)", "stal" => 15, "czesci" => 8, "syn" => 2, "elek" => 4, "loot" => "Łuski po nabojach", "en" => 18, "trudnosc" => 45],
-        "pm_p90" => ["nazwa" => "P90 z Amunicją Jadową (Tox)", "stal" => 15, "czesci" => 12, "syn" => 6, "elek" => 6, "loot" => "Brudna Strzykawka", "en" => 20, "trudnosc" => 50],
-        "karabin_m4a1" => ["nazwa" => "M4A1 (Amunicja AP)", "stal" => 22, "czesci" => 15, "syn" => 5, "elek" => 5, "loot" => "Przemycane Części", "en" => 25, "trudnosc" => 55],
-        "pancerz_taktyczny" => ["nazwa" => "Pancerz Taktyczny SWAT", "stal" => 15, "czesci" => 5, "syn" => 20, "elek" => 2, "loot" => "Kewlarowy Pancerz", "en" => 20, "trudnosc" => 60]
-    ],
-    
-    "☢️ TIER III: Prototypy Śmierci (Wymagają Unikalnych Artefaktów)" => [
-        "lmg_m249" => ["nazwa" => "M249 SAW (AP)", "stal" => 35, "czesci" => 20, "syn" => 5, "elek" => 8, "loot" => "Tytanowa Płyta", "en" => 35, "trudnosc" => 70],
-        "snajperka_awp" => ["nazwa" => "Karabin AWP (EMP)", "stal" => 25, "czesci" => 15, "syn" => 8, "elek" => 15, "loot" => "Spalony Mikroczip", "en" => 40, "trudnosc" => 80],
-        "wyrzutnia_rpg7" => ["nazwa" => "Wyrzutnia RPG-7 (EMP)", "stal" => 50, "czesci" => 15, "syn" => 5, "elek" => 25, "loot" => "Bateria Termojądrowa", "en" => 50, "trudnosc" => 90],
-        "pancerz_taktyczny_upg" => ["nazwa" => "Egzoszkielet Taktyczny", "stal" => 40, "czesci" => 25, "syn" => 30, "elek" => 35, "loot" => "Rdzeń Plazmowy Alpha", "en" => 60, "trudnosc" => 110]
-    ]
+/* Bonusy pochodzenia przekazywane jawnie — dawniej wisiały jako martwy kod. */
+$mod = [
+    'craft_energia_mult'         => pochodzenie_bonus($gracz, 'craft_energia_mult', 1.0),
+    'inzynier_craft_fail_mult'   => pochodzenie_bonus($gracz, 'inzynier_craft_fail_mult', 1.0),
+    'craft_bonus_produkt_szansa' => pochodzenie_bonus($gracz, 'craft_bonus_produkt_szansa', 0),
 ];
 
-// 4. LOGIKA WYTWARZANIA (RNG, Skille, Utrata Surowców)
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['wytworz'])) {
-    $kod = $_POST['schemat_kod'];
-    $s = null;
-    foreach($katalog_schematow as $kat => $bronie) { if(isset($bronie[$kod])) { $s = $bronie[$kod]; break; } }
-    
-    if ($s) {
-        $ma_loot = ($s['loot'] == null || (isset($posiadane_lupy[$s['loot']]) && $posiadane_lupy[$s['loot']] >= 1));
-        
-        if ($gracz['energia_aktualna'] < $s['en']) {
-            $komunikat = "<div class='blad'>Jesteś zbyt zmęczony by utrzymać spawarkę! Potrzebujesz {$s['en']} EN.</div>";
-        } elseif ($gracz['zlom_stalowy'] < $s['stal'] || $gracz['czesci_mechaniczne'] < $s['czesci'] || $gracz['syntetyki'] < $s['syn'] || $gracz['elektronika'] < $s['elek'] || !$ma_loot) {
-            $komunikat = "<div class='blad'>Brakuje materiałów lub wymaganego artefaktu: <b>".($s['loot'] ?? 'Brak')."</b>! Udaj się do Doków lub kup u Szabrownika.</div>";
-        } else {
-            
-            // --- MATEMATYKA SUKCESU (Z VALLHERU) ---
-            // Baza to 50%. Każdy punkt skilla inżynierii daje +2%. Inteligencja też lekko pomaga.
-            // Od tego odejmujemy trudność schematu.
-            $szansa = (50 + ($gracz['umiejetnosc_inzynierii'] * 2.5) + ($gracz['inteligencja'] / 2)) - ($s['trudnosc'] / 1.5);
-            $szansa = max(10, min(95, $szansa)); // Nigdy mniej niż 10%, nigdy więcej niż 95%
-            
-            $los = rand(1, 100);
-            
-            if ($los <= $szansa) {
-                // *** SUKCES ***
-                // Przyrost skilla: Im trudniejszy przedmiot, tym więcej się uczysz (od 0.10 do 0.80)
-                $przyrost_skilla = round(($s['trudnosc'] / 15) * (rand(80, 120)/100), 2);
-                $exp = $s['trudnosc'] * 5;
-                
-                $polaczenie->query("UPDATE gracze SET 
-                    zlom_stalowy = zlom_stalowy - {$s['stal']}, czesci_mechaniczne = czesci_mechaniczne - {$s['czesci']}, 
-                    syntetyki = syntetyki - {$s['syn']}, elektronika = elektronika - {$s['elek']},
-                    energia_aktualna = energia_aktualna - {$s['en']}, exp = exp + $exp, 
-                    umiejetnosc_inzynierii = umiejetnosc_inzynierii + $przyrost_skilla, $kod = $kod + 1 
-                    WHERE id = $id_gracza");
-                
-                // ══ HOOK: POSTĘP KONTRAKTÓW KLASOWYCH — WARSZTAT ══
-                $typ_celu_wytw = "wytworz_" . $kod;
-                $polaczenie->query("UPDATE kontrakty_klasowe SET postep = LEAST(cel_ilosc, postep+1)
-                    WHERE gracz_id=$id_gracza AND status='aktywny' AND typ_celu='$typ_celu_wytw' AND deadline > NOW()");
-                
-                if ($s['loot']) { 
-                    $polaczenie->query("UPDATE przedmioty_gracze SET ilosc = ilosc - 1 WHERE gracz_id = $id_gracza AND nazwa = '{$s['loot']}'"); 
-                }
-                
-                $nowy_skill = $gracz['umiejetnosc_inzynierii'] + $przyrost_skilla;
-                $komunikat = "<div class='sukces'>PRODUKCJA UDANA! Wytworzono: <b style='color:#fff;'>{$s['nazwa']}</b>. <br><span style='color:#ccc; font-size:0.9em;'>(+$exp EXP, +$przyrost_skilla Inżynierii. Twój poziom: $nowy_skill)</span></div>";
-            } else {
-                // *** PORAŻKA ***
-                // W Vallheru tracisz surkę i zyskujesz tylko 0.01 do 0.05 skilla.
-                $przyrost_fail = rand(1, 5) / 100;
-                
-                // Traci połowę włożonych surowców bazowych, ale NIE traci artefaktu (byłoby to zbyt bolesne)
-                $strata_stali = floor($s['stal']/2);
-                $strata_czesci = floor($s['czesci']/2);
-                
-                $polaczenie->query("UPDATE gracze SET 
-                    zlom_stalowy = zlom_stalowy - $strata_stali, czesci_mechaniczne = czesci_mechaniczne - $strata_czesci, 
-                    energia_aktualna = energia_aktualna - floor({$s['en']}/2),
-                    umiejetnosc_inzynierii = umiejetnosc_inzynierii + $przyrost_fail
-                    WHERE id = $id_gracza");
-                
-                $komunikat = "<div class='blad'>PRODUKCJA NIEUDANA! Przegrzałeś obwody i zepsułeś kalibrację! (Los: $los%, Szansa: $szansa%)<br>Straciłeś część złomu, części i połowę energii włożonej w pracę. <br><span style='color:#aaa; font-size:0.9em;'>(Nauczyłeś się na błędzie: +$przyrost_fail Inżynierii)</span></div>";
-            }
-            
-            // Odświeżenie danych na żywo, żeby gracz nie widział starych surowców po kliknięciu
-            $wynik = $polaczenie->query("SELECT * FROM gracze WHERE id=$id_gracza");
-            $gracz = $wynik->fetch_assoc();
-            $lupy_q = $polaczenie->query("SELECT nazwa, ilosc FROM przedmioty_gracze WHERE gracz_id = $id_gracza");
-            $posiadane_lupy = [];
-            while($r = $lupy_q->fetch_assoc()) { $posiadane_lupy[$r['nazwa']] = $r['ilosc']; }
-             // Koszt energii
-$koszt_en = round($koszt_en * pochodzenie_bonus($gracz_r, 'craft_energia_mult', 1.0));
-
-// Szansa na porażkę
-$szansa_porazki = round($szansa_porazki * pochodzenie_bonus($gracz_r, 'inzynier_craft_fail_mult', 1.0));
-
-// Bonus jakości (Francuz)
-$jakosc_bonus = pochodzenie_bonus($gracz_r, 'craft_jakosc_bonus_abs', 0);
-
-// Szansa na 2 produkty za raz (Niemiec)
-if (rand(1,100) <= pochodzenie_bonus($gracz_r, 'craft_bonus_produkt_szansa', 0)) {
-    $ilosc_produktow = 2;
-}
-        }
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
+    if (isset($_POST['wytworz'])) {
+        [$ok, $tekst] = warsztat_wytworz($polaczenie, $gracz, $_POST['kod'] ?? '', $mod);
+        $komunikat = "<div class='".($ok ? 'sukces' : 'blad')."'>$tekst</div>";
     }
+    if (isset($_POST['ulepsz'])) {
+        [$ok, $tekst] = warsztat_ulepsz($polaczenie, $gracz, $_POST['kod'] ?? '', $id_gracza);
+        $komunikat = "<div class='".($ok ? 'sukces' : 'blad')."'>$tekst</div>";
+    }
+    if (isset($_POST['ustaw_cene'])) {
+        warsztat_ustaw_cene($polaczenie, $id_gracza, $_POST['kod'] ?? '', $_POST['typ'] ?? 'wytworz', (int)($_POST['cena'] ?? 0));
+        $komunikat = "<div class='sukces'>Cennik zaktualizowany.</div>";
+    }
+    if (isset($_POST['wykonaj_zlecenie'])) {
+        [$ok, $tekst] = zlecenie_wykonaj($polaczenie, $gracz, (int)($_POST['zid'] ?? 0));
+        $komunikat = "<div class='".($ok ? 'sukces' : 'blad')."'>$tekst</div>";
+    }
+    $gracz = $polaczenie->query("SELECT * FROM gracze WHERE id=$id_gracza")->fetch_assoc();
+}
+
+$moje    = eq_stan($polaczenie, $id_gracza);
+$kat     = bronie_katalog();
+$tiery   = bronie_tiery();
+$cennik  = warsztat_cennik($polaczenie, $id_gracza);
+$zlecenia = zlecenia_otwarte($polaczenie, $id_gracza);
+
+/* Broń, którą Inżynier posiada i która da się jeszcze ulepszyć. */
+$do_ulepszenia = [];
+foreach ($moje as $kod => $st) {
+    if (!isset($kat[$kod]) || (int)$st['ilosc'] <= 0) continue;
+    if ((int)$st['stopien'] >= WARSZTAT_STOPIEN_MAX) continue;
+    $do_ulepszenia[$kod] = $st;
 }
 ?>
 
 <style>
-    /* ========================================================
-       GLASSMORPHISM W WARSZTACIE INŻYNIERA
-       ======================================================== */
-    .warsztat-header { background: linear-gradient(to right, rgba(0,30,0,0.8), rgba(0,0,0,0.9)), url('https://via.placeholder.com/900x250/001100/000000?text=Manufaktura+Inzyniera') center/cover; padding: 40px; border: 1px solid rgba(0, 255, 0, 0.4); border-radius: 8px; margin-bottom: 25px; box-shadow: 0 0 25px rgba(0, 255, 0, 0.15); backdrop-filter: blur(5px);}
-    .warsztat-header h1 { font-family: 'Oswald', sans-serif; color: #00ff00; font-size: 3.2em; margin: 0; text-transform: uppercase; text-shadow: 0 0 15px rgba(0,255,0,0.6); letter-spacing: 1px;}
-    
-    .panel-zasobow { background: rgba(10,10,10,0.6); border: 1px solid rgba(255,255,255,0.05); padding: 25px; border-radius: 8px; display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 15px; margin-bottom: 30px; backdrop-filter: blur(10px); box-shadow: inset 0 0 15px rgba(0,0,0,0.5);}
-    .zasob { text-align: center; padding: 15px; border-radius: 6px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.05); }
-    .zasob span { display: block; color: #888; font-size: 0.85em; text-transform: uppercase; font-family: 'Oswald', sans-serif; letter-spacing: 1px; margin-bottom: 5px;}
-    .zasob b { color: #fff; font-size: 1.5em; font-family: 'Open Sans', sans-serif; font-weight: 700;}
+    .warsztat-header { background: linear-gradient(to right, rgba(0,30,0,.8), rgba(0,0,0,.9)); padding: 36px; border: 1px solid rgba(0,255,0,.4); border-radius: 8px; margin-bottom: 22px; box-shadow: 0 0 25px rgba(0,255,0,.15); }
+    .warsztat-header h1 { font-family: 'Oswald', sans-serif; color: #00ff00; font-size: 2.8em; margin: 0; text-transform: uppercase; text-shadow: 0 0 15px rgba(0,255,0,.6); letter-spacing: 1px; }
+    .warsztat-header p { color: #ccc; font-size: 1.05em; margin: 10px 0 0; }
 
-    .kategoria-box { margin-bottom: 40px; background: rgba(5,5,5,0.5); padding: 20px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.02);}
-    .kategoria-tytul { color: #00ccff; font-family: 'Oswald', sans-serif; text-transform: uppercase; font-size: 1.5em; border-bottom: 1px dashed rgba(0,204,255,0.3); padding-bottom: 10px; margin-bottom: 25px; letter-spacing: 1px; text-shadow: 0 0 10px rgba(0,204,255,0.3);}
-    
-    .schematy-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
-    
-    .schemat-karta { background: rgba(15,15,15,0.7); border: 1px solid rgba(255,255,255,0.05); padding: 20px; border-radius: 8px; display: flex; flex-direction: column; transition: 0.3s; box-shadow: 0 5px 15px rgba(0,0,0,0.3);}
-    .schemat-karta:hover { border-color: rgba(0,255,0,0.4); transform: translateY(-5px); background: rgba(20,30,20,0.8); box-shadow: 0 10px 25px rgba(0,0,0,0.5), inset 0 0 15px rgba(0,255,0,0.05); }
-    
-    .schemat-karta h3 { margin: 0 0 15px 0; color: #fff; font-family: 'Oswald', sans-serif; font-size: 1.3em; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center;}
-    .posiada-badge { font-size: 0.7em; background: rgba(0,0,0,0.8); padding: 3px 8px; border-radius: 4px; color: #888; border: 1px solid rgba(255,255,255,0.1); font-family: 'Open Sans', sans-serif;}
-    
-    .wymagania { font-size: 0.9em; color: #aaa; flex-grow: 1; margin-bottom: 20px; line-height: 1.6; font-family: 'Open Sans', sans-serif;}
-    .req-item { display: inline-block; background: rgba(0,0,0,0.6); padding: 2px 6px; border-radius: 3px; margin-right: 5px; margin-bottom: 5px; border: 1px solid rgba(255,255,255,0.05); }
+    .panel-zasobow { background: rgba(10,10,10,.6); border: 1px solid rgba(255,255,255,.05); padding: 22px; border-radius: 8px; display: grid; grid-template-columns: repeat(auto-fit, minmax(125px, 1fr)); gap: 14px; margin-bottom: 26px; box-shadow: inset 0 0 15px rgba(0,0,0,.5); }
+    .zasob { text-align: center; padding: 14px; border-radius: 6px; background: rgba(0,0,0,.4); border: 1px solid rgba(255,255,255,.05); }
+    .zasob span { display: block; color: #888; font-size: .82em; text-transform: uppercase; font-family: 'Oswald', sans-serif; letter-spacing: 1px; margin-bottom: 5px; }
+    .zasob b { color: #fff; font-size: 1.4em; font-weight: 700; }
+
+    .sekcja { margin-bottom: 34px; }
+    .sekcja-tytul { color: #00ccff; font-family: 'Oswald', sans-serif; text-transform: uppercase; font-size: 1.4em; border-bottom: 1px dashed rgba(0,204,255,.3); padding-bottom: 10px; margin-bottom: 18px; letter-spacing: 1px; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+    .sekcja-tytul small { color: #666; font-size: .58em; letter-spacing: 1px; }
+
+    .zlecenia-lista { display: grid; gap: 12px; margin-bottom: 10px; }
+    .zlecenie { background: rgba(30,20,0,.5); border: 1px solid rgba(255,170,0,.35); border-radius: 6px; padding: 16px 18px; display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+    .zlecenie .kto { font-family: 'Oswald', sans-serif; text-transform: uppercase; letter-spacing: 1px; color: #fff; }
+    .zlecenie .co { color: #aaa; font-size: .92em; }
+    .zlecenie .stawka { font-family: 'Oswald', sans-serif; color: #ffd700; font-size: 1.2em; }
+
+    .kategoria-box { margin-bottom: 30px; background: rgba(5,5,5,.5); padding: 18px; border-radius: 8px; border: 1px solid rgba(255,255,255,.02); }
+    .schematy-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 18px; }
+    .schemat-karta { background: rgba(15,15,15,.7); border: 1px solid rgba(255,255,255,.05); padding: 18px; border-radius: 8px; display: flex; flex-direction: column; transition: .3s; }
+    .schemat-karta:hover { border-color: rgba(0,255,0,.4); transform: translateY(-4px); background: rgba(20,30,20,.8); }
+    .schemat-karta h3 { margin: 0 0 12px; color: #fff; font-family: 'Oswald', sans-serif; font-size: 1.15em; border-bottom: 1px solid rgba(255,255,255,.05); padding-bottom: 9px; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+    .posiada-badge { font-size: .68em; background: rgba(0,0,0,.8); padding: 3px 8px; border-radius: 4px; color: #888; border: 1px solid rgba(255,255,255,.1); white-space: nowrap; }
+    .wymagania { font-size: .9em; color: #aaa; flex-grow: 1; margin-bottom: 16px; line-height: 1.6; }
+    .req-item { display: inline-block; background: rgba(0,0,0,.6); padding: 2px 6px; border-radius: 3px; margin: 0 4px 5px 0; border: 1px solid rgba(255,255,255,.05); }
+    .req-item.brak { border-color: rgba(255,51,51,.5); color: #ff8888; }
     .req-item b { color: #fff; }
-    
-    .loot-req { color: #dd88ff; font-weight: bold; border: 1px solid rgba(221,136,255,0.3); background: rgba(221,136,255,0.05); padding: 6px 10px; border-radius: 4px; display: block; margin-top: 10px; text-align: center; text-transform: uppercase; font-family: 'Oswald', sans-serif;}
-    
-    .szansa-bar-bg { background: rgba(0,0,0,0.8); height: 8px; border-radius: 4px; margin-top: 15px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1);}
-    .szansa-bar-fill { height: 100%; background: linear-gradient(90deg, #ff3333, #ffaa00, #00ff00); transition: width 1s; }
+    .staty-bron { font-family: monospace; color: #ffd700; margin-bottom: 8px; }
+    .cios-mini { font-family: 'Oswald', sans-serif; font-size: .78em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; border: 1px solid #555; color: #ccc; }
 
-    .btn-wytworz { background: rgba(0,255,0,0.1); color: #00ff00; border: 1px solid rgba(0,255,0,0.5); padding: 12px; font-family: 'Oswald', sans-serif; cursor: pointer; text-transform: uppercase; width: 100%; border-radius: 4px; transition: 0.3s; font-weight: bold; letter-spacing: 1px; font-size: 1.05em;}
-    .btn-wytworz:hover:not(:disabled) { background: #00ff00; color: #000; box-shadow: 0 0 20px rgba(0,255,0,0.6); }
-    .btn-disabled { background: rgba(10,10,10,0.8); border-color: rgba(255,255,255,0.1); color: #555; cursor: not-allowed; }
+    .szansa-bar-bg { background: rgba(0,0,0,.8); height: 8px; border-radius: 4px; margin-top: 12px; overflow: hidden; border: 1px solid rgba(255,255,255,.1); }
+    .szansa-bar-fill { height: 100%; transition: width 1s; }
 
-    .sukces { background: rgba(0, 255, 0, 0.1); border: 1px solid rgba(0,255,0,0.3); color: #00ff00; padding: 20px; margin-bottom: 25px; text-align: center; border-radius: 6px; font-size: 1.1em;}
-    .blad { background: rgba(255, 51, 51, 0.1); border: 1px solid rgba(255,51,51,0.3); color: #ff3333; padding: 20px; margin-bottom: 25px; text-align: center; border-radius: 6px; font-size: 1.1em;}
+    .btn-wytworz { background: rgba(0,255,0,.1); color: #00ff00; border: 1px solid rgba(0,255,0,.5); padding: 11px; font-family: 'Oswald', sans-serif; cursor: pointer; text-transform: uppercase; width: 100%; border-radius: 4px; transition: .3s; font-weight: 700; letter-spacing: 1px; }
+    .btn-wytworz:hover:not(:disabled) { background: #00ff00; color: #000; box-shadow: 0 0 20px rgba(0,255,0,.6); }
+    .btn-ulepsz { background: rgba(255,215,0,.12); color: #ffd700; border: 1px solid rgba(255,215,0,.5); padding: 11px; font-family: 'Oswald', sans-serif; cursor: pointer; text-transform: uppercase; width: 100%; border-radius: 4px; transition: .3s; font-weight: 700; letter-spacing: 1px; }
+    .btn-ulepsz:hover:not(:disabled) { background: #ffd700; color: #000; box-shadow: 0 0 20px rgba(255,215,0,.5); }
+    .btn-mini { background: transparent; color: #ffaa00; border: 1px solid #ffaa00; padding: 7px 14px; font-family: 'Oswald', sans-serif; cursor: pointer; text-transform: uppercase; border-radius: 3px; }
+    .btn-mini:hover { background: #ffaa00; color: #000; }
+    .btn-disabled { background: rgba(10,10,10,.8) !important; border-color: rgba(255,255,255,.1) !important; color: #555 !important; cursor: not-allowed; }
+
+    .cennik-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+    .cennik-form select, .cennik-form input { background: #0a0a0a; border: 1px solid #333; color: #fff; padding: 8px; border-radius: 3px; font-family: 'Open Sans', sans-serif; }
+    .cennik-tabela { width: 100%; border-collapse: collapse; font-size: .95em; }
+    .cennik-tabela th { font-family: 'Oswald', sans-serif; text-transform: uppercase; font-size: .72em; letter-spacing: 1px; color: #00ccff; text-align: left; padding: 9px; border-bottom: 1px solid rgba(0,204,255,.3); }
+    .cennik-tabela td { padding: 8px 9px; border-bottom: 1px solid rgba(255,255,255,.05); }
+
+    .sukces { background: rgba(0,255,0,.1); border: 1px solid rgba(0,255,0,.3); color: #00ff00; padding: 18px; margin-bottom: 22px; text-align: center; border-radius: 6px; }
+    .blad { background: rgba(255,51,51,.1); border: 1px solid rgba(255,51,51,.3); color: #ff3333; padding: 18px; margin-bottom: 22px; text-align: center; border-radius: 6px; }
+    .pusto { color: #888; font-style: italic; }
 </style>
 
 <div class="warsztat-header">
-    <h1>Manufaktura Śmierci</h1>
-    <p style="color: #ccc; font-size: 1.1em; font-family: 'Open Sans', sans-serif;">Od kawałka pordzewiałej rurki do śmiercionośnej wyrzutni EMP. Twórz, ulepszaj i ryzykuj.</p>
+    <h1>Manufaktura</h1>
+    <p>Od rurki z barierki do karabinu przeciwpancernego. Kuj, ulepszaj, przyjmuj zlecenia &mdash; i licz się z tym, że ręka zadrży.</p>
 </div>
 
 <?php echo $komunikat; ?>
 
 <div class="panel-zasobow">
-    <div class="zasob"><span>Inżynieria (Skill)</span><b style="color:#00ff00; text-shadow: 0 0 10px rgba(0,255,0,0.4);"><?php echo number_format($gracz['umiejetnosc_inzynierii'], 2); ?></b></div>
-    <div class="zasob"><span>Inteligencja</span><b style="color:#ffaa00;"><?php echo $gracz['inteligencja']; ?></b></div>
-    <div class="zasob"><span>Energia</span><b style="color:#00ccff;"><?php echo $gracz['energia_aktualna']; ?></b></div>
-    
-    <div class="zasob" style="border-left: 1px dashed rgba(255,255,255,0.1);"><span>Stal 🔩</span><b><?php echo $gracz['zlom_stalowy']; ?></b></div>
-    <div class="zasob"><span>Części ⚙️</span><b><?php echo $gracz['czesci_mechaniczne']; ?></b></div>
-    <div class="zasob"><span>Kevlar 🧵</span><b><?php echo $gracz['syntetyki']; ?></b></div>
-    <div class="zasob"><span>Elektronika 🔋</span><b><?php echo $gracz['elektronika']; ?></b></div>
+    <div class="zasob"><span>Rusznikarstwo</span><b style="color:#00ff00; text-shadow:0 0 10px rgba(0,255,0,.4);"><?php echo number_format((float)$gracz['umiejetnosc_inzynierii'], 2); ?></b></div>
+    <div class="zasob"><span>Inteligencja</span><b style="color:#ffaa00;"><?php echo (int)$gracz['inteligencja']; ?></b></div>
+    <div class="zasob"><span>Energia</span><b style="color:#00ccff;"><?php echo (int)$gracz['energia_aktualna']; ?></b></div>
+    <div class="zasob" style="border-left:1px dashed rgba(255,255,255,.1);"><span>Stal 🔩</span><b><?php echo (int)$gracz['zlom_stalowy']; ?></b></div>
+    <div class="zasob"><span>Części ⚙️</span><b><?php echo (int)$gracz['czesci_mechaniczne']; ?></b></div>
+    <div class="zasob"><span>Kevlar 🧵</span><b><?php echo (int)$gracz['syntetyki']; ?></b></div>
+    <div class="zasob"><span>Elektronika 🔋</span><b><?php echo (int)$gracz['elektronika']; ?></b></div>
 </div>
 
-<?php foreach($katalog_schematow as $nazwa_kat => $bronie): ?>
-    <div class="kategoria-box">
-        <div class="kategoria-tytul"><?php echo $nazwa_kat; ?></div>
-        <div class="schematy-grid">
-            <?php foreach($bronie as $kod => $s): 
-                $brak_mat = ($gracz['zlom_stalowy'] < $s['stal'] || $gracz['czesci_mechaniczne'] < $s['czesci'] || $gracz['syntetyki'] < $s['syn'] || $gracz['elektronika'] < $s['elek']);
-                $ilosc_lootu = isset($posiadane_lupy[$s['loot']]) ? $posiadane_lupy[$s['loot']] : 0;
-                $brak_loot = ($s['loot'] && $ilosc_lootu < 1);
-                
-                // --- OBLICZANIE SZANSY WIDOCZNEJ DLA GRACZA ---
-                $szansa_widok = (50 + ($gracz['umiejetnosc_inzynierii'] * 2.5) + ($gracz['inteligencja'] / 2)) - ($s['trudnosc'] / 1.5);
-                $szansa_widok = max(10, min(95, $szansa_widok));
-                
-                $kolor_szansy = "#00ff00";
-                if ($szansa_widok < 70) $kolor_szansy = "#ffaa00";
-                if ($szansa_widok < 40) $kolor_szansy = "#ff3333";
+<?php /* ── ZLECENIA ──────────────────────────────────────────────── */ ?>
+<div class="sekcja">
+    <div class="sekcja-tytul">📋 Zlecenia <small>klient zapłacił z góry · przy porażce zwracasz kasę</small></div>
+    <?php if (empty($zlecenia)): ?>
+        <p class="pusto">Brak otwartych zleceń. Ustaw cennik niżej, żeby ktokolwiek mógł cokolwiek zamówić.</p>
+    <?php else: ?>
+        <div class="zlecenia-lista">
+            <?php foreach ($zlecenia as $z):
+                $b = $kat[$z['kod']] ?? null; if (!$b) continue;
+                $ulepsz = ($z['typ'] === 'ulepsz');
             ?>
-                <div class="schemat-karta">
-                    <h3>
-                        <?php echo $s['nazwa']; ?> 
-                        <span class="posiada-badge">W szafce: <?php echo $gracz[$kod]; ?></span>
-                    </h3>
-                    
-                    <div class="wymagania">
-                        <?php if($s['stal'] > 0) echo "<span class='req-item'>Stal: <b>{$s['stal']}</b></span>"; ?>
-                        <?php if($s['czesci'] > 0) echo "<span class='req-item'>Części: <b>{$s['czesci']}</b></span>"; ?>
-                        <?php if($s['syn'] > 0) echo "<span class='req-item'>Kevlar: <b>{$s['syn']}</b></span>"; ?>
-                        <?php if($s['elek'] > 0) echo "<span class='req-item'>Elektronika: <b>{$s['elek']}</b></span>"; ?>
-                        
-                        <?php if($s['loot']): ?>
-                            <div class="loot-req">
-                                💎 Wymaga: <?php echo $s['loot']; ?> <br>
-                                <span style="color: <?php echo $brak_loot ? '#ff3333' : '#00ff00'; ?>; font-size: 0.8em;">(Posiadasz: <?php echo $ilosc_lootu; ?>)</span>
-                            </div>
-                        <?php endif; ?>
-                        
-                        <div style="margin-top: 15px; font-family: 'Oswald', sans-serif; text-transform: uppercase;">
-                            <div style="display:flex; justify-content:space-between;">
-                                <span style="color:#aaa;">Szansa udanej kalibracji:</span>
-                                <b style="color:<?php echo $kolor_szansy; ?>;"><?php echo round($szansa_widok); ?>%</b>
-                            </div>
-                            <div class="szansa-bar-bg">
-                                <div class="szansa-bar-fill" style="width: <?php echo round($szansa_widok); ?>%; background: <?php echo $kolor_szansy; ?>;"></div>
-                            </div>
+                <div class="zlecenie">
+                    <div>
+                        <div class="kto"><?php echo htmlspecialchars($z['klient']); ?></div>
+                        <div class="co">
+                            <?php echo $ulepsz ? 'ulepszenie' : 'wytworzenie'; ?>:
+                            <b style="color:#fff;"><?php echo htmlspecialchars($b['nazwa']); ?></b>
+                            <?php if ($ulepsz): ?>
+                                &middot; stopień klienta: +<?php echo eq_stopien($polaczenie, (int)$z['klient_id'], $z['kod']); ?>
+                            <?php endif; ?>
                         </div>
                     </div>
-                    
+                    <div style="display:flex; align-items:center; gap:14px;">
+                        <span class="stawka"><?php echo number_format((int)$z['cena'], 0, '', ' '); ?> $</span>
+                        <form method="POST" style="margin:0;">
+                            <input type="hidden" name="zid" value="<?php echo (int)$z['id']; ?>">
+                            <button type="submit" name="wykonaj_zlecenie" class="btn-mini">Wykonaj</button>
+                        </form>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
+
+    <div style="background:rgba(10,10,10,.55); border:1px solid rgba(255,255,255,.06); border-radius:6px; padding:18px; margin-top:14px;">
+        <div style="font-family:'Oswald',sans-serif; text-transform:uppercase; letter-spacing:1px; color:#fff; margin-bottom:6px;">Twój cennik</div>
+        <div style="color:#777; font-size:.9em; margin-bottom:10px;">Cenę ustalasz sam. Materiały i energia idą z Twoich zapasów, więc licz je w stawce.</div>
+        <form method="POST" class="cennik-form">
+            <select name="kod" required>
+                <option value="">— wybierz broń —</option>
+                <?php foreach ($kat as $kod => $b): ?>
+                    <option value="<?php echo htmlspecialchars($kod); ?>"><?php echo htmlspecialchars($b['nazwa']); ?> (lvl <?php echo (int)$b['poziom']; ?>)</option>
+                <?php endforeach; ?>
+            </select>
+            <select name="typ">
+                <option value="wytworz">wytworzenie</option>
+                <option value="ulepsz">ulepszenie o stopień</option>
+            </select>
+            <input type="number" name="cena" min="0" step="50" placeholder="cena w $" required>
+            <button type="submit" name="ustaw_cene" class="btn-mini">Zapisz</button>
+        </form>
+
+        <?php if (!empty($cennik)): ?>
+            <table class="cennik-tabela" style="margin-top:16px;">
+                <thead><tr><th>Broń</th><th>Usługa</th><th>Cena</th></tr></thead>
+                <tbody>
+                <?php foreach ($cennik as $typ => $poz): foreach ($poz as $kod => $cena):
+                    if (!isset($kat[$kod])) continue; ?>
+                    <tr>
+                        <td><?php echo htmlspecialchars($kat[$kod]['nazwa']); ?></td>
+                        <td style="color:#888;"><?php echo $typ === 'ulepsz' ? 'ulepszenie o stopień' : 'wytworzenie'; ?></td>
+                        <td style="font-family:monospace; color:#ffd700;"><?php echo number_format((int)$cena, 0, '', ' '); ?> $</td>
+                    </tr>
+                <?php endforeach; endforeach; ?>
+                </tbody>
+            </table>
+        <?php endif; ?>
+    </div>
+</div>
+
+<?php /* ── ULEPSZANIE ────────────────────────────────────────────── */ ?>
+<div class="sekcja">
+    <div class="sekcja-tytul">🔧 Ulepszanie <small>+5% ataku na stopień · porażka zbija o jeden, nie niszczy</small></div>
+    <?php if (empty($do_ulepszenia)): ?>
+        <p class="pusto">Nie masz broni, którą dałoby się jeszcze podnieść.</p>
+    <?php else: ?>
+        <div class="schematy-grid">
+            <?php foreach ($do_ulepszenia as $kod => $st):
+                $b  = $kat[$kod];
+                $sp = (int)$st['stopien'];
+                $sz = ulepszenie_szansa($gracz, $b, $sp);
+                $mn = 0.35 * ($sp + 1);
+                $r  = ['stal'=>(int)ceil($b['stal']*$mn), 'czesci'=>(int)ceil($b['czesci']*$mn),
+                       'syn'=>(int)ceil($b['syn']*$mn),   'elek'=>(int)ceil($b['elek']*$mn)];
+                $en = max(2, (int)ceil($b['en'] * 0.5 * ($sp + 1) * 0.6));
+                $brak = ((int)$gracz['zlom_stalowy'] < $r['stal'] || (int)$gracz['czesci_mechaniczne'] < $r['czesci']
+                      || (int)$gracz['syntetyki'] < $r['syn'] || (int)$gracz['elektronika'] < $r['elek']
+                      || (int)$gracz['energia_aktualna'] < $en);
+                $kolor = $sz >= 70 ? '#00ff00' : ($sz >= 40 ? '#ffaa00' : '#ff3333');
+            ?>
+                <div class="schemat-karta">
+                    <h3><?php echo $b['ikona'].' '.htmlspecialchars($b['nazwa']); ?>
+                        <span class="posiada-badge">+<?php echo $sp; ?> → +<?php echo $sp + 1; ?></span></h3>
+                    <div class="wymagania">
+                        <div class="staty-bron">atak <?php echo bron_atak($b, $sp); ?> → <b style="color:#fff;"><?php echo bron_atak($b, $sp + 1); ?></b></div>
+                        <?php foreach ([['stal','Stal'],['czesci','Części'],['syn','Kevlar'],['elek','Elektronika']] as [$k, $ln]):
+                            if ($r[$k] <= 0) continue;
+                            $mapa = ['stal'=>'zlom_stalowy','czesci'=>'czesci_mechaniczne','syn'=>'syntetyki','elek'=>'elektronika'];
+                            $ma = (int)$gracz[$mapa[$k]] >= $r[$k]; ?>
+                            <span class="req-item<?php echo $ma ? '' : ' brak'; ?>"><?php echo $ln; ?>: <b><?php echo $r[$k]; ?></b></span>
+                        <?php endforeach; ?>
+                        <span class="req-item<?php echo (int)$gracz['energia_aktualna'] >= $en ? '' : ' brak'; ?>">Energia: <b><?php echo $en; ?></b></span>
+                        <div style="margin-top:12px; font-family:'Oswald',sans-serif; text-transform:uppercase;">
+                            <div style="display:flex; justify-content:space-between;">
+                                <span style="color:#aaa;">Szansa</span>
+                                <b style="color:<?php echo $kolor; ?>;"><?php echo round($sz); ?>%</b>
+                            </div>
+                            <div class="szansa-bar-bg"><div class="szansa-bar-fill" style="width:<?php echo round($sz); ?>%; background:<?php echo $kolor; ?>;"></div></div>
+                        </div>
+                        <?php if ($sp > 0): ?>
+                            <div style="color:#ff8888; font-size:.86em; margin-top:8px;">Porażka: spadek na +<?php echo $sp - 1; ?></div>
+                        <?php endif; ?>
+                    </div>
                     <form method="POST" style="margin-top:auto;">
-                        <input type="hidden" name="schemat_kod" value="<?php echo $kod; ?>">
-                        <button type="submit" name="wytworz" class="btn-wytworz <?php echo ($brak_mat || $brak_loot) ? 'btn-disabled' : ''; ?>" <?php echo ($brak_mat || $brak_loot) ? 'disabled' : ''; ?>>
-                            <?php echo ($brak_mat || $brak_loot) ? 'Braki Surowcowe' : 'Buduj (-'.$s['en'].' EN)'; ?>
+                        <input type="hidden" name="kod" value="<?php echo htmlspecialchars($kod); ?>">
+                        <button type="submit" name="ulepsz" class="btn-ulepsz<?php echo $brak ? ' btn-disabled' : ''; ?>"<?php echo $brak ? ' disabled' : ''; ?>>
+                            <?php echo $brak ? 'Braki' : 'Ulepsz (-'.$en.' EN)'; ?>
+                        </button>
+                    </form>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
+</div>
+
+<?php /* ── SCHEMATY ──────────────────────────────────────────────── */ ?>
+<div class="sekcja-tytul">🛠️ Schematy <small>60 pozycji · Lombard kończy się na poziomie 12</small></div>
+<?php foreach ($tiery as $nazwa_kat => $bronie): if (empty($bronie)) continue; ?>
+    <div class="kategoria-box">
+        <div class="sekcja-tytul" style="font-size:1.15em; border-bottom-style:solid;"><?php echo htmlspecialchars($nazwa_kat); ?></div>
+        <div class="schematy-grid">
+            <?php foreach ($bronie as $kod => $s):
+                $mam = isset($moje[$kod]) ? (int)$moje[$kod]['ilosc'] : 0;
+                $en  = max(1, (int)round($s['en'] * (float)$mod['craft_energia_mult']));
+                $brak_mat = ((int)$gracz['zlom_stalowy'] < $s['stal'] || (int)$gracz['czesci_mechaniczne'] < $s['czesci']
+                          || (int)$gracz['syntetyki'] < $s['syn'] || (int)$gracz['elektronika'] < $s['elek']);
+                $brak_en  = ((int)$gracz['energia_aktualna'] < $en);
+                $sz = min(95, rusznikarstwo_szansa($gracz, (int)$s['trudnosc']) / max(0.01, (float)$mod['inzynier_craft_fail_mult']));
+                $kolor = $sz >= 70 ? '#00ff00' : ($sz >= 40 ? '#ffaa00' : '#ff3333');
+            ?>
+                <div class="schemat-karta">
+                    <h3><?php echo $s['ikona'].' '.htmlspecialchars($s['nazwa']); ?>
+                        <span class="posiada-badge">w szafce: <?php echo $mam; ?></span></h3>
+                    <div class="wymagania">
+                        <div class="staty-bron">+<?php echo (int)$s['atak']; ?> atak · +<?php echo (int)$s['szybkosc']; ?> szyb.
+                            <span class="cios-mini"><?php echo bronie_kategoria_nazwa($s['cios']); ?></span></div>
+                        <?php foreach ([['stal','Stal','zlom_stalowy'],['czesci','Części','czesci_mechaniczne'],['syn','Kevlar','syntetyki'],['elek','Elektronika','elektronika']] as [$k, $ln, $kol]):
+                            if ((int)$s[$k] <= 0) continue;
+                            $ma = (int)$gracz[$kol] >= (int)$s[$k]; ?>
+                            <span class="req-item<?php echo $ma ? '' : ' brak'; ?>"><?php echo $ln; ?>: <b><?php echo (int)$s[$k]; ?></b></span>
+                        <?php endforeach; ?>
+                        <span class="req-item<?php echo $brak_en ? ' brak' : ''; ?>">Energia: <b><?php echo $en; ?></b></span>
+                        <div style="margin-top:12px; font-family:'Oswald',sans-serif; text-transform:uppercase;">
+                            <div style="display:flex; justify-content:space-between;">
+                                <span style="color:#aaa;">Szansa kalibracji</span>
+                                <b style="color:<?php echo $kolor; ?>;"><?php echo round($sz); ?>%</b>
+                            </div>
+                            <div class="szansa-bar-bg"><div class="szansa-bar-fill" style="width:<?php echo round($sz); ?>%; background:<?php echo $kolor; ?>;"></div></div>
+                        </div>
+                        <div style="color:#777; font-size:.85em; margin-top:8px;">Porażka: połowa materiałów i energii przepada.</div>
+                    </div>
+                    <form method="POST" style="margin-top:auto;">
+                        <input type="hidden" name="kod" value="<?php echo htmlspecialchars($kod); ?>">
+                        <button type="submit" name="wytworz" class="btn-wytworz<?php echo ($brak_mat || $brak_en) ? ' btn-disabled' : ''; ?>"<?php echo ($brak_mat || $brak_en) ? ' disabled' : ''; ?>>
+                            <?php echo $brak_mat ? 'Braki surowcowe' : ($brak_en ? 'Za mało energii' : 'Kuj (-'.$en.' EN)'); ?>
                         </button>
                     </form>
                 </div>
