@@ -15,8 +15,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // Wpłata do banku
     if (isset($_POST['wplac_bank'])) {
         $kwota = (int)$_POST['kwota_przelewu'];
-        if ($kwota > 0 && $gracz['gotowka'] >= $kwota) {
-            $polaczenie->query("UPDATE gracze SET gotowka = gotowka - $kwota, bank = bank + $kwota WHERE id = $id_gracza");
+        if ($kwota > 0 && db_zmien($polaczenie, "UPDATE gracze SET gotowka = gotowka - ?, bank = bank + ? WHERE id = ? AND gotowka >= ?", [$kwota, $kwota, $id_gracza, $kwota]) === 1) {
             $gracz['gotowka'] -= $kwota; $gracz['bank'] += $kwota;
             $komunikat = "<div class='sukces'>Zdeponowano $kwota $ na bezpiecznym koncie.</div>";
         } else { $komunikat = "<div class='blad'>Nieprawidłowa kwota lub brak gotówki!</div>"; }
@@ -25,8 +24,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // Wypłata z banku
     if (isset($_POST['wyplac_bank'])) {
         $kwota = (int)$_POST['kwota_przelewu'];
-        if ($kwota > 0 && $gracz['bank'] >= $kwota) {
-            $polaczenie->query("UPDATE gracze SET gotowka = gotowka + $kwota, bank = bank - $kwota WHERE id = $id_gracza");
+        if ($kwota > 0 && db_zmien($polaczenie, "UPDATE gracze SET gotowka = gotowka + ?, bank = bank - ? WHERE id = ? AND bank >= ?", [$kwota, $kwota, $id_gracza, $kwota]) === 1) {
             $gracz['gotowka'] += $kwota; $gracz['bank'] -= $kwota;
             $komunikat = "<div class='sukces'>Wypłacono $kwota $ w czystej gotówce.</div>";
         } else { $komunikat = "<div class='blad'>Nie masz tylu środków na koncie!</div>"; }
@@ -48,8 +46,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $komunikat = "<div class='blad'>Minimalna kwota lokaty to 1 000 $.</div>";
         } elseif ($gracz['gotowka'] < $kwota_lok) {
             $komunikat = "<div class='blad'>Nie masz tyle gotówki przy sobie!</div>";
+        } elseif (db_zmien($polaczenie, "UPDATE gracze SET gotowka = gotowka - ?, lokata_kwota = ?, lokata_godziny = ?, lokata_start = NOW()
+                                         WHERE id = ? AND gotowka >= ? AND lokata_kwota = 0", [$kwota_lok, $kwota_lok, $czas_lok, $id_gracza, $kwota_lok]) !== 1) {
+            $komunikat = "<div class='blad'>Lokata już jest aktywna albo zabrakło gotówki.</div>";
         } else {
-            $polaczenie->query("UPDATE gracze SET gotowka = gotowka - $kwota_lok, lokata_kwota = $kwota_lok, lokata_godziny = $czas_lok, lokata_start = NOW() WHERE id = $id_gracza");
             $gracz['gotowka'] -= $kwota_lok; $gracz['lokata_kwota'] = $kwota_lok; $gracz['lokata_godziny'] = $czas_lok; $gracz['lokata_start'] = date('Y-m-d H:i:s');
             $komunikat = "<div class='sukces'>Lokata aktywowana. Pieniądze zaczęły na siebie pracować.</div>";
         }
@@ -67,14 +67,22 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             // Sukces - odsetki
             $oprocentowanie = 5; // 5% za 24h
             $zysk = round($kapital * ($oprocentowanie / 100) * ($gracz['lokata_godziny'] / 24));
-            $pula = $kapital + $zysk;
-            $polaczenie->query("UPDATE gracze SET gotowka = gotowka + $pula, lokata_kwota = 0, lokata_godziny = 0, lokata_start = NULL WHERE id = $id_gracza");
-            $gracz['gotowka'] += $pula; $gracz['lokata_kwota'] = 0;
+            $zysk = (int)round($zysk * pochodzenie_bonus($gracz_r, 'bank_odsetki_mult', 1.0));
+            $pula = (int)$kapital + $zysk;
+            // Wypłata tylko raz: warunek na tę samą lokatę, którą właśnie przeczytaliśmy.
+            $ok = db_zmien($polaczenie, "UPDATE gracze SET gotowka = gotowka + ?, lokata_kwota = 0, lokata_godziny = 0, lokata_start = NULL
+                                        WHERE id = ? AND lokata_kwota = ? AND lokata_start = ?", [$pula, $id_gracza, (int)$kapital, $gracz['lokata_start']]) === 1;
+            if ($ok) { $gracz['gotowka'] += $pula; }
+            $gracz['lokata_kwota'] = 0;
+            if (!$ok) $komunikat = "<div class='blad'>Ta lokata została już rozliczona.</div>"; else
             $komunikat = "<div class='sukces'>Lokata zakończona sukcesem! Odbierasz swój kapitał i zysk w wysokości $zysk $.</div>";
         } else {
             // Zerwanie
-            $polaczenie->query("UPDATE gracze SET gotowka = gotowka + $kapital, lokata_kwota = 0, lokata_godziny = 0, lokata_start = NULL WHERE id = $id_gracza");
-            $gracz['gotowka'] += $kapital; $gracz['lokata_kwota'] = 0;
+            $ok = db_zmien($polaczenie, "UPDATE gracze SET gotowka = gotowka + ?, lokata_kwota = 0, lokata_godziny = 0, lokata_start = NULL
+                                        WHERE id = ? AND lokata_kwota = ? AND lokata_start = ?", [(int)$kapital, $id_gracza, (int)$kapital, $gracz['lokata_start']]) === 1;
+            if ($ok) { $gracz['gotowka'] += $kapital; }
+            $gracz['lokata_kwota'] = 0;
+            if (!$ok) $komunikat = "<div class='blad'>Ta lokata została już rozliczona.</div>"; else
             $komunikat = "<div class='blad'>Zerwałeś umowę przed czasem. Kapitał wraca do Ciebie, ale tracisz wszystkie odsetki!</div>";
         }
     }
@@ -93,7 +101,7 @@ if ($lokata_aktywna) {
     $pozostalo = max(0, $czas_koniec - $teraz);
     
     $zysk_przewidywany = round($gracz['lokata_kwota'] * (5 / 100) * ($gracz['lokata_godziny'] / 24));
-    $odsetki = round($odsetki * pochodzenie_bonus($gracz_r, 'bank_odsetki_mult', 1.0));
+    $zysk_przewidywany = round($zysk_przewidywany * pochodzenie_bonus($gracz_r, 'bank_odsetki_mult', 1.0));
 }
 ?>
 

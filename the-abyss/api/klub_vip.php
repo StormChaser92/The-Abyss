@@ -20,6 +20,7 @@ if (!isset($_SESSION['zalogowany']) || $_SESSION['zalogowany'] !== true) {
 }
 
 require_once __DIR__ . "/../db.php";
+require_once __DIR__ . "/../includes/bezpieczne.php";
 header('Content-Type: application/json; charset=utf-8');
 
 $id_gracza = (int)$_SESSION['id_gracza'];
@@ -120,8 +121,11 @@ if ($op === 'zaplac') {
     }
     $waznosc_do = date('Y-m-d H:i:s', $jutro_6);
 
-    // Pobierz pieniądze
-    $polaczenie->query("UPDATE gracze SET gotowka = gotowka - $cena WHERE id=$id_gracza");
+    // Pobierz pieniądze (warunkowo)
+    if (!kasa_pobierz($polaczenie, (int)$id_gracza, (int)$cena)) {
+        echo json_encode(['ok' => false, 'msg' => 'Brak gotówki']);
+        exit;
+    }
     $polaczenie->query("INSERT INTO klub_vip_zaplaty (gracz_id, kwota, waznosc_do) VALUES ($id_gracza, $cena, '$waznosc_do')");
 
     // System message

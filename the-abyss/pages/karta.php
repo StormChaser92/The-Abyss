@@ -561,8 +561,13 @@ $limit_cech = ($poch_wstepne && isset($poch_wstepne['bonusy']['limit_cech']))
 
 // ── ZAPIS CECH ─────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD']=='POST' && isset($_POST['zapisz_cechy'])) {
-    $nz = $_POST['zalety'] ?? [];
-    $nw = $_POST['wady']   ?? [];
+    $nz = array_values(array_filter((array)($_POST['zalety'] ?? []), 'is_string'));
+    $nw = array_values(array_filter((array)($_POST['wady']   ?? []), 'is_string'));
+    // Tylko cechy z katalogu — wcześniej formularz przyjmował dowolny tekst jako zaletę.
+    $znane_z = array_map('strval', array_keys($wszystkie_zalety_def));
+    $znane_w = array_map('strval', array_keys($wszystkie_wady_def));
+    $nz = array_values(array_intersect($nz, $znane_z));
+    $nw = array_values(array_intersect($nw, $znane_w));
     $az = array_unique(array_merge($aktualne_zalety,$nz));
     $aw = array_unique(array_merge($aktualne_wady,$nw));
     $all = array_merge($az,$aw);
@@ -590,10 +595,12 @@ if ($_SERVER['REQUEST_METHOD']=='POST' && isset($_POST['zapisz_ap'])) {
     $ds = (int)$_POST['dodana_sila']; $dz = (int)$_POST['dodana_zrecznosc'];
     $dw = (int)$_POST['dodana_wytrzymalosc']; $di = (int)$_POST['dodana_inteligencja'];
     $sum = $ds+$dz+$dw+$di;
-    if ($sum>0 && $sum<=$avail) {
-        $polaczenie->query("UPDATE gracze SET sila=sila+$ds,zrecznosc=zrecznosc+$dz,
-            wytrzymalosc=wytrzymalosc+$dw,inteligencja=inteligencja+$di,
-            punkty_atrybutow=punkty_atrybutow-$sum WHERE id=$id_gracza");
+    // Każdy składnik >= 0. Wcześniej ujemna wartość w jednym polu przerzucała punkty
+    // (np. +100 siły, −99 inteligencji za 1 AP).
+    if (min($ds, $dz, $dw, $di) >= 0 && $sum>0 && $sum<=$avail) {
+        db_zmien($polaczenie, "UPDATE gracze SET sila=sila+?,zrecznosc=zrecznosc+?,
+            wytrzymalosc=wytrzymalosc+?,inteligencja=inteligencja+?,
+            punkty_atrybutow=punkty_atrybutow-? WHERE id=? AND punkty_atrybutow>=?", [$ds, $dz, $dw, $di, $sum, (int)$id_gracza, $sum]);
         echo "<script>location.href='game.php?page=karta';</script>"; exit;
     }
 }

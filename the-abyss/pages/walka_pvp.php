@@ -114,12 +114,14 @@ if ($jego_hp <= 0 || ($jego_hp < $moje_hp && $moje_hp > 10)) {
     $koszt_po_wygranej = $koszt_energii;
     if (rand(1,100) <= pochodzenie_bonus($ja, 'egzekutor_energia_po_wygranej_szansa', 0)) $koszt_po_wygranej = 0;
 
-    $polaczenie->query("UPDATE gracze SET gotowka = gotowka + $zrabowano, energia_aktualna = energia_aktualna - $koszt_po_wygranej, ostatni_atak_pvp = NOW() WHERE id = $id_gracza");
-    $polaczenie->query("UPDATE gracze SET gotowka = gotowka - $zrabowano, hp_aktualne = max(1, $jego_hp) WHERE id = $cel_id");
+    db_q($polaczenie, "UPDATE gracze SET gotowka = gotowka + ?, energia_aktualna = GREATEST(0, energia_aktualna - ?), ostatni_atak_pvp = NOW() WHERE id = ?",
+         [(int)$zrabowano, (int)$koszt_po_wygranej, (int)$id_gracza]);
+    db_q($polaczenie, "UPDATE gracze SET gotowka = GREATEST(0, gotowka - ?), hp_aktualne = GREATEST(1, ?) WHERE id = ?",
+         [(int)$zrabowano, (int)$jego_hp, (int)$cel_id]);
     
-    // Alert dla ofiary
-    $alert = "Zostałeś napadnięty przez <b>{$ja['login']}</b>! Po krótkiej walce straciłeś <b>$zrabowano $</b>.";
-    $polaczenie->query("INSERT INTO powiadomienia (gracz_id, tresc) VALUES ($cel_id, '$alert')");
+    // Alert dla ofiary (login przez htmlspecialchars, zapis przez parametr — apostrof w nicku nic nie zepsuje)
+    $alert = "Zostałeś napadnięty przez <b>".htmlspecialchars($ja['login'])."</b>! Po krótkiej walce straciłeś <b>$zrabowano $</b>.";
+    powiadom($polaczenie, (int)$cel_id, $alert);
     
     // Czarna Pieczęć — tylko za wygraną z członkiem WROGIEGO syndykatu.
     // Szansa: 0,01% x suma walki bronią całego gangu, sufit 60%.
@@ -131,7 +133,8 @@ if ($jego_hp <= 0 || ($jego_hp < $moje_hp && $moje_hp > 10)) {
     $kolor = "#00ff00";
 } else {
     // PRZEGRANA
-    $polaczenie->query("UPDATE gracze SET hp_aktualne = max(1, $moje_hp), energia_aktualna = energia_aktualna - $koszt_energii, ostatni_atak_pvp = NOW() WHERE id = $id_gracza");
+    db_q($polaczenie, "UPDATE gracze SET hp_aktualne = GREATEST(1, ?), energia_aktualna = GREATEST(0, energia_aktualna - ?), ostatni_atak_pvp = NOW() WHERE id = ?",
+         [(int)$moje_hp, (int)$koszt_energii, (int)$id_gracza]);
     $tytul_walki = "PORAŻKA!";
     $podsumowanie = "Przeciwnik okazał się silniejszy lub zdołał uciec. Wracasz z niczym i nowymi sińcami.";
     $kolor = "#ff3333";

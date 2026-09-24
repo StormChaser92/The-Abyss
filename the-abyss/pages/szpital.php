@@ -23,8 +23,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['lecz'])) {
         } elseif ($gracz['hp_aktualne'] >= $gracz['hp_max']) {
             $komunikat = "<div class='info'>Jesteś w pełni sił. Nie marnuj mojego czasu.</div>";
         } else {
-            $nowe_hp = min($gracz['hp_max'], $gracz['hp_aktualne'] + $ile_hp);
-            $polaczenie->query("UPDATE gracze SET gotowka = gotowka - $cena, hp_aktualne = $nowe_hp WHERE id = $id_gracza");
+            $ok = db_zmien($polaczenie, "UPDATE gracze SET gotowka = gotowka - ?, hp_aktualne = LEAST(hp_max, hp_aktualne + ?)
+                                        WHERE id = ? AND gotowka >= ? AND hp_aktualne < hp_max", [$cena, $ile_hp, $id_gracza, $cena]) === 1;
+            if (!$ok) $komunikat = "<div class='blad'>Nie wyszło — odśwież stronę.</div>"; else
             $komunikat = "<div class='sukces'>Zastosowano: $nazwa. Czujesz się trochę lepiej!</div>";
         }
         
@@ -37,7 +38,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['lecz'])) {
         } elseif ($gracz['gotowka'] < $cena) {
             $komunikat = "<div class='blad'>Nie stać Cię na operację! Brakuje Ci gotówki (Koszt: $cena $).</div>";
         } else {
-            $polaczenie->query("UPDATE gracze SET gotowka = gotowka - $cena, hp_aktualne = hp_max WHERE id = $id_gracza");
+            // Cena liczona od tego HP, które widzieliśmy — jeśli się zmieniło, operacja nie przejdzie.
+            $ok = db_zmien($polaczenie, "UPDATE gracze SET gotowka = gotowka - ?, hp_aktualne = hp_max
+                                        WHERE id = ? AND gotowka >= ? AND hp_aktualne = ?", [$cena, $id_gracza, $cena, (int)$gracz['hp_aktualne']]) === 1;
+            if (!$ok) $komunikat = "<div class='blad'>Stan się zmienił — odśwież stronę.</div>"; else
             $komunikat = "<div class='sukces'>$nazwa zakończona. Jesteś jak nowo narodzony (Koszt: $cena $).</div>";
         }
         
@@ -46,7 +50,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['lecz'])) {
         if ($gracz['gotowka'] < $cena) {
             $komunikat = "<div class='blad'>Materiały medyczne kosztują! Przyjdź z gotówką.</div>";
         } else {
-            $polaczenie->query("UPDATE gracze SET gotowka = gotowka - $cena, apteczki = apteczki + 1 WHERE id = $id_gracza");
+            $ok = db_zmien($polaczenie, "UPDATE gracze SET gotowka = gotowka - ?, apteczki = apteczki + 1 WHERE id = ? AND gotowka >= ?", [$cena, $id_gracza, $cena]) === 1;
+            if (!$ok) $komunikat = "<div class='blad'>Materiały medyczne kosztują! Przyjdź z gotówką.</div>"; else
             $komunikat = "<div class='sukces'>Kupiłeś Wojskową Apteczkę. Możesz jej użyć w Dokach podczas walki.</div>";
         }
         
@@ -57,8 +62,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['lecz'])) {
         } elseif ($gracz['gotowka'] < $cena) {
             $komunikat = "<div class='blad'>Ten towar to luksus. Potrzebujesz 1 000 $.</div>";
         } else {
-            $nowa_en = min($gracz['energia_max'], $gracz['energia_aktualna'] + 5);
-            $polaczenie->query("UPDATE gracze SET gotowka = gotowka - $cena, energia_aktualna = $nowa_en WHERE id = $id_gracza");
+            $ok = db_zmien($polaczenie, "UPDATE gracze SET gotowka = gotowka - ?, energia_aktualna = LEAST(energia_max, energia_aktualna + 5)
+                                        WHERE id = ? AND gotowka >= ? AND energia_aktualna < energia_max", [$cena, $id_gracza, $cena]) === 1;
+            if (!$ok) $komunikat = "<div class='blad'>Nie wyszło — odśwież stronę.</div>"; else
             $komunikat = "<div class='sukces' style='color:#ffaa00; border-color:#ffaa00;'>Przyjąłeś zastrzyk. Odzyskujesz +5 Energii!</div>";
         }
     }

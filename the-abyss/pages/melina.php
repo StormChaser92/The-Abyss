@@ -25,14 +25,14 @@ $jestem_mg = czy_mg($gracz['login']);
 if ($syn_id > 0 && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['wplac'])) {
         $kwota = max(1, (int)$_POST['kwota']);
-        if ((int)$gracz['gotowka'] < $kwota) {
+        if (!kasa_pobierz($polaczenie, (int)$id_gracza, $kwota)) {
             $komunikat = "<div class='ml-alert err'>Nie masz przy sobie tyle gotówki.</div>";
         } else {
             [$ok, $blad] = melina_kasa($polaczenie, $syn_id, $id_gracza, $kwota, 'Wpłata: '.$gracz['login']);
             if ($ok) {
-                $polaczenie->query("UPDATE gracze SET gotowka=gotowka-$kwota WHERE id=$id_gracza");
                 $komunikat = "<div class='ml-alert ok'>Do skarbca wpadło ".number_format($kwota, 0, '', ' ')." $.</div>";
             } else {
+                kasa_dodaj($polaczenie, (int)$id_gracza, $kwota);   // skarbiec nie przyjął — gotówka wraca
                 $komunikat = "<div class='ml-alert err'>".htmlspecialchars($blad)."</div>";
             }
         }
@@ -43,7 +43,7 @@ if ($syn_id > 0 && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $kwota = max(1, (int)$_POST['kwota']);
             [$ok, $blad] = melina_kasa($polaczenie, $syn_id, $id_gracza, -$kwota, 'Wypłata: '.$gracz['login']);
             if ($ok) {
-                $polaczenie->query("UPDATE gracze SET gotowka=gotowka+$kwota WHERE id=$id_gracza");
+                kasa_dodaj($polaczenie, (int)$id_gracza, $kwota);
                 $komunikat = "<div class='ml-alert ok'>Wyjęte ze skarbca: ".number_format($kwota, 0, '', ' ')." $.</div>";
             } else {
                 $komunikat = "<div class='ml-alert err'>".htmlspecialchars($blad)."</div>";

@@ -34,9 +34,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         } elseif ((int)$t['hp_aktualne'] >= (int)$t['hp_max']) {
             $komunikat = "<div class='blad'>Jesteś w pełni zdrowy.</div>";
         } else {
-            $nowe = min((int)$t['hp_max'], (int)$t['hp_aktualne'] + 50);
-            $polaczenie->query("UPDATE gracze SET hp_aktualne=$nowe, apteczki=apteczki-1 WHERE id=$id_gracza");
-            $komunikat = "<div class='sukces'>Apteczka zużyta. Odzyskujesz zdrowie.</div>";
+            if (db_zmien($polaczenie, "UPDATE gracze SET hp_aktualne = LEAST(hp_max, hp_aktualne + 50), apteczki = apteczki - 1 WHERE id = ? AND apteczki > 0", [(int)$id_gracza]) === 1)
+                $komunikat = "<div class='sukces'>Apteczka zużyta. Odzyskujesz zdrowie.</div>";
+            else
+                $komunikat = "<div class='blad'>Nie masz apteczek.</div>";
         }
     }
 }

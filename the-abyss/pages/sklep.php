@@ -52,8 +52,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['kup_bron'])) {
             $komunikat = "<div class='blad'>Za niski poziom. Wymagany: {$b['poziom']}</div>";
         elseif ((int)$gracz['gotowka'] < (int)$b['cena'])
             $komunikat = "<div class='blad'>Brak kasy. Potrzebujesz {$b['cena']} \$</div>";
+        elseif (!kasa_pobierz($polaczenie, (int)$id_gracza, (int)$b['cena']))
+            $komunikat = "<div class='blad'>Brak kasy. Potrzebujesz {$b['cena']} \$</div>";
         else {
-            $polaczenie->query("UPDATE gracze SET gotowka = gotowka - {$b['cena']} WHERE id=$id_gracza");
             eq_dodaj($polaczenie, $id_gracza, $kod, 1);
             [$ok, $tekst] = eq_zaloz_bron($polaczenie, $id_gracza, $kod);
             $komunikat = "<div class='sukces'>Kupujesz <b>{$b['nazwa']}</b>. $tekst</div>";
@@ -71,8 +72,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['kup_pancerz'])) {
             $komunikat = "<div class='blad'>Za niski poziom. Wymagany: {$s['poziom']}</div>";
         elseif ((int)$gracz['gotowka'] < (int)$s['koszt'])
             $komunikat = "<div class='blad'>Brak kasy. Potrzebujesz {$s['koszt']} \$</div>";
+        elseif (!kasa_pobierz($polaczenie, (int)$id_gracza, (int)$s['koszt']))
+            $komunikat = "<div class='blad'>Brak kasy. Potrzebujesz {$s['koszt']} \$</div>";
         else {
-            $polaczenie->query("UPDATE gracze SET gotowka = gotowka - {$s['koszt']} WHERE id=$id_gracza");
             eq_dodaj($polaczenie, $id_gracza, $kod, 1);
             [$ok, $tekst] = eq_zaloz_pancerz($polaczenie, $id_gracza, $kod);
             $komunikat = "<div class='sukces'>Kupujesz <b>{$p['nazwa']}</b>. $tekst</div>";

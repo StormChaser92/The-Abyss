@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/bezpieczne.php';
 /* the-abyss/includes/rynek_odczynniki.php
    Stragan z odczynnikami — nowa kategoria towaru na rynku. Handlarz jest
    NPC, bo warka musi mieć źródło składników; kupione odczynniki lądują
@@ -55,9 +56,8 @@ function odczynniki_obsluz(mysqli $db, int $gracz_id): string {
         [$ok, $blad] = melina_kasa($db, $syn, $gracz_id, -$koszt, 'Odczynniki: '.$o['nazwa']." ×$ile");
         if (!$ok) return "<div class='blad'>".htmlspecialchars($blad)."</div>";
     } else {
-        if ((int)$g['gotowka'] < $koszt)
+        if (!kasa_pobierz($db, $gracz_id, (int)$koszt))
             return "<div class='blad'>Za mało gotówki. Potrzebujesz ".number_format($koszt, 0, '', ' ')." $.</div>";
-        $db->query("UPDATE gracze SET gotowka=gotowka-$koszt WHERE id=$gracz_id");
     }
 
     $db->query("UPDATE rynek_odczynniki SET sprzedane=sprzedane+$ile WHERE id=$id");

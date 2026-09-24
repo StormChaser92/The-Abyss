@@ -47,13 +47,19 @@ $slownik_przedmiotow = [
 
 $kategoria_materialy = ['zlom_stalowy', 'czesci_mechaniczne', 'syntetyki', 'elektronika'];
 
+/* Handlować wolno WYŁĄCZNIE towarami ze słownika. Kod towaru to nazwa kolumny w `gracze`,
+   więc bez tej listy dało się wystawić „poziom”, „bank” albo „exp” i przelać je na drugie konto. */
+function rynek_towar_ok(string $kod, array $slownik): bool {
+    return isset($slownik[$kod]) && preg_match('/^[a-z0-9_]+$/', $kod);
+}
+
 // --- STRAGAN ODCZYNNIKÓW (chemia pod warkę substancji w melinie) ---
 require_once "includes/rynek_odczynniki.php";
 $komunikat .= odczynniki_obsluz($polaczenie, $id_gracza);
 
 // 2. LOGIKA: WYSTAWIANIE OFERTY
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['wystaw_oferte'])) {
-    $co_sprzedaje = $polaczenie->real_escape_string($_POST['przedmiot']);
+    $co_sprzedaje = (string)($_POST['przedmiot'] ?? '');
     $ilosc = (int)$_POST['ilosc'];
     $cena = (int)$_POST['cena'];
     
@@ -61,11 +67,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['wystaw_oferte'])) {
 
     if ($ilosc <= 0 || $cena <= 0) {
         $komunikat = "<div class='blad'>Ilość i cena muszą być większe od zera!</div>";
-    } elseif (!isset($gracz[$co_sprzedaje]) || $gracz[$co_sprzedaje] < $ilosc) {
+    } elseif (!rynek_towar_ok($co_sprzedaje, $slownik_przedmiotow) || !isset($gracz[$co_sprzedaje])) {
+        $komunikat = "<div class='blad'>Tym się na Rynku nie handluje.</div>";
+    } elseif (db_zmien($polaczenie, "UPDATE gracze SET `$co_sprzedaje` = `$co_sprzedaje` - ? WHERE id = ? AND `$co_sprzedaje` >= ?", [$ilosc, (int)$id_gracza, $ilosc]) !== 1) {
         $komunikat = "<div class='blad'>Nie masz w ekwipunku takiej ilości tego przedmiotu!</div>";
     } else {
-        $polaczenie->query("UPDATE gracze SET $co_sprzedaje = $co_sprzedaje - $ilosc WHERE id = $id_gracza");
-        $polaczenie->query("INSERT INTO rynek_oferty (id_sprzedawcy, typ_oferty, kod_przedmiotu, ilosc, cena_za_sztuke) VALUES ($id_gracza, '$typ', '$co_sprzedaje', $ilosc, $cena)");
+        db_q($polaczenie, "INSERT INTO rynek_oferty (id_sprzedawcy, typ_oferty, kod_przedmiotu, ilosc, cena_za_sztuke) VALUES (?, ?, ?, ?, ?)",
+             [(int)$id_gracza, $typ, $co_sprzedaje, $ilosc, $cena]);
         $komunikat = "<div class='sukces'>Towar został wystawiony na Rynku!</div>";
         $gracz[$co_sprzedaje] -= $ilosc;
     }
@@ -85,19 +93,24 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['kup_oferte'])) {
         
         if ($sprzedawca_id == $id_gracza) {
             $komunikat = "<div class='blad'>Nie możesz kupić własnej oferty! (Przejdź do 'Moje Oferty', by ją zdjąć).</div>";
-        } elseif ($gracz['gotowka'] < $calkowity_koszt) {
+        } elseif (!rynek_towar_ok($przedmiot, $slownik_przedmiotow)) {
+            $komunikat = "<div class='blad'>Ta oferta jest wstrzymana do wyjaśnienia.</div>";
+        } elseif (!kasa_pobierz($polaczenie, (int)$id_gracza, (int)$calkowity_koszt)) {
             $komunikat = "<div class='blad'>Brak gotówki! Potrzebujesz $calkowity_koszt $.</div>";
+        } elseif (db_zmien($polaczenie, "DELETE FROM rynek_oferty WHERE id = ?", [$id_oferty]) !== 1) {
+            // Ktoś był szybszy. Pieniądze wracają, towar został u tamtego kupca.
+            kasa_dodaj($polaczenie, (int)$id_gracza, (int)$calkowity_koszt);
+            $komunikat = "<div class='blad'>Ta oferta została już kupiona lub wycofana.</div>";
         } else {
             // Wypłata dla sprzedawcy: cena plus jego bonus handlowy, minus prowizja rynku.
             // Belg ma tańszą prowizję i wyższą cenę sprzedaży (config/pochodzenia.php).
-            $sprz = $polaczenie->query("SELECT pochodzenie FROM gracze WHERE id = $sprzedawca_id")->fetch_assoc();
+            $sprz = db_wiersz($polaczenie, "SELECT pochodzenie FROM gracze WHERE id = ?", [(int)$sprzedawca_id]);
             $cena_sprzedazy = round($calkowity_koszt * pochodzenie_bonus($sprz, 'rynek_cena_sprzedazy_mult', 1.0));
             $prowizja       = round($cena_sprzedazy * RYNEK_PROWIZJA * pochodzenie_bonus($sprz, 'rynek_prowizja_mult', 1.0));
             $wyplata        = max(0, $cena_sprzedazy - $prowizja);
 
-            $polaczenie->query("UPDATE gracze SET gotowka = gotowka - $calkowity_koszt, $przedmiot = $przedmiot + $ilosc WHERE id = $id_gracza");
-            $polaczenie->query("UPDATE gracze SET gotowka = gotowka + $wyplata WHERE id = $sprzedawca_id");
-            $polaczenie->query("DELETE FROM rynek_oferty WHERE id = $id_oferty");
+            db_q($polaczenie, "UPDATE gracze SET `$przedmiot` = `$przedmiot` + ? WHERE id = ?", [(int)$ilosc, (int)$id_gracza]);
+            kasa_dodaj($polaczenie, (int)$sprzedawca_id, (int)$wyplata);
             
             $nazwa_wys = isset($slownik_przedmiotow[$przedmiot]) ? $slownik_przedmiotow[$przedmiot] : $przedmiot;
             $komunikat = "<div class='sukces'>Transakcja udana! Kupiłeś $ilosc x $nazwa_wys za $calkowity_koszt $.</div>";
@@ -118,13 +131,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['anuluj_oferte'])) {
     if ($wynik_oferty->num_rows > 0) {
         $oferta = $wynik_oferty->fetch_assoc();
         $przedmiot = $oferta['kod_przedmiotu'];
-        $ilosc = $oferta['ilosc'];
+        $ilosc = (int)$oferta['ilosc'];
         
-        $polaczenie->query("UPDATE gracze SET $przedmiot = $przedmiot + $ilosc WHERE id = $id_gracza");
-        $polaczenie->query("DELETE FROM rynek_oferty WHERE id = $id_oferty");
-        
-        $komunikat = "<div class='sukces'>Wycofano ofertę. Przedmioty wróciły do Ekwipunku.</div>";
-        $gracz[$przedmiot] += $ilosc;
+        // Najpierw zdejmij ofertę — tylko jedno żądanie może ją zdjąć i odebrać towar.
+        if (rynek_towar_ok($przedmiot, $slownik_przedmiotow)
+            && db_zmien($polaczenie, "DELETE FROM rynek_oferty WHERE id = ? AND id_sprzedawcy = ?", [$id_oferty, (int)$id_gracza]) === 1) {
+            db_q($polaczenie, "UPDATE gracze SET `$przedmiot` = `$przedmiot` + ? WHERE id = ?", [$ilosc, (int)$id_gracza]);
+            $komunikat = "<div class='sukces'>Wycofano ofertę. Przedmioty wróciły do Ekwipunku.</div>";
+            $gracz[$przedmiot] += $ilosc;
+        }
     }
 }
 ?>

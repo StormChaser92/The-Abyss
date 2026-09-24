@@ -200,8 +200,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['zapros_lokatora'])) {
                         VALUES ($id_gracza, $cel_id, 'wspollokator', '$wiadomosc', 'oczekuje')");
 
                     // Powiadomienie dla zaproszonego
-                    $pow = "🏠 <b>{$gracz['login']}</b> zaprosił cię do zamieszkania w swoim mieszkaniu! Sprawdź zakładkę Mieszkanie.";
-                    $polaczenie->query("INSERT INTO powiadomienia (gracz_id, tresc) VALUES ($cel_id, '$pow')");
+                    $pow = "🏠 <b>".htmlspecialchars($gracz['login'])."</b> zaprosił cię do zamieszkania w swoim mieszkaniu! Sprawdź zakładkę Mieszkanie.";
+                    powiadom($polaczenie, $cel_id, $pow);
 
                     $komunikat = "<div class='sukces'>📨 Zaproszenie wysłane do <b>".htmlspecialchars($cel['login'])."</b>!</div>";
                 }
@@ -227,8 +227,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['akceptuj_zaproszenie']
             $polaczenie->query("UPDATE zaproszenia_mieszkanie SET status='odrzucone' WHERE do_id=$id_gracza AND status='oczekuje' AND id != $zap_id");
 
             // Powiadomienie dla właściciela
-            $pow = "🎉 <b>{$gracz['login']}</b> wprowadził się do Twojego mieszkania!";
-            $polaczenie->query("INSERT INTO powiadomienia (gracz_id, tresc) VALUES ({$zap['od_id']}, '$pow')");
+            $pow = "🎉 <b>".htmlspecialchars($gracz['login'])."</b> wprowadził się do Twojego mieszkania!";
+            powiadom($polaczenie, (int)$zap['od_id'], $pow);
 
             echo "<script>location.href='game.php?page=mieszkanie';</script>"; exit;
         }
@@ -240,8 +240,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['odrzuc_zaproszenie']))
     $zap = $polaczenie->query("SELECT * FROM zaproszenia_mieszkanie WHERE id=$zap_id AND do_id=$id_gracza AND status='oczekuje'")->fetch_assoc();
     if ($zap) {
         $polaczenie->query("UPDATE zaproszenia_mieszkanie SET status='odrzucone' WHERE id=$zap_id");
-        $pow = "❌ <b>{$gracz['login']}</b> odrzucił Twoje zaproszenie do zamieszkania.";
-        $polaczenie->query("INSERT INTO powiadomienia (gracz_id, tresc) VALUES ({$zap['od_id']}, '$pow')");
+        $pow = "❌ <b>".htmlspecialchars($gracz['login'])."</b> odrzucił Twoje zaproszenie do zamieszkania.";
+        powiadom($polaczenie, (int)$zap['od_id'], $pow);
         $komunikat = "<div class='sukces'>Zaproszenie odrzucone.</div>";
     }
 }
@@ -254,8 +254,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['wyrzuc_lokatora'])) {
     $polaczenie->query("DELETE FROM wspollokatorzy WHERE wlasciciel_id=$id_gracza AND lokator_id=$lok_id");
     // Wyłącz mu tryb "w_mieszkaniu" jakby był aktywny
     $polaczenie->query("UPDATE gracze SET w_mieszkaniu=0 WHERE id=$lok_id");
-    $pow = "🚪 <b>{$gracz['login']}</b> wyrzucił cię ze swojego mieszkania.";
-    $polaczenie->query("INSERT INTO powiadomienia (gracz_id, tresc) VALUES ($lok_id, '$pow')");
+    $pow = "🚪 <b>".htmlspecialchars($gracz['login'])."</b> wyrzucił cię ze swojego mieszkania.";
+    powiadom($polaczenie, $lok_id, $pow);
     $komunikat = "<div class='sukces'>Lokator wyrzucony na ulicę.</div>";
     echo "<script>location.href='game.php?page=mieszkanie';</script>"; exit;
 }
@@ -268,8 +268,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['wyprowadz_sie'])) {
         $wl_id = $jestem_lokatorem['wlasciciel_id'];
         $polaczenie->query("DELETE FROM wspollokatorzy WHERE lokator_id=$id_gracza");
         $polaczenie->query("UPDATE gracze SET w_mieszkaniu=0 WHERE id=$id_gracza");
-        $pow = "🚶 <b>{$gracz['login']}</b> wyprowadził się z Twojego mieszkania.";
-        $polaczenie->query("INSERT INTO powiadomienia (gracz_id, tresc) VALUES ($wl_id, '$pow')");
+        $pow = "🚶 <b>".htmlspecialchars($gracz['login'])."</b> wyprowadził się z Twojego mieszkania.";
+        powiadom($polaczenie, (int)$wl_id, $pow);
         echo "<script>location.href='game.php?page=mieszkanie';</script>"; exit;
     }
 }
@@ -293,22 +293,23 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['skrzynia_akcja'])) {
     $ilosc = max(0, (int)$_POST['ilosc']);
 
     $dozwolone_zasoby = ['gotowka','zlom_stalowy','czesci_mechaniczne','syntetyki','elektronika'];
-    if (in_array($typ, $dozwolone_zasoby) && $ilosc > 0) {
+    if (!$jestem_wlascicielem && !$jestem_lokatorem) {
+        $komunikat = "<div class='blad'>To nie Twoja skrzynia.</div>";
+    } elseif (in_array($typ, $dozwolone_zasoby, true) && $ilosc > 0) {
+        // Każdy ruch to warunkowy UPDATE: odejmujemy tylko to, co jest. Dwa kliknięcia „wyjmij”
+        // naraz nie wyjmą podwójnie — wcześniej tak dało się kopiować gotówkę ze skrzyni.
         if ($akcja == 'wrzuc') {
-            if ($gracz[$typ] >= $ilosc) {
-                $polaczenie->query("UPDATE gracze SET $typ = $typ - $ilosc WHERE id=$id_gracza");
-                $polaczenie->query("UPDATE wspolna_skrzynia SET $typ = $typ + $ilosc WHERE wlasciciel_id=$wl_skrzyni_id");
-                $polaczenie->query("INSERT INTO skrzynia_log (wlasciciel_id, gracz_id, akcja, typ_zasobu, ilosc) VALUES ($wl_skrzyni_id, $id_gracza, 'wrzuc', '$typ', $ilosc)");
+            if (zasob_pobierz($polaczenie, (int)$id_gracza, $ilosc, $typ)) {
+                db_q($polaczenie, "UPDATE wspolna_skrzynia SET `$typ` = `$typ` + ? WHERE wlasciciel_id = ?", [$ilosc, (int)$wl_skrzyni_id]);
+                db_q($polaczenie, "INSERT INTO skrzynia_log (wlasciciel_id, gracz_id, akcja, typ_zasobu, ilosc) VALUES (?, ?, 'wrzuc', ?, ?)", [(int)$wl_skrzyni_id, (int)$id_gracza, $typ, $ilosc]);
                 $komunikat = "<div class='sukces'>📦 Wrzuciłeś <b>$ilosc</b> do skrzyni.</div>";
             } else {
                 $komunikat = "<div class='blad'>Nie masz tyle zasobów!</div>";
             }
         } elseif ($akcja == 'wyjmij') {
-            $sk = $polaczenie->query("SELECT $typ FROM wspolna_skrzynia WHERE wlasciciel_id=$wl_skrzyni_id")->fetch_assoc();
-            if ($sk && $sk[$typ] >= $ilosc) {
-                $polaczenie->query("UPDATE wspolna_skrzynia SET $typ = $typ - $ilosc WHERE wlasciciel_id=$wl_skrzyni_id");
-                $polaczenie->query("UPDATE gracze SET $typ = $typ + $ilosc WHERE id=$id_gracza");
-                $polaczenie->query("INSERT INTO skrzynia_log (wlasciciel_id, gracz_id, akcja, typ_zasobu, ilosc) VALUES ($wl_skrzyni_id, $id_gracza, 'wyjmij', '$typ', $ilosc)");
+            if (db_zmien($polaczenie, "UPDATE wspolna_skrzynia SET `$typ` = `$typ` - ? WHERE wlasciciel_id = ? AND `$typ` >= ?", [$ilosc, (int)$wl_skrzyni_id, $ilosc]) === 1) {
+                zasob_dodaj($polaczenie, (int)$id_gracza, $ilosc, $typ);
+                db_q($polaczenie, "INSERT INTO skrzynia_log (wlasciciel_id, gracz_id, akcja, typ_zasobu, ilosc) VALUES (?, ?, 'wyjmij', ?, ?)", [(int)$wl_skrzyni_id, (int)$id_gracza, $typ, $ilosc]);
                 $komunikat = "<div class='sukces'>📤 Wyjąłeś <b>$ilosc</b> ze skrzyni.</div>";
             } else {
                 $komunikat = "<div class='blad'>Skrzynia nie ma tyle zasobów!</div>";
@@ -358,10 +359,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['zbuduj_pokoj'])) {
                 }
                 if ($ok) {
                     $posiadane_pokoje[] = $nazwa;
-                    $json = $polaczenie->real_escape_string(json_encode($posiadane_pokoje));
-                    $polaczenie->query("UPDATE gracze SET gotowka=gotowka-{$dane['koszt']}, pokoje_specjalne='$json' WHERE id=$id_gracza");
+                    $json = json_encode($posiadane_pokoje);
+                    if (db_zmien($polaczenie, "UPDATE gracze SET gotowka = gotowka - ?, pokoje_specjalne = ? WHERE id = ? AND gotowka >= ?",
+                                 [(int)$dane['koszt'], $json, (int)$id_gracza, (int)$dane['koszt']]) !== 1) {
+                        $komunikat = "<div class='blad'>Brak gotówki!</div>";
+                    } else {
                     $komunikat = "<div class='sukces'>✅ Zbudowano: <b>$nazwa</b></div>";
                     echo "<script>location.href='game.php?page=mieszkanie';</script>"; exit;
+                    }
                 } else {
                     $komunikat = "<div class='blad'>Nie spełniasz wymagań!</div>";
                 }

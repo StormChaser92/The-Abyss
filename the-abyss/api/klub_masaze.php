@@ -19,6 +19,7 @@ if (!isset($_SESSION['zalogowany']) || $_SESSION['zalogowany'] !== true) {
 }
 
 require_once __DIR__ . "/../db.php";
+require_once __DIR__ . "/../includes/bezpieczne.php";
 require_once __DIR__ . "/klub_odznaki_helper.php";
 header('Content-Type: application/json; charset=utf-8');
 
@@ -74,10 +75,17 @@ if ($op === 'zamow') {
         exit;
     }
 
-    // Pobierz kasę
-    $polaczenie->query("UPDATE gracze SET gotowka = gotowka - $cena WHERE id=$id_gracza");
-    // Zajmij łóżko
-    $polaczenie->query("UPDATE klub_masaze_lozka SET klient_id=$id_gracza, zabieg_id=$zabieg_id, do_kiedy=NOW() + INTERVAL $czas_min MINUTE WHERE id=$lozko_id");
+    // Zajmij łóżko warunkowo (dwóch klientów naraz nie położy się na jednym), potem pobierz kasę.
+    $polaczenie->query("UPDATE klub_masaze_lozka SET klient_id=$id_gracza, zabieg_id=$zabieg_id, do_kiedy=NOW() + INTERVAL $czas_min MINUTE WHERE id=$lozko_id AND (klient_id IS NULL OR klient_id=0)");
+    if ($polaczenie->affected_rows !== 1) {
+        echo json_encode(['ok' => false, 'msg' => 'Łóżko jest zajęte']);
+        exit;
+    }
+    if (!kasa_pobierz($polaczenie, (int)$id_gracza, $cena)) {
+        $polaczenie->query("UPDATE klub_masaze_lozka SET klient_id=NULL, zabieg_id=NULL, do_kiedy=NULL WHERE id=$lozko_id AND klient_id=$id_gracza");
+        echo json_encode(['ok' => false, 'msg' => 'Brak gotówki']);
+        exit;
+    }
     // Historia
     $z_nazwa_e = $polaczenie->real_escape_string($zabieg['nazwa']);
     $polaczenie->query("INSERT INTO klub_zabiegi_historia (gracz_id, zabieg_id, zabieg_nazwa, cena_zaplacona) VALUES ($id_gracza, $zabieg_id, '$z_nazwa_e', $cena)");

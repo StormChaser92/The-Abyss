@@ -151,9 +151,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (isset($_POST['wplac_kase']) && $w_syndykacie) {
         $syn_id = $gracz['syndykat_id'];
         $kwota = (int)$_POST['kwota_wplaty'];
-        if ($kwota > 0 && $gracz['gotowka'] >= $kwota) {
-            $polaczenie->query("UPDATE gracze SET gotowka = gotowka - $kwota WHERE id = $id_gracza");
-            $polaczenie->query("UPDATE syndykaty SET skarbiec = skarbiec + $kwota WHERE id = $syn_id");
+        if ($kwota > 0 && kasa_pobierz($polaczenie, (int)$id_gracza, $kwota)) {
+            db_q($polaczenie, "UPDATE syndykaty SET skarbiec = skarbiec + ? WHERE id = ?", [$kwota, (int)$syn_id]);
             $gracz['gotowka'] -= $kwota;
             $komunikat = "<div class='msg-ok'>✓ Wpłacono ".number_format($kwota,0,'',' ')." $ do kasy rodziny.</div>";
         } else {
@@ -165,10 +164,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (isset($_POST['wyplac_kase']) && $w_syndykacie && syn_moze($moja_rola, 'kasa_wyplata')) {
         $syn_id = $gracz['syndykat_id'];
         $kwota = (int)$_POST['kwota_wyplaty'];
-        $sprawdz = $polaczenie->query("SELECT skarbiec FROM syndykaty WHERE id=$syn_id")->fetch_assoc();
-        if ($kwota > 0 && $sprawdz['skarbiec'] >= $kwota) {
-            $polaczenie->query("UPDATE gracze SET gotowka = gotowka + $kwota WHERE id = $id_gracza");
-            $polaczenie->query("UPDATE syndykaty SET skarbiec = skarbiec - $kwota WHERE id = $syn_id");
+        // Warunek w UPDATE: dwie równoczesne wypłaty nie opróżnią kasy poniżej zera.
+        if ($kwota > 0 && db_zmien($polaczenie, "UPDATE syndykaty SET skarbiec = skarbiec - ? WHERE id = ? AND skarbiec >= ?", [$kwota, (int)$syn_id, $kwota]) === 1) {
+            kasa_dodaj($polaczenie, (int)$id_gracza, $kwota);
             $komunikat = "<div class='msg-ok'>✓ Wypłacono ".number_format($kwota,0,'',' ')." $ z kasy.</div>";
         } else {
             $komunikat = "<div class='msg-blad'>⚠ Nieprawidłowa kwota lub kasa ma za mało środków.</div>";
@@ -178,16 +176,22 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     // ── PRZYJĘCIE PODANIA (Don, Consigliere, Capo, Rekruter) ─────
     if (isset($_POST['akceptuj_podanie']) && $w_syndykacie && syn_moze($moja_rola, 'rekrutacja')) {
         $aplikant_id = (int)$_POST['id_aplikanta'];
-        $syn_id = $gracz['syndykat_id'];
-        // Nowi dostają rangę Picciotto
-        $polaczenie->query("UPDATE gracze SET 
-            syndykat_id = $syn_id, 
-            syndykat_rola = 'Picciotto', 
+        $syn_id = (int)$gracz['syndykat_id'];
+        // Przyjąć można tylko kogoś, kto złożył podanie do TEJ rodziny i nie siedzi w innej.
+        // Wcześniej dowolne id z formularza wciągało do gangu każdego gracza, także członka wrogiej rodziny.
+        if (db_zmien($polaczenie, "DELETE FROM syndykat_podania WHERE gracz_id = ? AND syndykat_id = ?", [$aplikant_id, $syn_id]) < 1) {
+            $komunikat = "<div class='msg-blad'>⚠ Nie ma takiego podania.</div>";
+        } elseif (db_zmien($polaczenie, "UPDATE gracze SET
+            syndykat_id = ?,
+            syndykat_rola = 'Picciotto',
             syndykat_dostep_skarbiec = 0,
             syndykat_data_dolaczenia = NOW()
-            WHERE id = $aplikant_id");
-        $polaczenie->query("DELETE FROM syndykat_podania WHERE gracz_id = $aplikant_id");
-        $komunikat = "<div class='msg-ok'>✓ Nowy Picciotto dołączył do rodziny.</div>";
+            WHERE id = ? AND (syndykat_id IS NULL OR syndykat_id = 0)", [$syn_id, $aplikant_id]) !== 1) {
+            $komunikat = "<div class='msg-blad'>⚠ Ten gracz już należy do innej rodziny.</div>";
+        } else {
+            db_q($polaczenie, "DELETE FROM syndykat_podania WHERE gracz_id = ?", [$aplikant_id]);
+            $komunikat = "<div class='msg-ok'>✓ Nowy Picciotto dołączył do rodziny.</div>";
+        }
     }
 
     // ── ODRZUCENIE PODANIA ───────────────────────────────────────

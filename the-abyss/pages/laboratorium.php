@@ -22,12 +22,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['produkuj_apteczke'])) 
             $komunikat = "<div class='blad'>Jesteś zbyt zmęczony na precyzyjną pracę laboratoryjną.</div>";
         } else {
             // Sukces!
-            $polaczenie->query("UPDATE gracze SET 
-                materialy = materialy - $koszt_mat, 
-                energia_aktualna = energia_aktualna - $koszt_en,
-                apteczki = apteczki + 1 
-                WHERE id = $id_gracza");
-            
+            $ok = db_zmien($polaczenie, "UPDATE gracze SET
+                materialy = materialy - ?,
+                energia_aktualna = energia_aktualna - ?,
+                apteczki = apteczki + 1
+                WHERE id = ? AND materialy >= ? AND energia_aktualna >= ?", [$koszt_mat, $koszt_en, (int)$id_gracza, $koszt_mat, $koszt_en]) === 1;
+            if (!$ok) { $komunikat = "<div class='blad'>Zabrakło materiałów albo energii.</div>"; $gracz['apteczki'] -= 1; $gracz['materialy'] += $koszt_mat; $gracz['energia_aktualna'] += $koszt_en; } else
             $komunikat = "<div class='sukces'>Udało się! Wyprodukowałeś profesjonalną Apteczkę Uliczną.</div>";
             
             // Odśwież dane do widoku

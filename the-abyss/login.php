@@ -5,18 +5,20 @@ require_once "db.php";
 $komunikat = ""; 
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $login = $_POST['login'];
-    $haslo = $_POST['haslo'];
+    $login = trim((string)($_POST['login'] ?? ''));
+    $haslo = (string)($_POST['haslo'] ?? '');
 
-    $login = $polaczenie->real_escape_string($login);
-
-    $sql = "SELECT * FROM gracze WHERE login='$login'";
-    $rezultat = $polaczenie->query($sql);
+    $st = $polaczenie->prepare("SELECT id, login, haslo, profesja FROM gracze WHERE login = ? LIMIT 1");
+    $st->bind_param('s', $login);
+    $st->execute();
+    $rezultat = $st->get_result();
 
     if ($rezultat->num_rows > 0) {
         $wiersz = $rezultat->fetch_assoc();
         
         if (password_verify($haslo, $wiersz['haslo'])) {
+            // Nowy identyfikator sesji po zalogowaniu — podrzucone ciasteczko sesji przestaje działać.
+            session_regenerate_id(true);
             $_SESSION['zalogowany'] = true;
             $_SESSION['id_gracza'] = $wiersz['id'];
             $_SESSION['login'] = $wiersz['login'];

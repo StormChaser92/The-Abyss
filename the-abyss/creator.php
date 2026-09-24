@@ -10,13 +10,14 @@ if (!isset($_SESSION['zalogowany'])) {
 
 // Jeśli gracz kliknął "WEJDŹ DO MIASTA" (wysłał formularz)
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['wybrana_profesja'])) {
-    $profesja = $polaczenie->real_escape_string($_POST['wybrana_profesja']);
-    $id_gracza = $_SESSION['id_gracza'];
+    $profesja = mb_substr(trim((string)$_POST['wybrana_profesja']), 0, 60);
+    $id_gracza = (int)$_SESSION['id_gracza'];
 
-    // Zapisujemy wybór w bazie danych
-    $sql = "UPDATE gracze SET profesja='$profesja' WHERE id=$id_gracza";
-    
-    if ($polaczenie->query($sql) === TRUE) {
+    // Zapisujemy wybór w bazie danych (tylko jeśli profesji jeszcze nie ma)
+    $st = $polaczenie->prepare("UPDATE gracze SET profesja = ? WHERE id = ? AND (profesja IS NULL OR profesja = '')");
+    $st->bind_param('si', $profesja, $id_gracza);
+
+    if ($st->execute()) {
         // Po udanym zapisie, przenosimy od razu do gry!
         header("Location: game.php");
         exit;

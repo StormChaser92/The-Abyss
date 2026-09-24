@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/bezpieczne.php';
 /* the-abyss/includes/melina.php
    Melina syndykatu — skarbiec, warka substancji, terytoria, pieczęcie.
    Bez echa i bez HTML.
@@ -153,8 +154,7 @@ function melina_start_warki(mysqli $db, array $g, string $kraj, string $miasto, 
         [$ok, $blad] = melina_kasa($db, $syn, (int)$g['id'], -$koszt, 'Warka substancji');
         if (!$ok) return [false, $blad];
     } else {
-        if ((int)$g['gotowka'] < $koszt) return [false, 'Nie masz przy sobie '.number_format($koszt, 0, '', ' ').' $.'];
-        $db->query("UPDATE gracze SET gotowka=gotowka-$koszt WHERE id={$g['id']}");
+        if (!kasa_pobierz($db, (int)$g['id'], $koszt)) return [false, 'Nie masz przy sobie '.number_format($koszt, 0, '', ' ').' $.'];
     }
 
     foreach (warka_receptura() as $nazwa => $ile)

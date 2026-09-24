@@ -59,9 +59,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['zaloz_firme'])) {
             $check = $polaczenie->query("SELECT id FROM firmy WHERE nazwa = '$nazwa_e' AND status != 'zamknieta'");
             if ($check && $check->num_rows > 0) {
                 $komunikat = "<div class='msg msg-bad'>Firma o tej nazwie już istnieje. Wybierz inną.</div>";
+            } elseif (db_zmien($polaczenie, "UPDATE gracze SET gotowka = gotowka - ? WHERE id = ? AND gotowka >= ? AND (id_firmy IS NULL OR id_firmy = 0)",
+                                [FIRMA_KOSZT_REJESTRACJI, (int)$id_gracza, FIRMA_KOSZT_REJESTRACJI]) !== 1) {
+                // Warunek w UPDATE: dwa szybkie wysłania formularza nie założą dwóch firm.
+                $komunikat = "<div class='msg msg-bad'>Brak gotówki albo masz już firmę — odśwież stronę.</div>";
             } else {
-                // Pobierz kasę i utwórz firmę
-                $polaczenie->query("UPDATE gracze SET gotowka = gotowka - " . FIRMA_KOSZT_REJESTRACJI . " WHERE id = $id_gracza");
 
                 $branza_e = $polaczenie->real_escape_string($branza);
                 $slogan_e = $polaczenie->real_escape_string($slogan);
@@ -129,7 +131,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['kup_dom'])) {
         } elseif ($gracz['gotowka'] < $cena_domu) {
             $komunikat = "<div class='msg msg-bad'>Nie stać Cię na ten akt własności. Brakuje " . number_format($cena_domu - $gracz['gotowka'], 0, '', ' ') . " $!</div>";
         } else {
-            $polaczenie->query("UPDATE gracze SET gotowka = gotowka - $cena_domu, id_domu = $wybrany_id WHERE id = $id_gracza");
+            $ok = db_zmien($polaczenie, "UPDATE gracze SET gotowka = gotowka - ?, id_domu = ? WHERE id = ? AND gotowka >= ? AND COALESCE(id_domu,0) < ?",
+                           [(int)$cena_domu, $wybrany_id, (int)$id_gracza, (int)$cena_domu, $wybrany_id]) === 1;
+            if (!$ok) $komunikat = "<div class='msg msg-bad'>Nie wyszło — odśwież stronę.</div>"; else
             $komunikat = "<div class='msg msg-good'>Gratulacje! Podpisano akt własności: " . htmlspecialchars($lista_nieruchomosci[$wybrany_id]['nazwa']) . ".</div>";
             $gracz['gotowka'] -= $cena_domu;
             $gracz['id_domu'] = $wybrany_id;

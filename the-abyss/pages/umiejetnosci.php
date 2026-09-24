@@ -8,40 +8,6 @@ $gracz_dane = $wynik->fetch_assoc();
 $dostepne_pu = (int)$gracz_dane['punkty_umiejetnosci'];
 $posiadane_um = !empty($gracz_dane['umiejetnosci']) ? json_decode($gracz_dane['umiejetnosci'], true) : [];
 
-// ── ZAPIS UMIEJĘTNOŚCI ───────────────────────────────────────────
-$blad = "";
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['zapisz_umiejetnosci'])) {
-
-    $wydane_punkty = 0;
-    $nowe_umiejetnosci = $posiadane_um;
-
-    if (isset($_POST['um'])) {
-        foreach ($_POST['um'] as $nazwa_um => $nowy_poziom) {
-            $nowy_poziom = (int)$nowy_poziom;
-            $stary_poziom = isset($posiadane_um[$nazwa_um]) ? (int)$posiadane_um[$nazwa_um] : 0;
-
-            if ($nowy_poziom > $stary_poziom) {
-                $roznica = $nowy_poziom - $stary_poziom;
-                $wydane_punkty += $roznica;
-                $nowe_umiejetnosci[$nazwa_um] = $nowy_poziom;
-            }
-        }
-    }
-
-    if ($wydane_punkty <= $dostepne_pu && $wydane_punkty > 0) {
-        $nowe_pu = $dostepne_pu - $wydane_punkty;
-        $pakiet_json = $polaczenie->real_escape_string(json_encode($nowe_umiejetnosci, JSON_UNESCAPED_UNICODE));
-
-        $sql = "UPDATE gracze SET umiejetnosci='$pakiet_json', punkty_umiejetnosci=$nowe_pu WHERE id=$id_gracza";
-        $polaczenie->query($sql);
-
-        echo "<script>window.location.href='game.php?page=umiejetnosci';</script>";
-        exit;
-    } else {
-        $blad = "Wydano nieprawidłową ilość punktów!";
-    }
-}
-
 // ═══════════════════════════════════════════════════════════════════
 // KATALOG UMIEJĘTNOŚCI (92 pozycje w 8 kategoriach)
 // ═══════════════════════════════════════════════════════════════════
@@ -195,6 +161,45 @@ $KATEGORIE = [
         ],
     ],
 ];
+
+// ── ZAPIS UMIEJĘTNOŚCI ───────────────────────────────────────────
+$blad = "";
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['zapisz_umiejetnosci'])) {
+
+    $wydane_punkty = 0;
+    $nowe_umiejetnosci = $posiadane_um;
+
+    if (isset($_POST['um'])) {
+        // Tylko umiejętności z katalogu — nazwy spoza listy były zapisywane do profilu.
+        $znane_um = [];
+        foreach ($KATEGORIE as $kat_um) foreach ($kat_um['umiejetnosci'] as $n_um => $_o) $znane_um[$n_um] = true;
+        foreach ((array)$_POST['um'] as $nazwa_um => $nowy_poziom) {
+            if (!isset($znane_um[$nazwa_um])) continue;
+            $nowy_poziom = (int)$nowy_poziom;
+            $stary_poziom = isset($posiadane_um[$nazwa_um]) ? (int)$posiadane_um[$nazwa_um] : 0;
+
+            if ($nowy_poziom > $stary_poziom) {
+                $roznica = $nowy_poziom - $stary_poziom;
+                $wydane_punkty += $roznica;
+                $nowe_umiejetnosci[$nazwa_um] = $nowy_poziom;
+            }
+        }
+    }
+
+    if ($wydane_punkty <= $dostepne_pu && $wydane_punkty > 0) {
+        $nowe_pu = $dostepne_pu - $wydane_punkty;
+        $pakiet_json = json_encode($nowe_umiejetnosci, JSON_UNESCAPED_UNICODE);
+        // Warunek na stan PU, który widzieliśmy — dwa zapisy naraz nie wydadzą tych samych punktów dwa razy.
+        db_zmien($polaczenie, "UPDATE gracze SET umiejetnosci = ?, punkty_umiejetnosci = ? WHERE id = ? AND punkty_umiejetnosci = ?",
+                 [$pakiet_json, $nowe_pu, (int)$id_gracza, $dostepne_pu]);
+
+        echo "<script>window.location.href='game.php?page=umiejetnosci';</script>";
+        exit;
+    } else {
+        $blad = "Wydano nieprawidłową ilość punktów!";
+    }
+}
+
 ?>
 
 <style>

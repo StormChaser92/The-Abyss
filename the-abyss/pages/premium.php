@@ -26,12 +26,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['kup_vip'])) {
         if ($gracz['gotowka'] < $koszt) {
             $brakuje = $koszt - $gracz['gotowka'];
             $komunikat = "<div class='msg msg-bad'>Brak gotówki! Potrzebujesz jeszcze " . number_format($brakuje, 0, '', ' ') . " $.</div>";
+        } elseif (!kasa_pobierz($polaczenie, (int)$id_gracza, $koszt)) {
+            $komunikat = "<div class='msg msg-bad'>Brak gotówki — odśwież stronę.</div>";
         } else {
-            $polaczenie->query("UPDATE gracze SET gotowka = gotowka - $koszt WHERE id = $id_gracza");
             $nowa_data = dodaj_vip($id_gracza, $dni, 'waluta_growa', $koszt);
 
             if ($nowa_data === false) {
-                $polaczenie->query("UPDATE gracze SET gotowka = gotowka + $koszt WHERE id = $id_gracza");
+                kasa_dodaj($polaczenie, (int)$id_gracza, $koszt);
                 $komunikat = "<div class='msg msg-bad'>Błąd systemu — pieniądze zwrócone, spróbuj ponownie.</div>";
             } else {
                 $komunikat = "<div class='msg msg-good'>★ Status VIP aktywny do <b>" . htmlspecialchars($nowa_data) . "</b>. Witaj w elicie The Abyss.</div>";

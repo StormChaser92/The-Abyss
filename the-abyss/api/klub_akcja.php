@@ -26,6 +26,7 @@ if (!isset($_SESSION['zalogowany']) || $_SESSION['zalogowany'] !== true) {
 }
 
 require_once __DIR__ . "/../db.php";
+require_once __DIR__ . "/../includes/bezpieczne.php";
 header('Content-Type: application/json; charset=utf-8');
 
 $id_gracza   = (int)$_SESSION['id_gracza'];
@@ -464,8 +465,12 @@ if (preg_match('/^\/napiwek\s+@?(\S+)\s+(\d+)/i', $tresc, $m)) {
     }
 
     $cel_id = (int)$cel['id'];
-    $polaczenie->query("UPDATE gracze SET gotowka = gotowka - $kwota WHERE id=$id_gracza");
-    $polaczenie->query("UPDATE gracze SET gotowka = gotowka + $kwota, klub_napiwki_zarobione = klub_napiwki_zarobione + $kwota WHERE id=$cel_id");
+    // Pobranie warunkowe — dwa szybkie /napiwek nie zejdą poniżej zera.
+    if (!kasa_pobierz($polaczenie, $id_gracza, (int)$kwota)) {
+        echo json_encode(['ok' => false, 'msg' => 'Brak gotówki']);
+        exit;
+    }
+    db_q($polaczenie, "UPDATE gracze SET gotowka = gotowka + ?, klub_napiwki_zarobione = klub_napiwki_zarobione + ? WHERE id = ?", [(int)$kwota, (int)$kwota, $cel_id]);
     $polaczenie->query("INSERT INTO klub_napiwki (od_gracza_id, do_gracza_id, kwota) VALUES ($id_gracza, $cel_id, $kwota)");
 
     // System message w czacie
@@ -502,9 +507,20 @@ if (preg_match('/^\/zaplac/i', $tresc)) {
         exit;
     }
 
-    $ids_str = implode(',', $ids);
-    $polaczenie->query("UPDATE gracze SET gotowka = gotowka - $razem WHERE id=$id_gracza");
-    $polaczenie->query("UPDATE klub_rachunki SET oplacony=1 WHERE id IN ($ids_str)");
+    $ids_str = implode(',', array_map('intval', $ids));
+    // Najpierw zamknij rachunki — tylko jedno żądanie przestawi je z 0 na 1.
+    // Wcześniej podwójne /zaplac płaciło dwa razy i barmani dostawali podwójnie.
+    $polaczenie->query("UPDATE klub_rachunki SET oplacony=1 WHERE id IN ($ids_str) AND oplacony=0");
+    if ($polaczenie->affected_rows !== count($ids)) {
+        $polaczenie->query("UPDATE klub_rachunki SET oplacony=0 WHERE id IN ($ids_str) AND gracz_id=$id_gracza");
+        echo json_encode(['ok' => false, 'msg' => 'Rachunek właśnie się rozlicza — spróbuj za chwilę']);
+        exit;
+    }
+    if (!kasa_pobierz($polaczenie, $id_gracza, (int)$razem)) {
+        $polaczenie->query("UPDATE klub_rachunki SET oplacony=0 WHERE id IN ($ids_str)");
+        echo json_encode(['ok' => false, 'msg' => 'Brak gotówki na rachunek']);
+        exit;
+    }
 
     // 80% trafia do barmanów którzy podali drinki
     foreach ($do_barmanow as $bid => $kwota_drink) {

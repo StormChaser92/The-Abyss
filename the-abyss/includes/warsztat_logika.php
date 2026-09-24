@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/bezpieczne.php';
 /* the-abyss/includes/warsztat_logika.php
    Warsztat Inżyniera: wytwarzanie, ulepszanie +1…+10, zlecenia od nie-Inżynierów.
    Wymaga includes/bronie_katalog.php i tabel z db/migracja_warsztat.sql.
@@ -120,15 +121,19 @@ function warsztat_wytworz(mysqli $db, array $g, string $kod, array $mod = []): a
         $przyrost = rusznikarstwo_przyrost((int)$b['trudnosc'], true);
         $exp      = (int)$b['trudnosc'] * 5;
 
-        $db->query("UPDATE gracze SET
-            zlom_stalowy = zlom_stalowy - {$b['stal']},
-            czesci_mechaniczne = czesci_mechaniczne - {$b['czesci']},
-            syntetyki = syntetyki - {$b['syn']},
-            elektronika = elektronika - {$b['elek']},
-            energia_aktualna = energia_aktualna - $en,
-            exp = exp + $exp,
-            umiejetnosc_inzynierii = umiejetnosc_inzynierii + $przyrost
-            WHERE id = $gid");
+        $pobrano = db_zmien($db, "UPDATE gracze SET
+            zlom_stalowy = zlom_stalowy - ?,
+            czesci_mechaniczne = czesci_mechaniczne - ?,
+            syntetyki = syntetyki - ?,
+            elektronika = elektronika - ?,
+            energia_aktualna = energia_aktualna - ?,
+            exp = exp + ?,
+            umiejetnosc_inzynierii = umiejetnosc_inzynierii + ?
+            WHERE id = ? AND zlom_stalowy >= ? AND czesci_mechaniczne >= ? AND syntetyki >= ?
+              AND elektronika >= ? AND energia_aktualna >= ?",
+            [(int)$b['stal'], (int)$b['czesci'], (int)$b['syn'], (int)$b['elek'], $en, $exp, (float)$przyrost, $gid,
+             (int)$b['stal'], (int)$b['czesci'], (int)$b['syn'], (int)$b['elek'], $en], 'iiiiiidiiiiii') === 1;
+        if (!$pobrano) return [false, 'Brakuje materiałów albo energii.', []];
         eq_dodaj($db, $gid, $kod, $ile);
 
         $typ = 'wytworz_'.preg_replace('/[^a-z0-9_]/', '', $kod);
@@ -145,9 +150,9 @@ function warsztat_wytworz(mysqli $db, array $g, string $kod, array $mod = []): a
     $ss = (int)floor($b['stal'] / 2); $sc = (int)floor($b['czesci'] / 2);
     $sy = (int)floor($b['syn'] / 2);  $se = (int)floor($b['elek'] / 2);
     $db->query("UPDATE gracze SET
-        zlom_stalowy = zlom_stalowy - $ss, czesci_mechaniczne = czesci_mechaniczne - $sc,
-        syntetyki = syntetyki - $sy, elektronika = elektronika - $se,
-        energia_aktualna = energia_aktualna - ".max(1, (int)floor($en / 2)).",
+        zlom_stalowy = GREATEST(0, zlom_stalowy - $ss), czesci_mechaniczne = GREATEST(0, czesci_mechaniczne - $sc),
+        syntetyki = GREATEST(0, syntetyki - $sy), elektronika = GREATEST(0, elektronika - $se),
+        energia_aktualna = GREATEST(0, energia_aktualna - ".max(1, (int)floor($en / 2))."),
         umiejetnosc_inzynierii = umiejetnosc_inzynierii + $przyrost
         WHERE id = $gid");
 
@@ -194,12 +199,16 @@ function warsztat_ulepsz(mysqli $db, array $inz, string $kod, int $wlasciciel_id
     $los    = mt_rand(1, 10000) / 100;
     $przyrost = rusznikarstwo_przyrost((int)$b['trudnosc'], $los <= $szansa);
 
-    $db->query("UPDATE gracze SET
-        zlom_stalowy = zlom_stalowy - $st_stal, czesci_mechaniczne = czesci_mechaniczne - $st_czes,
-        syntetyki = syntetyki - $st_syn, elektronika = elektronika - $st_elek,
-        energia_aktualna = energia_aktualna - $en,
-        umiejetnosc_inzynierii = umiejetnosc_inzynierii + $przyrost
-        WHERE id = $iid");
+    $pobrano = db_zmien($db, "UPDATE gracze SET
+        zlom_stalowy = zlom_stalowy - ?, czesci_mechaniczne = czesci_mechaniczne - ?,
+        syntetyki = syntetyki - ?, elektronika = elektronika - ?,
+        energia_aktualna = energia_aktualna - ?,
+        umiejetnosc_inzynierii = umiejetnosc_inzynierii + ?
+        WHERE id = ? AND zlom_stalowy >= ? AND czesci_mechaniczne >= ? AND syntetyki >= ?
+          AND elektronika >= ? AND energia_aktualna >= ?",
+        [$st_stal, $st_czes, $st_syn, $st_elek, $en, (float)$przyrost, $iid,
+         $st_stal, $st_czes, $st_syn, $st_elek, $en], 'iiiiidiiiiii') === 1;
+    if (!$pobrano) return [false, 'Brakuje materiałów albo energii na ten stopień.', []];
 
     $k = $db->real_escape_string($kod);
     if ($los <= $szansa) {
@@ -287,12 +296,15 @@ function naprawa_wykonaj(mysqli $db, array $g, string $sprzet): array {
     if ((int)$g['zlom_stalowy'] < $stal || (int)$g['czesci_mechaniczne'] < $czesci)
         return [false, "Brakuje materiału: stal $stal, części $czesci."];
 
-    $db->query("UPDATE gracze SET
+    // Warunek na stan trwałości, który wycenił koszt — dwa kliknięcia nie zapłacą dwa razy.
+    $zrobione = db_zmien($db, "UPDATE gracze SET
         `$kol_tr` = `$kol_max`,
-        gotowka = gotowka - $kasa,
-        zlom_stalowy = zlom_stalowy - $stal,
-        czesci_mechaniczne = czesci_mechaniczne - $czesci
-        WHERE id = $gid");
+        gotowka = gotowka - ?,
+        zlom_stalowy = zlom_stalowy - ?,
+        czesci_mechaniczne = czesci_mechaniczne - ?
+        WHERE id = ? AND `$kol_tr` = ? AND gotowka >= ? AND zlom_stalowy >= ? AND czesci_mechaniczne >= ?",
+        [(int)$kasa, (int)$stal, (int)$czesci, $gid, $tr, (int)$kasa, (int)$stal, (int)$czesci]) === 1;
+    if (!$zrobione) return [false, 'Stan się zmienił albo zabrakło środków — odśwież stronę.'];
 
     $s = $db->real_escape_string($sprzet);
     $n = $db->real_escape_string("stal $stal, części $czesci");
@@ -350,15 +362,13 @@ function zlecenie_zloz(mysqli $db, array $klient, int $inz_id, string $kod, stri
 
     $cena = (int)$cennik[$typ][$kod];
     $kid  = (int)$klient['id'];
-    if ((int)$klient['gotowka'] < $cena)
-        return [false, "Brakuje gotówki. Cena: $cena \$."];
     if ($typ === 'ulepsz' && eq_ma($db, $kid, $kod) < 1)
         return [false, 'Nie masz tej broni — nie ma czego ulepszać.'];
+    if (!kasa_pobierz($db, $kid, $cena))
+        return [false, "Brakuje gotówki. Cena: $cena \$."];
 
-    $k = $db->real_escape_string($kod);
-    $db->query("UPDATE gracze SET gotowka = gotowka - $cena WHERE id=$kid");
-    $db->query("INSERT INTO warsztat_zlecenia (klient_id, inzynier_id, kod, typ, cena, status)
-                VALUES ($kid, $inz_id, '$k', '$typ', $cena, 'oczekuje')");
+    db_q($db, "INSERT INTO warsztat_zlecenia (klient_id, inzynier_id, kod, typ, cena, status)
+               VALUES (?, ?, ?, ?, ?, 'oczekuje')", [$kid, $inz_id, $kod, $typ, $cena]);
     return [true, "Zlecenie złożone. Zapłacono $cena \$ z góry."];
 }
 
@@ -373,6 +383,11 @@ function zlecenie_wykonaj(mysqli $db, array $inz, int $zid): array {
     $z = $r->fetch_assoc();
     $kid = (int)$z['klient_id'];
 
+    // Zajmij zlecenie, zanim cokolwiek się wydarzy: drugie równoczesne kliknięcie dostanie 0 wierszy
+    // i nie wypłaci drugi raz ani nie zwróci klientowi podwójnie.
+    if (db_zmien($db, "UPDATE warsztat_zlecenia SET status='w_toku' WHERE id = ? AND inzynier_id = ? AND status='oczekuje'", [$zid, $iid]) !== 1)
+        return [false, 'To zlecenie jest już realizowane.'];
+
     if ($z['typ'] === 'ulepsz') {
         [$ok, $tekst, $d] = warsztat_ulepsz($db, $inz, $z['kod'], $kid);
     } else {
@@ -383,6 +398,13 @@ function zlecenie_wykonaj(mysqli $db, array $inz, int $zid): array {
                         WHERE gracz_id=$iid AND kod='".$db->real_escape_string($z['kod'])."'");
             eq_dodaj($db, $kid, $z['kod'], $ile);
         }
+    }
+
+    // Porażka bez rzutu (brak materiałów, energii, broni) zwraca pusty trzeci element — nic się nie
+    // wydarzyło, więc zlecenie wraca do kolejki zamiast zwracać klientowi pieniądze.
+    if (!$ok && empty($d)) {
+        db_q($db, "UPDATE warsztat_zlecenia SET status='oczekuje' WHERE id = ?", [$zid]);
+        return [false, $tekst];
     }
 
     if ($ok) {

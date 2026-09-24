@@ -176,8 +176,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['zdjecie_narzedzia'])) 
 // ROZWIĄZANIE EVENTU (wcześniej triggnięty)
 // ═══════════════════════════════════════════════════════════════
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['event_wybor'])) {
-    $event_typ = $_POST['event_typ'];
-    $wybor = $_POST['event_wybor'];
+    // Typ zdarzenia bierzemy z sesji (zapisany przy losowaniu), nie z formularza.
+    // Wcześniej wystarczyło wysyłać „przechodzien/pomoz” w kółko: +150 $ i +15 EXP za każdym razem.
+    $event_typ = $_SESSION['zlom_event'] ?? '';
+    unset($_SESSION['zlom_event']);
+    if ($event_typ === '' || $event_typ !== ($_POST['event_typ'] ?? '')) $event_typ = '';
+    $wybor = (string)$_POST['event_wybor'];
 
     switch($event_typ) {
         case 'patrol':
@@ -185,8 +189,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['event_wybor'])) {
                 $polaczenie->query("UPDATE gracze SET energia_aktualna = GREATEST(0, energia_aktualna - 5) WHERE id=$id_gracza");
                 $komunikat = "<div class='sukces'>🏃 Przeskoczyłeś ogrodzenie i zniknąłeś w tłumie. <span style='color:#aaa'>(-5 EN)</span></div>";
             } elseif ($wybor == 'przekup') {
-                if ($gracz['gotowka'] >= 300) {
-                    $polaczenie->query("UPDATE gracze SET gotowka = gotowka - 300 WHERE id=$id_gracza");
+                if (kasa_pobierz($polaczenie, (int)$id_gracza, 300)) {
                     $komunikat = "<div class='sukces'>💵 Funkcjonariusz wziął 300$ i odszedł. Rano nie pamięta twarzy. <span style='color:#aaa'>(-300$)</span></div>";
                 } else {
                     $polaczenie->query("UPDATE gracze SET hp_aktualne = GREATEST(1, hp_aktualne - 20), gotowka = GREATEST(0, gotowka - 100) WHERE id=$id_gracza");
@@ -397,11 +400,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['szabruj_hotspot'])) {
             $eventy_pula = ['patrol','rywal','zwloki','szczury','paczka','przechodzien'];
             $ev = $eventy_pula[array_rand($eventy_pula)];
             $event_html = $ev; // renderujemy niżej
+            $_SESSION['zlom_event'] = $ev;
         }
 
         // ── MINI-GRA JEŚLI HOTSPOT = SEJF ─────────────────────────
         if ($hs == 'sejf' && rand(1,100) <= 60) {
             $minigra = 'sejf';
+            $_SESSION['zlom_sejf'] = rand(0, 9);   // kod zostaje na serwerze
         }
 
         $gracz = $polaczenie->query("SELECT * FROM gracze WHERE id=$id_gracza")->fetch_assoc();
@@ -428,8 +433,12 @@ $nagroda_event = round($nagroda_event * pochodzenie_bonus($gracz_r, 'event_nagro
 // ═══════════════════════════════════════════════════════════════
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['minigra_sejf'])) {
     $kod_wybor = (int)$_POST['kod_wybor'];
-    $kod_poprawny = (int)$_POST['kod_poprawny'];
-    if ($kod_wybor === $kod_poprawny) {
+    // Poprawny kod z sesji. Wcześniej szło ukrytym polem formularza — wystarczyło odesłać go jako własny wybór.
+    $kod_poprawny = $_SESSION['zlom_sejf'] ?? null;
+    unset($_SESSION['zlom_sejf']);
+    if ($kod_poprawny === null) {
+        $komunikat = "<div class='blad'>Ten sejf już ktoś otworzył.</div>";
+    } elseif ($kod_wybor === $kod_poprawny) {
         $nagroda_elek = rand(8,20); $nagroda_kasa = rand(200,600);
         $polaczenie->query("UPDATE gracze SET elektronika=elektronika+$nagroda_elek, gotowka=gotowka+$nagroda_kasa WHERE id=$id_gracza");
         $komunikat = "<div class='sukces'>🔓 Sejf otwarty! Trafiłeś kombinację! <span style='color:#aaa'>(+$nagroda_elek Elektroniki, +$nagroda_kasa\$)</span></div>";
@@ -675,7 +684,7 @@ input[type=range].en-suwak::-webkit-slider-runnable-track{
 
 <!-- ══ MINI-GRA SEJF ══ -->
 <?php if ($minigra == 'sejf'):
-    $kod_poprawny = rand(0,9);
+    $kod_poprawny = (int)$_SESSION['zlom_sejf'];
     $opcje_kodow = range(0,9);
     shuffle($opcje_kodow);
     $opcje_kodow = array_slice($opcje_kodow, 0, 5);
@@ -693,7 +702,7 @@ input[type=range].en-suwak::-webkit-slider-runnable-track{
             ?>.</b>
         </div>
         <form method="POST">
-            <input type="hidden" name="kod_poprawny" value="<?php echo $kod_poprawny; ?>">
+            <input type="hidden" name="kod_poprawny" value="">
             <div class="sejf-kody">
                 <?php foreach($opcje_kodow as $k): ?>
                 <button type="submit" name="minigra_sejf" value="1" class="sejf-btn" onclick="document.getElementById('kod_wybor_<?php echo $k; ?>').click()"><?php echo $k; ?></button>

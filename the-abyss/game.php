@@ -1,5 +1,6 @@
 <?php
 session_start();
+ob_start();   // podstrony mogą robić header('Location') mimo że layout już się wypisuje
 ob_start();
 
 if (!isset($_SESSION['zalogowany']) || $_SESSION['zalogowany'] !== true) {
@@ -8,12 +9,13 @@ if (!isset($_SESSION['zalogowany']) || $_SESSION['zalogowany'] !== true) {
 }
 
 require_once "db.php";
+require_once "includes/bezpieczne.php";   // db_q(), kasa_pobierz(), powiadom() — dla wszystkich podstron
 require_once "config/miasta.php";   // ← katalog miast + helpery pogody/odległości
 require_once "config/pochodzenia.php";  // ← katalog narodowości + helpery bonusów
 require_once "helpers/vip.php";   // ← helper systemu VIP
 require_once "helpers/firmy.php";   // ← helper systemu firm
 
-$id_gracza   = $_SESSION['id_gracza'];
+$id_gracza   = (int)$_SESSION['id_gracza'];
 $strona      = isset($_GET['page'])     ? $_GET['page']     : 'witaj';
 $zakladka    = isset($_GET['zakladka']) ? $_GET['zakladka'] : '';
 

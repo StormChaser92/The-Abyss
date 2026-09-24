@@ -45,14 +45,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cel'])) {
         } else {
             // ── WSZYSTKO OK — WYKONAJ LOT ──
             $cel_esc = $polaczenie->real_escape_string($cel);
-            $polaczenie->query("
+            $kk = (int)$koszt['kasa']; $ke = (int)$koszt['energia'];
+            $polecial = db_zmien($polaczenie, "
                 UPDATE gracze SET
-                    obecne_miasto    = '$cel_esc',
-                    gotowka          = gotowka - {$koszt['kasa']},
-                    energia_aktualna = energia_aktualna - {$koszt['energia']},
+                    obecne_miasto    = ?,
+                    gotowka          = gotowka - ?,
+                    energia_aktualna = energia_aktualna - ?,
                     ostatni_lot      = NOW()
-                WHERE id = $id_gracza
-            ");
+                WHERE id = ? AND gotowka >= ? AND energia_aktualna >= ?
+            ", [$cel, $kk, $ke, (int)$id_gracza, $kk, $ke]) === 1;
+            if (!$polecial) {
+                $_SESSION['powiadomienie_lot'] = "Lot odwołany — zabrakło gotówki albo energii.";
+                header("Location: game.php?page=lotnisko");
+                exit;
+            }
 
             // Log lotu (jeśli tabela istnieje — jest bezpieczny fallback)
             $z_esc = $polaczenie->real_escape_string($obecne);

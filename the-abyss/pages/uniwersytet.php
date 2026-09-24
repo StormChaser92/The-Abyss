@@ -165,6 +165,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['rozpocznij_egzamin']))
         $pule_pytan = $kierunki[$wybrany_id]['pytania'] ?? ["Opisz najważniejszy aspekt Twojej wiedzy zdobytej na tym wydziale."];
         $pytanie_egzaminacyjne = $pule_pytan[array_rand($pule_pytan)];
         $_SESSION['aktywne_pytanie'] = $pytanie_egzaminacyjne;
+        $_SESSION['egzamin_kierunek'] = $wybrany_id;
     }
 }
 
@@ -172,9 +173,21 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['rozpocznij_egzamin']))
 // LOGIKA 2: WERYFIKACJA EGZAMINU PRZEZ AI (API)
 // ========================================================
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['zatwierdz_egzamin'])) {
-    $wybrany_id = $_POST['id_kierunku'];
-    $odpowiedz_gracza = trim($_POST['odpowiedz_gracza']);
-    $pytanie = $_SESSION['aktywne_pytanie'];
+    $wybrany_id = (string)($_POST['id_kierunku'] ?? '');
+    $odpowiedz_gracza = trim((string)($_POST['odpowiedz_gracza'] ?? ''));
+    $pytanie = $_SESSION['aktywne_pytanie'] ?? null;
+
+    // Egzamin tylko po LOGICE 1 dla tego samego kierunku i tylko na ostatnich zajęciach.
+    // Wcześniej formularz można było wysyłać w kółko: każde zdanie = +1 zajęcia i tytuł, bez kosztu i limitu dnia.
+    $egz_ok = isset($kierunki[$wybrany_id]) && $pytanie !== null
+           && ($_SESSION['egzamin_kierunek'] ?? '') === $wybrany_id
+           && $mozna_studiowac
+           && (int)$gracz[$kierunki[$wybrany_id]['db']] === (int)$kierunki[$wybrany_id]['wymagane_zajecia'] - 1;
+    unset($_SESSION['egzamin_kierunek']);
+    if (!$egz_ok) {
+        unset($_SESSION['aktywne_pytanie']);
+        $komunikat = "<div class='blad'>Ten egzamin już się odbył albo nie jest dostępny.</div>";
+    } else {
     $k = $kierunki[$wybrany_id];
     $kolumna_db = $k['db'];
 
@@ -256,6 +269,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['zatwierdz_egzamin'])) 
         unset($_SESSION['aktywne_pytanie']);
     }
     $mozna_studiowac = false;
+    }
 }
 
 // ========================================================
@@ -278,19 +292,24 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['id_kierunku']) && !iss
         } elseif ($gracz['energia_aktualna'] < $k['koszt_en']) {
             $komunikat = "<div class='blad'>Jesteś zbyt zmęczony na naukę ({$k['koszt_en']} EN). Odpocznij.</div>";
         } else {
-            $polaczenie->query("UPDATE gracze SET
-                gotowka = gotowka - {$k['koszt_kasy']},
-                energia_aktualna = energia_aktualna - {$k['koszt_en']},
-                $kolumna_db = $kolumna_db + 1,
+            $kk = (int)$k['koszt_kasy']; $ke = (int)$k['koszt_en'];
+            $zaliczone = db_zmien($polaczenie, "UPDATE gracze SET
+                gotowka = gotowka - ?,
+                energia_aktualna = energia_aktualna - ?,
+                `$kolumna_db` = `$kolumna_db` + 1,
                 uni_ostatni_wyklad = NOW()
-                WHERE id = $id_gracza");
-
+                WHERE id = ? AND gotowka >= ? AND energia_aktualna >= ? AND `$kolumna_db` = ?",
+                [$kk, $ke, (int)$id_gracza, $kk, $ke, (int)$postep_gracza]) === 1;
+            if (!$zaliczone) {
+                $komunikat = "<div class='blad'>Zajęcia już zaliczone albo zabrakło środków — odśwież stronę.</div>";
+            } else {
             $gracz['gotowka'] -= $k['koszt_kasy'];
             $gracz['energia_aktualna'] -= $k['koszt_en'];
             $gracz[$kolumna_db] += 1;
             $mozna_studiowac = false;
 
             $komunikat = "<div class='sukces'>Ukończyłeś kolejne zajęcia z kierunku <b>{$k['nazwa']}</b>! Twoja wiedza rośnie.</div>";
+            }
         }
     }
 }

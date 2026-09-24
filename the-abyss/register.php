@@ -4,21 +4,28 @@ require_once "db.php";
 $komunikat = ""; 
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $login = $_POST['login'];
-    $email = $_POST['email'];
-    $haslo = $_POST['haslo'];
+    $login = trim((string)($_POST['login'] ?? ''));
+    $email = trim((string)($_POST['email'] ?? ''));
+    $haslo = (string)($_POST['haslo'] ?? '');
 
-    $login = $polaczenie->real_escape_string($login);
-    $email = $polaczenie->real_escape_string($email);
-    
-    $zaszyfrowane_haslo = password_hash($haslo, PASSWORD_DEFAULT);
-
-    $sql = "INSERT INTO gracze (login, email, haslo) VALUES ('$login', '$email', '$zaszyfrowane_haslo')";
-
-    if ($polaczenie->query($sql) === TRUE) {
-        $komunikat = "<div class='sukces'>Obywatel pomyślnie zarejestrowany. Witamy w The Abyss. <br><br> <a href='login.php' class='btn'>Przejdź do logowania</a></div>";
+    // Login ląduje w powiadomieniach, czacie i HTML-u wielu stron — tylko litery, cyfry, spacja, _ . -
+    if (!preg_match('/^[\p{L}\p{N}][\p{L}\p{N} _.\-]{2,23}$/u', $login)) {
+        $komunikat = "<div class='blad'>Imię postaci: 3–24 znaki, litery, cyfry, spacja, _ . -</div>";
+    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $komunikat = "<div class='blad'>Nieprawidłowy adres e-mail.</div>";
     } else {
-        $komunikat = "<div class='blad'>Błąd centrali: " . $polaczenie->error . "</div>";
+        $zaszyfrowane_haslo = password_hash($haslo, PASSWORD_DEFAULT);
+        $st = $polaczenie->prepare("INSERT INTO gracze (login, email, haslo) VALUES (?, ?, ?)");
+        $st->bind_param('sss', $login, $email, $zaszyfrowane_haslo);
+        try { $ok = $st->execute(); $kod = $ok ? 0 : $st->errno; }
+        catch (mysqli_sql_exception $e) { $ok = false; $kod = $e->getCode(); }
+        if ($ok) {
+            $komunikat = "<div class='sukces'>Obywatel pomyślnie zarejestrowany. Witamy w The Abyss. <br><br> <a href='login.php' class='btn'>Przejdź do logowania</a></div>";
+        } else {
+            $komunikat = $kod == 1062
+                ? "<div class='blad'>To imię albo e-mail jest już zajęte.</div>"
+                : "<div class='blad'>Błąd centrali. Spróbuj ponownie.</div>";
+        }
     }
 }
 ?>

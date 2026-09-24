@@ -36,9 +36,12 @@ while ($q && $w = $q->fetch_assoc()) $lista_wrogow[(int)$w['id']] = $w;
 if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['uzyj_apteczki'])) {
     if ((int)$gracz['apteczki'] > 0 && (int)$gracz['hp_aktualne'] < (int)$gracz['hp_max']) {
         $nowe = min((int)$gracz['hp_max'], (int)$gracz['hp_aktualne'] + 50);
-        $polaczenie->query("UPDATE gracze SET hp_aktualne=$nowe, apteczki=apteczki-1 WHERE id=$id_gracza");
-        $gracz['hp_aktualne'] = $nowe; $gracz['apteczki']--;
-        $komunikat = "<div class='alert-ok'>Adrenalina w żyłach. +50 HP.</div>";
+        if (db_zmien($polaczenie, "UPDATE gracze SET hp_aktualne = LEAST(hp_max, hp_aktualne + 50), apteczki = apteczki - 1 WHERE id = ? AND apteczki > 0", [(int)$id_gracza]) === 1) {
+            $gracz['hp_aktualne'] = $nowe; $gracz['apteczki']--;
+            $komunikat = "<div class='alert-ok'>Adrenalina w żyłach. +50 HP.</div>";
+        } else {
+            $komunikat = "<div class='alert-err'>Nie masz apteczek.</div>";
+        }
     } else {
         $komunikat = "<div class='alert-err'>Jesteś w pełni zdrowy albo nie masz apteczek.</div>";
     }

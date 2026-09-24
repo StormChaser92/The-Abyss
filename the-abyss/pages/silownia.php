@@ -45,18 +45,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['trenuj'])) {
         if ($zdobyte_punkty > $P_max) $zdobyte_punkty = $P_max;
         $zdobyte_punkty = round($zdobyte_punkty, 2);
 
-        if ($co == 'wb') {
-            $polaczenie->query("UPDATE gracze SET walka_bronia = walka_bronia + $zdobyte_punkty, energia_aktualna = energia_aktualna - $koszt_en, treningi_silownia = treningi_silownia - 1 WHERE id = $id_gracza");
-            $gracz['walka_bronia'] += $zdobyte_punkty;
-            $nazwa_skilla = "Walki Bronią";
-        } else {
-            $polaczenie->query("UPDATE gracze SET uniki = uniki + $zdobyte_punkty, energia_aktualna = energia_aktualna - $koszt_en, treningi_silownia = treningi_silownia - 1 WHERE id = $id_gracza");
-            $gracz['uniki'] += $zdobyte_punkty;
-            $nazwa_skilla = "Uników";
+        $kol = ($co == 'wb') ? 'walka_bronia' : 'uniki';
+        $nazwa_skilla = ($co == 'wb') ? "Walki Bronią" : "Uników";
+        // Bilet i energia schodzą tylko, jeśli wciąż są — szybkie podwójne kliknięcie nie da dwóch treningów z jednego biletu.
+        $ok = db_zmien($polaczenie, "UPDATE gracze SET `$kol` = `$kol` + ?, energia_aktualna = energia_aktualna - ?, treningi_silownia = treningi_silownia - 1
+                                    WHERE id = ? AND treningi_silownia >= 1 AND energia_aktualna >= ?", [(float)$zdobyte_punkty, $koszt_en, (int)$id_gracza, $koszt_en], 'diii') === 1;
+        if ($ok) {
+            $gracz[$kol] += $zdobyte_punkty;
+            $gracz['treningi_silownia'] -= 1;
+            $gracz['energia_aktualna'] -= $koszt_en;
         }
-        
-        $gracz['treningi_silownia'] -= 1;
-        $gracz['energia_aktualna'] -= $koszt_en;
+        if (!$ok) $komunikat = "<div class='blad'>Limit biletów albo energii się skończył.</div>"; else
         $komunikat = "<div class='sukces'>Trening zaliczony! Zdobywasz <b>+$zdobyte_punkty</b> do $nazwa_skilla. Koszt: $koszt_en EN.</div>";
     }
 }
