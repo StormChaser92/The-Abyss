@@ -57,7 +57,7 @@ if ($wynik_r) {
         $_SESSION['powiadomienie_awans'] = "Awans! Osiągnąłeś poziom $lvl! Zyskujesz +5 AP i +5 PU.";
         $gracz_r['poziom']=$lvl; $gracz_r['exp']=$exp;
     }
-    $avatar_url = !empty($gracz_r['avatar']) ? htmlspecialchars($gracz_r['avatar']) : "https://via.placeholder.com/500x625/0a0a0a/333?text=PORTRET";
+    $avatar_url = !empty($gracz_r['avatar']) ? htmlspecialchars($gracz_r['avatar'], ENT_QUOTES) : '';
 }
 
 // VIP — synchronizacja flagi is_premium z vip_do + powiadomienie o wygaśnięciu
@@ -272,6 +272,7 @@ body::after{
 .quick-name .id{color:var(--txt-mute);font-size:.75em;font-family:'JetBrains Mono',monospace}
 
 .quick-avatar{
+    background:linear-gradient(160deg,#2a0a14,#0a0408 70%);
     width:100%;aspect-ratio:500/625;
     background-position:top center!important;background-size:cover!important;
     border-radius:2px;margin-bottom:12px;
@@ -485,8 +486,8 @@ body::after{
    bo prawy sidebar ma overflow:auto i ucinał podgląd wystający w lewo. */
 .gracz-online .tt{display:none}
 #tt-float{
-    position:fixed;z-index:1000;width:220px;pointer-events:none;
-    background:rgba(6,4,8,0.96);border:1px solid var(--border-mid);border-radius:2px;padding:12px;
+    position:fixed;z-index:1000;width:280px;pointer-events:none;
+    background:rgba(6,4,8,0.96);border:1px solid var(--border-mid);border-radius:2px;padding:14px;
     opacity:0;visibility:hidden;
     filter:blur(10px) brightness(.4);transform:translateX(18px) scale(.96);
     box-shadow:0 0 0 rgba(255,23,68,0),0 0 0 rgba(0,0,0,0);
@@ -498,13 +499,15 @@ body::after{
     transition:opacity .35s ease,filter .45s ease,transform .45s cubic-bezier(.2,.8,.2,1),box-shadow .6s ease,visibility 0s;
 }
 #tt-float::before{content:'';position:absolute;top:-1px;left:14px;width:36px;height:1px;background:var(--neon-red);box-shadow:0 0 8px var(--neon-red)}
-.tt-av{width:100%;aspect-ratio:500/625;background-position:top center;background-size:cover;background-color:#0a0408;border-radius:2px;margin-bottom:10px;border:1px solid var(--border-soft);position:relative;overflow:hidden}
+.tt-av{width:100%;aspect-ratio:500/625;background:linear-gradient(160deg,#2a0a14,#0a0408 70%) top center/cover no-repeat;border-radius:2px;margin-bottom:12px;border:1px solid var(--border-soft);position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.tt-av::before{content:attr(data-ini);font-family:'Oswald',sans-serif;font-size:3.2em;letter-spacing:4px;color:rgba(255,23,68,.55);text-shadow:0 0 20px rgba(255,23,68,.5)}
+.tt-av.ma-foto::before{content:none}
 .tt-av::after{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% 120%,rgba(255,23,68,.55),transparent 60%);opacity:1;transition:opacity .9s ease .1s}
 #tt-float.on .tt-av::after{opacity:.35}
-.tt-name{font-family:'Oswald',sans-serif;font-weight:500;font-size:1.15em;text-transform:uppercase;letter-spacing:2px;color:#fff;text-align:center;line-height:1.1;overflow-wrap:anywhere;text-shadow:0 0 12px var(--neon-red)}
+.tt-name{font-family:'Oswald',sans-serif;font-weight:500;font-size:1.4em;text-transform:uppercase;letter-spacing:2px;color:#fff;text-align:center;line-height:1.1;overflow-wrap:anywhere;text-shadow:0 0 12px var(--neon-red)}
 .tt-name.vip{color:var(--neon-gold);text-shadow:0 0 10px rgba(255,215,0,.5)}
-.tt-lvl{display:block;text-align:center;font-family:'JetBrains Mono',monospace;font-size:.7em;letter-spacing:3px;color:var(--neon-red-hot);margin:4px 0 10px;padding-bottom:9px;border-bottom:1px dashed rgba(255,23,68,.18)}
-.tt-row{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:baseline;font-size:.8em;margin-bottom:5px}
+.tt-lvl{display:block;text-align:center;font-family:'JetBrains Mono',monospace;font-size:.78em;letter-spacing:3px;color:var(--neon-red-hot);margin:4px 0 10px;padding-bottom:9px;border-bottom:1px dashed rgba(255,23,68,.18)}
+.tt-row{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:baseline;font-size:.92em;margin-bottom:6px}
 .tt-row span{font-family:'JetBrains Mono',monospace;font-size:.82em;letter-spacing:1px;text-transform:uppercase;color:var(--txt-mute)}
 .tt-row b{color:var(--txt-main);text-align:right;font-weight:600;font-family:'Rajdhani',sans-serif;font-size:1.08em;overflow-wrap:anywhere}
 .tt-row b.fab{color:var(--neon-ember)}
@@ -573,7 +576,7 @@ input,select,textarea,button{font-family:'Rajdhani',sans-serif}
             <span class="id">#<?php echo $id_gracza; ?></span>
         </div>
 
-        <div class="quick-avatar" style="background-image:url('<?php echo $avatar_url; ?>')"></div>
+        <div class="quick-avatar"<?php if ($avatar_url): ?> style="background-image:url('<?php echo $avatar_url; ?>')"<?php endif; ?>></div>
 
         <div class="qs"><span>Poziom</span><b><?php echo $gracz_r['poziom']; ?></b></div>
         <div class="qs"><span>Gotówka</span><b class="money"><?php echo number_format($gracz_r['gotowka'],0,'','&nbsp;'); ?> $</b></div>
@@ -684,7 +687,8 @@ input,select,textarea,button{font-family:'Rajdhani',sans-serif}
 <div class="sidebar-right">
     <h3>Online <span class="online-count">[ <?php echo $ilosc_online; ?> ]</span></h3>
     <?php foreach($lista_online as $o):
-        $img  = !empty($o['avatar']) ? htmlspecialchars($o['avatar']) : "https://via.placeholder.com/500x625/0a0a0a/333?text=PORTRET";
+        $img  = !empty($o['avatar']) ? htmlspecialchars($o['avatar'], ENT_QUOTES) : '';
+        $ini  = mb_strtoupper(mb_substr(preg_replace('/[^\p{L}\p{N}]/u', '', $o['login']), 0, 2));
         $kol  = $o['is_premium'] ? 'vip' : '';
         $synd = !empty($o['s_nazwa']) ? "[".htmlspecialchars($o['s_tag'])."] ".htmlspecialchars($o['s_nazwa']) : "Brak";
     ?>
@@ -694,7 +698,7 @@ input,select,textarea,button{font-family:'Rajdhani',sans-serif}
             <?php echo ($o['is_premium']?"★ ":"").htmlspecialchars($o['login']); ?>
         </a>
         <div class="tt">
-            <div class="tt-av" style="background-image:url('<?php echo $img; ?>')"></div>
+            <div class="tt-av" data-av="<?php echo $img; ?>" data-ini="<?php echo htmlspecialchars($ini); ?>"></div>
             <div class="tt-name<?php echo $o['is_premium']?' vip':''; ?>"><?php echo ($o['is_premium']?"★ ":"").htmlspecialchars($o['login']); ?></div>
             <span class="tt-lvl">LVL <?php echo (int)$o['poziom']; ?></span>
             <div class="tt-row"><span>Fabularna</span><b class="fab"><?php echo $o['profesja_fabularna'] ? htmlspecialchars($o['profesja_fabularna']) : '—'; ?></b></div>
@@ -759,12 +763,19 @@ input,select,textarea,button{font-family:'Rajdhani',sans-serif}
         const tpl = row.querySelector('.tt');
         if (!tpl) return;
         box.innerHTML = tpl.innerHTML;
+        const av = box.querySelector('.tt-av');
+        const url = av ? av.dataset.av : '';
+        if (url) {
+            const im = new Image();
+            im.onload = () => { av.style.backgroundImage = 'url("' + url.replace(/"/g, '%22') + '")'; av.classList.add('ma-foto'); };
+            im.src = url;
+        }
         const r = row.getBoundingClientRect();
-        const h = box.offsetHeight || 380;
+        const h = box.offsetHeight || 460;
         let top = r.top + r.height/2 - h/2;
         top = Math.max(12, Math.min(top, window.innerHeight - h - 12));
         box.style.top = top + 'px';
-        box.style.left = Math.max(12, r.left - 220 - 14) + 'px';
+        box.style.left = Math.max(12, r.left - box.offsetWidth - 14) + 'px';
         box.classList.remove('on'); void box.offsetWidth; box.classList.add('on');
     }
     document.querySelectorAll('.gracz-online').forEach(row => {

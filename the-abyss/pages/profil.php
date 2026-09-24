@@ -189,7 +189,7 @@ if (abyss_table_exists($polaczenie, 'malzenstwa')) {
     }
 }
 
-$avatar = !empty($profil['avatar']) ? abyss_e($profil['avatar']) : "https://via.placeholder.com/500x625/0a0a0a/333?text=PORTRET";
+$avatar = !empty($profil['avatar']) ? abyss_e($profil['avatar']) : '';
 $opis = !empty($profil['opis_profilu']) ? nl2br(abyss_e($profil['opis_profilu'])) : "<span class='pusto'>Ten gracz woli pozostać w cieniu. Brak wpisu w kartotece.</span>";
 $klasa_nicku = !empty($profil['is_premium']) ? ' vip' : '';
 
@@ -211,7 +211,7 @@ $story_html = $story_public ? ($historia['historia_html'] ?? '') : '';
 .profil-lewy,.karta-info,.profil-tabs{background:rgba(10,8,14,.55);backdrop-filter:blur(10px) saturate(140%);-webkit-backdrop-filter:blur(10px) saturate(140%);border:1px solid var(--border-soft);border-radius:2px;position:relative}
 .profil-lewy::before,.karta-info::before{content:'';position:absolute;top:-1px;left:16px;width:36px;height:1px;background:var(--neon-red);box-shadow:0 0 8px var(--neon-red)}
 .profil-lewy{padding:18px;text-align:center;position:sticky;top:0}
-.profil-avatar{width:100%;aspect-ratio:500/625;background-position:top center!important;background-size:cover!important;background-color:#05060c;border:1px solid var(--border-mid);border-radius:2px;margin-bottom:16px;box-shadow:0 0 22px rgba(255,23,68,.22),inset 0 0 30px rgba(0,0,0,.5);position:relative;overflow:hidden}
+.profil-avatar{width:100%;aspect-ratio:500/625;background:linear-gradient(160deg,#2a0a14,#0a0408 70%);background-position:top center!important;background-size:cover!important;border:1px solid var(--border-mid);border-radius:2px;margin-bottom:16px;box-shadow:0 0 22px rgba(255,23,68,.22),inset 0 0 30px rgba(0,0,0,.5);position:relative;overflow:hidden}
 .profil-avatar::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,transparent 60%,rgba(255,23,68,.12));pointer-events:none}
 .profil-nick{font-family:'Oswald',sans-serif;font-weight:500;font-size:1.9em;line-height:1.05;margin:0 0 6px;text-transform:uppercase;letter-spacing:3px;color:#fff;overflow-wrap:anywhere;text-shadow:0 0 4px rgba(255,255,255,.4),0 0 16px var(--neon-red),0 0 32px var(--neon-red-deep)}
 .profil-nick.vip{color:var(--neon-gold);text-shadow:0 0 12px rgba(255,215,0,.55)}
@@ -299,7 +299,7 @@ $story_html = $story_public ? ($historia['historia_html'] ?? '') : '';
 
 <div class="profil-kontener">
     <div class="profil-lewy">
-        <div class="profil-avatar" style="background:url('<?php echo $avatar; ?>');"></div>
+        <div class="profil-avatar"<?php if ($avatar): ?> style="background-image:url('<?php echo $avatar; ?>')"<?php endif; ?>></div>
         <?php $odznaki_html = generuj_odznaki($profil); if ($odznaki_html): ?>
             <div class="odznaki-profil"><?php echo $odznaki_html; ?></div>
         <?php endif; ?>
@@ -318,13 +318,13 @@ $story_html = $story_public ? ($historia['historia_html'] ?? '') : '';
                 $partner_login_mal = $malzenstwo_profilu['m1_login'];
                 $partner_avatar_mal = $malzenstwo_profilu['m1_avatar'];
             }
-            $av_par = !empty($partner_avatar_mal) ? abyss_e($partner_avatar_mal) : "https://via.placeholder.com/80/0a0a0a/333?text=?";
+            $av_par = !empty($partner_avatar_mal) ? abyss_e($partner_avatar_mal) : '';
         ?>
         <div class="malz-baner">
             <div class="malz-info">
                 <div class="malz-label">// W związku z</div>
                 <a href="game.php?page=profil&id=<?php echo $partner_id_mal; ?>" class="malz-nick">
-                    <div class="malz-mini-av" style="background-image:url('<?php echo $av_par; ?>')"></div>
+                    <div class="malz-mini-av"<?php if ($av_par): ?> style="background-image:url('<?php echo $av_par; ?>')"<?php endif; ?>></div>
                     <?php echo abyss_e($partner_login_mal); ?>
                 </a>
             </div>
