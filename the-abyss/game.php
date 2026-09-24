@@ -9,7 +9,8 @@ if (!isset($_SESSION['zalogowany']) || $_SESSION['zalogowany'] !== true) {
 }
 
 require_once "db.php";
-require_once "includes/bezpieczne.php";   // db_q(), kasa_pobierz(), powiadom() — dla wszystkich podstron
+require_once "includes/bezpieczne.php";
+require_once "includes/avatar.php";       // avatar_url() — naprawia stare ścieżki z bazy   // db_q(), kasa_pobierz(), powiadom() — dla wszystkich podstron
 require_once "config/miasta.php";   // ← katalog miast + helpery pogody/odległości
 require_once "config/pochodzenia.php";  // ← katalog narodowości + helpery bonusów
 require_once "helpers/vip.php";   // ← helper systemu VIP
@@ -57,7 +58,7 @@ if ($wynik_r) {
         $_SESSION['powiadomienie_awans'] = "Awans! Osiągnąłeś poziom $lvl! Zyskujesz +5 AP i +5 PU.";
         $gracz_r['poziom']=$lvl; $gracz_r['exp']=$exp;
     }
-    $avatar_url = !empty($gracz_r['avatar']) ? htmlspecialchars($gracz_r['avatar'], ENT_QUOTES) : '';
+    $avatar_url = htmlspecialchars(avatar_url($gracz_r['avatar'] ?? ''), ENT_QUOTES);
 }
 
 // VIP — synchronizacja flagi is_premium z vip_do + powiadomienie o wygaśnięciu
@@ -687,7 +688,7 @@ input,select,textarea,button{font-family:'Rajdhani',sans-serif}
 <div class="sidebar-right">
     <h3>Online <span class="online-count">[ <?php echo $ilosc_online; ?> ]</span></h3>
     <?php foreach($lista_online as $o):
-        $img  = !empty($o['avatar']) ? htmlspecialchars($o['avatar'], ENT_QUOTES) : '';
+        $img  = htmlspecialchars(avatar_url($o['avatar'] ?? ''), ENT_QUOTES);
         $ini  = mb_strtoupper(mb_substr(preg_replace('/[^\p{L}\p{N}]/u', '', $o['login']), 0, 2));
         $kol  = $o['is_premium'] ? 'vip' : '';
         $synd = !empty($o['s_nazwa']) ? "[".htmlspecialchars($o['s_tag'])."] ".htmlspecialchars($o['s_nazwa']) : "Brak";

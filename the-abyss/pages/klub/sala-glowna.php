@@ -598,7 +598,7 @@ if ($kq) while ($r = $kq->fetch_assoc()) {
                 <?php else: ?>
                     <?php foreach ($obecni as $o):
                         $klasa = ($o['id'] == $id_gracza) ? 'me' : ($o['is_barman'] ? 'bar' : ($o['is_mg'] ? 'mg' : ''));
-                        $ava = !empty($o['avatar']) ? htmlspecialchars($o['avatar']) : '';
+                        $ava = htmlspecialchars(avatar_url($o['avatar'] ?? ''), ENT_QUOTES);
                         $inic = klub_inicjaly($o['login']);
                         $mood = !empty($o['klub_mood']) ? $o['klub_mood'] : ($o['is_barman'] ? 'za barem' : 'w sali');
                     ?>

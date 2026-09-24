@@ -19,6 +19,7 @@ if (!isset($_SESSION['zalogowany']) || $_SESSION['zalogowany'] !== true) {
 }
 
 require_once __DIR__ . "/../db.php";
+require_once __DIR__ . "/../includes/avatar.php";
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -103,7 +104,7 @@ if ($sala !== 'lobby') {
                 'summoner_id'    => $r['summoner_id'] ? (int)$r['summoner_id'] : null,
                 'summoner_login' => $r['summoner_login'],
                 'is_mine'        => ((int)$r['id_gracza'] === $id_gracza),
-                'avatar'         => $r['avatar'] ?: null,
+                'avatar'         => avatar_url($r['avatar'] ?? '') ?: null,
                 'polewki'        => (int)$r['polewki'],
                 'moja_polewka'   => (bool)$r['moja_polewka'],
             ];
@@ -165,7 +166,7 @@ if ($o) {
         $obecni[] = [
             'id'        => (int)$row['id'],
             'login'     => $row['login'],
-            'avatar'    => $row['avatar'],
+            'avatar'    => avatar_url($row['avatar'] ?? ''),
             'is_barman' => (bool)$row['is_barman'],
             'is_mg'     => (bool)$row['is_mg'],
             'klub_mood' => $row['klub_mood'] ?? '',

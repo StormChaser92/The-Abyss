@@ -4,6 +4,7 @@
 // game.php?page=czat[&sala=nazwa-sali]
 // ═══════════════════════════════════════════════════════════════════
 require_once "db.php";
+require_once __DIR__ . "/../includes/avatar.php";
 $id_gracza = $_SESSION['id_gracza'];
 $login_gracza = $_SESSION['login'];
 
@@ -335,7 +336,7 @@ function klub_render_msg($w) {
     }
 
     // Portret postaci (jak w karczmie) — awatar albo inicjały
-    $ava = !empty($w['avatar']) ? htmlspecialchars($w['avatar'], ENT_QUOTES) : '';
+    $ava = htmlspecialchars(avatar_url($w['avatar'] ?? ''), ENT_QUOTES);
     $portret = $ava
         ? "<div class='por' style=\"background-image:url('$ava')\"></div>"
         : "<div class='por'><span>".htmlspecialchars($inicjaly)."</span></div>";

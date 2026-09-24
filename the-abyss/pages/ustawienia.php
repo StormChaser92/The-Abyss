@@ -1,34 +1,52 @@
 <?php
 require_once "db.php";
-$id_gracza = $_SESSION['id_gracza'];
+require_once __DIR__ . "/../includes/avatar.php";
+$id_gracza = (int)$_SESSION['id_gracza'];
 
 $komunikat = "";
 
 // 1. OBSŁUGA ZAPISU WYKADROWANEGO AWATARA (CROPPER.JS)
+// Cropper przysyła 500×625 jako data:image/png;base64. Sprawdzamy, że to naprawdę obraz,
+// zapisujemy do the-abyss/uploads/avatars/ (ścieżka od pliku, nie od bieżącego katalogu)
+// i zmieniamy bazę dopiero, gdy plik leży na dysku.
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['zapisz_avatar'])) {
-    $cropped_image = $_POST['cropped_image']; 
+    $cropped_image = (string)($_POST['cropped_image'] ?? '');
+    $dane = null;
+    if (preg_match('~^data:image/(png|jpeg|webp);base64,~', $cropped_image)) {
+        $dane = base64_decode(substr($cropped_image, strpos($cropped_image, ',') + 1), true);
+    }
+    $info = $dane ? @getimagesizefromstring($dane) : false;
 
-    if (!empty($cropped_image)) {
-        // Usuwamy nagłówek Base64, aby uzyskać czyste dane obrazu PNG
-        $image_parts = explode(";base64,", $cropped_image);
-        $image_base64 = base64_decode($image_parts[1]);
-        
-        // Sprawdzamy czy folder istnieje, jak nie, to go tworzymy
-        $folder = 'uploads/avatars';
-        if (!file_exists($folder)) {
-            mkdir($folder, 0777, true);
-        }
-        
-        // Tworzymy unikalną nazwę i zapisujemy plik na serwerze
-        $nazwa_pliku = $folder . '/avatar_' . $id_gracza . '_' . time() . '.png';
-        file_put_contents($nazwa_pliku, $image_base64);
-
-        // Aktualizacja bazy danych
-        $polaczenie->query("UPDATE gracze SET avatar = '$nazwa_pliku' WHERE id = $id_gracza");
-        
-        $komunikat = "<div class='sukces'>Twój awatar został idealnie wykadrowany (portret) i zaktualizowany! (Może być konieczne odświeżenie strony F5).</div>";
+    if ($cropped_image === '') {
+        $komunikat = "<div class='blad'>Najpierw wybierz i wykadruj zdjęcie! Jeśli wybrałeś zdjęcie, a widzisz ten komunikat, plik był za duży dla serwera (limit post_max_size w php.ini).</div>";
+    } elseif (!$info) {
+        $komunikat = "<div class='blad'>To nie wygląda na obraz. Spróbuj innego pliku.</div>";
     } else {
-        $komunikat = "<div class='blad'>Najpierw wybierz i wykadruj zdjęcie!</div>";
+        $katalog = dirname(__DIR__) . '/uploads/avatars';
+        if (!is_dir($katalog) && !@mkdir($katalog, 0775, true)) {
+            $komunikat = "<div class='blad'>Serwer nie może utworzyć folderu uploads/avatars. Załóż go ręcznie w katalogu the-abyss.</div>";
+        } else {
+            $nazwa = 'avatar_' . $id_gracza . '_' . time();
+            $zapisane = false;
+            // JPEG 88% waży kilka razy mniej niż PNG z croppera — szybciej ładuje się w podglądach
+            if (function_exists('imagecreatefromstring') && ($img = @imagecreatefromstring($dane))) {
+                $plik = "uploads/avatars/$nazwa.jpg";
+                $zapisane = imagejpeg($img, dirname(__DIR__) . '/' . $plik, 88);
+                imagedestroy($img);
+            }
+            if (!$zapisane) {
+                $plik = "uploads/avatars/$nazwa.png";
+                $zapisane = file_put_contents(dirname(__DIR__) . '/' . $plik, $dane) > 0;
+            }
+            if (!$zapisane) {
+                $komunikat = "<div class='blad'>Nie udało się zapisać pliku na dysku. Sprawdź uprawnienia folderu uploads/avatars.</div>";
+            } else {
+                $st = $polaczenie->prepare("UPDATE gracze SET avatar = ? WHERE id = ?");
+                $st->bind_param('si', $plik, $id_gracza);
+                $st->execute();
+                $komunikat = "<div class='sukces'>Twój awatar został wykadrowany (portret) i zaktualizowany!</div>";
+            }
+        }
     }
 }
 
@@ -36,8 +54,29 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['zapisz_avatar'])) {
 $wynik = $polaczenie->query("SELECT avatar, tryb_pacyfisty FROM gracze WHERE id=$id_gracza");
 $gracz = $wynik->fetch_assoc();
 
-// Zaktualizowany placeholder na pionowy
-$aktualny_avatar = !empty($gracz['avatar']) ? htmlspecialchars($gracz['avatar']) : 'https://via.placeholder.com/500x625/111/333?text=Portret';
+$aktualny_avatar = htmlspecialchars(avatar_url($gracz['avatar'] ?? ''), ENT_QUOTES);
+
+if (isset($_GET['diag'])) {
+    $root = dirname(__DIR__);
+    $wpis = (string)($gracz['avatar'] ?? '');
+    $p2 = ltrim(str_replace('\\', '/', $wpis), '/'); $pl = basename($p2);
+    $kat = $root . '/uploads/avatars';
+    echo "<pre style='background:#000;color:#0f0;padding:12px;border:1px solid #f33;white-space:pre-wrap;font-size:13px'>";
+    echo "DIAGNOSTYKA AWATARA\n";
+    echo "wpis w bazie:     " . htmlspecialchars(var_export($wpis, true)) . "\n";
+    echo "katalog gry:      " . htmlspecialchars($root) . "\n";
+    echo "avatar_url():     " . ($aktualny_avatar ?: '(pusto — pliku nie znaleziono)') . "\n";
+    echo "URL strony:       " . htmlspecialchars($_SERVER['REQUEST_URI'] ?? '') . "\n\n";
+    foreach ([$p2, 'uploads/' . $p2, 'uploads/avatars/' . $pl, 'avatars/' . $pl] as $k) {
+        $f = $root . '/' . $k;
+        echo str_pad(htmlspecialchars($k), 60) . (is_file($f) ? 'JEST (' . filesize($f) . ' B)' : 'brak') . "\n";
+    }
+    echo "\nuploads/avatars istnieje: " . (is_dir($kat) ? 'tak' : 'NIE') . ", zapisywalny: " . (is_writable($kat) ? 'tak' : 'NIE') . "\n";
+    echo "GD (imagejpeg):   " . (function_exists('imagejpeg') ? 'tak' : 'NIE') . "\n";
+    echo "post_max_size:    " . ini_get('post_max_size') . "\n";
+    if (is_dir($kat)) { echo "\npliki w uploads/avatars:\n"; foreach (array_slice(scandir($kat), 2) as $x) echo "  $x (" . filesize("$kat/$x") . " B)\n"; }
+    echo "</pre>";
+}
 
 // 2. LOGIKA ZMIANY TRYBU NIETYKALNOŚCI (PACYFISTA)
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['zmien_tryb'])) {
@@ -93,7 +132,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['zmien_tryb'])) {
     <div class="cropper-wrapper">
         <div class="cropper-left">
             <b style="color: #888; display: block; margin-bottom: 10px; text-transform: uppercase;">Aktualny wizerunek:</b>
-            <div class="podglad-avatara" style="background-image: url('<?php echo $aktualny_avatar; ?>');"></div>
+            <div class="podglad-avatara"<?php if ($aktualny_avatar): ?> style="background-image: url('<?php echo $aktualny_avatar; ?>');"<?php endif; ?>></div>
             
             <input type="file" id="imageInput" class="input-file" accept="image/png, image/jpeg, image/gif, image/webp">
         </div>
@@ -110,6 +149,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['zmien_tryb'])) {
 
             <form method="POST" id="avatarForm" style="display: none;">
                 <input type="hidden" name="cropped_image" id="cropped_image_data">
+                <input type="hidden" name="zapisz_avatar" value="1">
                 <button type="submit" name="zapisz_avatar" class="btn-zapisz">Zapisz Wykadrowany Portret</button>
             </form>
         </div>
