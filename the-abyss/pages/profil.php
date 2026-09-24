@@ -189,16 +189,16 @@ if (abyss_table_exists($polaczenie, 'malzenstwa')) {
     }
 }
 
-$avatar = !empty($profil['avatar']) ? abyss_e($profil['avatar']) : "https://via.placeholder.com/500x625/111/333?text=Brak+Zdjecia";
-$opis = !empty($profil['opis_profilu']) ? nl2br(abyss_e($profil['opis_profilu'])) : "<span style='color:#666; font-style:italic;'>Ten gracz woli pozostać w cieniu. Brak wpisu w kartotece.</span>";
-$kolor_nicku = (!empty($profil['is_premium'])) ? "#ffd700" : "#00ff00";
+$avatar = !empty($profil['avatar']) ? abyss_e($profil['avatar']) : "https://via.placeholder.com/500x625/0a0a0a/333?text=PORTRET";
+$opis = !empty($profil['opis_profilu']) ? nl2br(abyss_e($profil['opis_profilu'])) : "<span class='pusto'>Ten gracz woli pozostać w cieniu. Brak wpisu w kartotece.</span>";
+$klasa_nicku = !empty($profil['is_premium']) ? ' vip' : '';
 
 $ostatnio = strtotime($profil['ostatnia_aktywnosc'] ?? 'now');
 $roznica_minut = round((time() - $ostatnio) / 60);
 if ($roznica_minut < 15) {
-    $status_online = "<span style='color: #00ff00; font-weight: bold; text-shadow: 0 0 5px rgba(0,255,0,0.5);'>● Dostępny/a na ulicach</span>";
+    $status_online = "<span class='status-on'>● Dostępny/a na ulicach</span>";
 } else {
-    $status_online = "<span style='color: #888;'>○ Ostatnio widziany/a: " . abyss_e($profil['ostatnia_aktywnosc']) . "</span>";
+    $status_online = "<span class='status-off'>○ Ostatnio: " . abyss_e(date('d.m.Y H:i', $ostatnio)) . "</span>";
 }
 
 $story_public = $historia['widocznosc'] !== 'prywatna' || $cel_id === $id_gracza;
@@ -206,22 +206,95 @@ $story_html = $story_public ? ($historia['historia_html'] ?? '') : '';
 ?>
 
 <style>
-.odznaka{display:inline-flex;align-items:center;gap:4px;border-radius:12px;font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:1px;font-weight:700;border:1px solid;margin:0 2px;white-space:nowrap}
-.o-vip{color:#ffd700;border-color:rgba(255,215,0,.5);background:rgba(255,215,0,.1);text-shadow:0 0 8px rgba(255,215,0,.5)}
-.o-mg{color:#dd88ff;border-color:rgba(221,136,255,.5);background:rgba(221,136,255,.1);text-shadow:0 0 8px rgba(221,136,255,.5)}
-.o-proboszcz{color:#ffd700;border-color:rgba(255,215,0,.4);background:rgba(255,215,0,.08);text-shadow:0 0 6px rgba(255,215,0,.4)}
-.o-barman{color:#ffaa00;border-color:rgba(255,170,0,.5);background:rgba(255,170,0,.1);text-shadow:0 0 8px rgba(255,170,0,.5)}
-.odznaki-profil{display:flex;flex-wrap:wrap;justify-content:center;gap:4px;margin-bottom:14px}
-.profil-kontener{display:flex;gap:30px;margin-top:10px;align-items:flex-start}.profil-lewy{width:320px;min-width:320px;background:rgba(10,10,10,.6);border:1px solid rgba(255,255,255,.08);padding:25px;border-radius:8px;text-align:center;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 10px 40px rgba(0,0,0,.6)}
-.profil-avatar{width:100%;height:auto;aspect-ratio:500/625;background-position:top center!important;background-size:cover!important;border:1px solid rgba(255,255,255,.15);border-radius:6px;margin-bottom:20px;box-shadow:0 5px 20px rgba(0,0,0,.8);background-color:#050505}.profil-nick{font-family:'Oswald',sans-serif;font-size:2.2em;margin:0 0 5px 0;text-transform:uppercase;word-wrap:break-word;text-shadow:0 0 10px rgba(0,255,0,.3);letter-spacing:1px}
-.malz-baner{background:linear-gradient(135deg,rgba(255,51,102,.08),rgba(221,136,255,.08));border:1px solid rgba(255,51,102,.3);border-radius:10px;padding:12px 16px;margin:14px 0;display:flex;align-items:center;gap:12px}.malz-info{flex:1;text-align:left}.malz-label{color:#ff3366;font-family:'Oswald',sans-serif;font-size:.72em;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:2px}.malz-nick{color:#fff;font-family:'Oswald',sans-serif;font-size:1em;letter-spacing:.5px;text-decoration:none;display:flex;align-items:center;gap:6px}.malz-nick:hover{text-decoration:underline}.malz-mini-av{width:28px;height:28px;border-radius:50%;background-size:cover;background-position:top center;border:1px solid rgba(255,51,102,.4)}.malz-dni{color:#dd88ff;font-family:'Oswald',sans-serif;font-size:.8em;letter-spacing:1px;text-align:right}.malz-dni b{font-size:1.3em;color:#dd88ff}
-.btn-akcja-profil{display:block;width:100%;background:rgba(0,0,0,.5);color:#fff;font-family:'Oswald',sans-serif;font-size:1.05em;text-transform:uppercase;letter-spacing:1.5px;padding:12px 15px;margin-bottom:10px;border-radius:3px;cursor:pointer;transition:all .3s ease;text-decoration:none;box-sizing:border-box;font-weight:600;position:relative;overflow:hidden}.btn-akcja-profil::before{content:'';position:absolute;top:0;left:-100%;width:50%;height:100%;background:linear-gradient(to right,transparent,rgba(255,255,255,.1),transparent);transform:skewX(-20deg);transition:.5s}.btn-akcja-profil:hover::before{left:150%}.btn-wiadomosc{border:1px solid rgba(0,204,255,.3);color:#00ccff;text-shadow:0 0 5px rgba(0,204,255,.5)}.btn-wiadomosc:hover{background:rgba(0,204,255,.15);border-color:#00ccff;box-shadow:0 0 20px rgba(0,204,255,.6),inset 0 0 10px rgba(0,204,255,.3);color:#fff;text-shadow:0 0 10px #00ccff}.btn-roza{border:1px solid rgba(255,0,255,.3);color:#ff00ff;text-shadow:0 0 5px rgba(255,0,255,.5)}.btn-roza:hover{background:rgba(255,0,255,.15);border-color:#ff00ff;box-shadow:0 0 20px rgba(255,0,255,.6),inset 0 0 10px rgba(255,0,255,.3);color:#fff;text-shadow:0 0 10px #ff00ff}.btn-zaczep{border:1px solid rgba(255,204,0,.3);color:#ffcc00;text-shadow:0 0 5px rgba(255,204,0,.5)}.btn-zaczep:hover{background:rgba(255,204,0,.15);border-color:#ffcc00;box-shadow:0 0 20px rgba(255,204,0,.6),inset 0 0 10px rgba(255,204,0,.3);color:#fff;text-shadow:0 0 10px #ffcc00}.btn-atak{background:rgba(50,0,0,.6);border:2px solid #ff3333;color:#ff3333;font-size:1.2em;font-weight:700;text-shadow:0 0 10px #ff3333;box-shadow:inset 0 0 15px rgba(255,51,51,.2),0 0 15px rgba(255,51,51,.1);margin-top:25px}.btn-atak:hover{background:rgba(255,0,0,.2);color:#fff;border-color:#ff0000;box-shadow:0 0 30px rgba(255,0,0,.8),inset 0 0 20px rgba(255,0,0,.5);text-shadow:0 0 15px #ff0000;transform:scale(1.02)}.btn-pacyfista{background:rgba(20,20,20,.8);border:1px solid rgba(100,100,100,.5);color:#666;cursor:not-allowed;margin-top:25px}
-.profil-prawy{flex-grow:1;display:flex;flex-direction:column;gap:18px;min-width:0}.karta-info{background:rgba(10,10,10,.6);border:1px solid rgba(255,255,255,.08);padding:28px;border-radius:8px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 5px 20px rgba(0,0,0,.5)}.karta-info h3{font-family:'Oswald',sans-serif;color:#fff;text-transform:uppercase;border-bottom:1px solid rgba(255,255,255,.1);padding-bottom:10px;margin-top:0;margin-bottom:22px;font-size:1.35em;letter-spacing:1px}.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}.stat-box{background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.05);padding:15px 20px;border-radius:6px}.stat-box span{color:#888;font-size:.85em;text-transform:uppercase;display:block;margin-bottom:5px;font-family:'Oswald',sans-serif;letter-spacing:.5px}.stat-box b{color:#fff;font-size:1.2em;font-family:'Open Sans',sans-serif}.opis-fabularny{background:rgba(0,0,0,.4);border-left:4px solid #00ccff;padding:20px 25px;color:#ddd;line-height:1.7;font-family:'Open Sans',sans-serif;font-size:1.05em;border-radius:0 6px 6px 0}
-.profil-tabs{display:flex;gap:8px;flex-wrap:wrap;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.08);padding:10px;border-radius:8px}.profil-tab{font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:1px;text-decoration:none;color:#8a818e;border:1px solid rgba(255,255,255,.08);background:rgba(0,0,0,.35);padding:10px 13px;border-radius:4px;transition:.2s}.profil-tab:hover{color:#fff;border-color:rgba(74,214,255,.4)}.profil-tab.active{color:#4ad6ff;border-color:rgba(74,214,255,.6);background:rgba(74,214,255,.08);box-shadow:0 0 16px rgba(74,214,255,.16)}
-.profil-alert{padding:12px 16px;border-radius:4px;margin-bottom:14px;font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:1px}.profil-alert.ok{color:#5aff9a;border:1px solid rgba(90,255,154,.45);background:rgba(90,255,154,.08)}.profil-alert.blad{color:#ff6678;border:1px solid rgba(255,102,120,.45);background:rgba(255,102,120,.08)}
-.historia-shell{background:radial-gradient(ellipse at top,rgba(74,214,255,.06),transparent 45%),rgba(0,0,0,.34);border:1px solid rgba(74,214,255,.18);border-radius:8px;padding:22px;overflow:hidden}.historia-meta{font-family:'JetBrains Mono',monospace;color:#666;font-size:.82em;text-transform:uppercase;margin-bottom:16px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}.historia-content{color:#e8e1e8;line-height:1.65;overflow-wrap:anywhere}.historia-content img{max-width:100%;height:auto;border-radius:6px;border:1px solid rgba(255,255,255,.12);box-shadow:0 15px 40px rgba(0,0,0,.55)}.historia-content figure{margin:18px auto;text-align:center}.historia-content figcaption{color:#8a818e;font-size:.9em;margin-top:7px;font-style:italic}.historia-empty{border:1px dashed rgba(255,255,255,.14);padding:35px;text-align:center;color:#777;border-radius:8px;background:rgba(0,0,0,.25)}
-.edytor-wrap{display:grid;grid-template-columns:1fr;gap:14px}.edytor-toolbar{position:sticky;top:0;z-index:3;background:rgba(8,5,10,.96);border:1px solid rgba(255,23,68,.25);border-radius:8px;padding:10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}.edytor-toolbar button,.edytor-toolbar select,.edytor-toolbar input[type=text],.edytor-toolbar input[type=color]{background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.14);color:#eee;border-radius:4px;padding:8px 10px;font-family:'Rajdhani',sans-serif}.edytor-toolbar button{cursor:pointer;text-transform:uppercase;font-family:'Oswald',sans-serif;letter-spacing:.8px}.edytor-toolbar button:hover{border-color:#4ad6ff;color:#4ad6ff}.story-editor{min-height:520px;background:rgba(0,0,0,.45);border:1px solid rgba(74,214,255,.25);border-radius:8px;padding:24px;color:#eee;line-height:1.65;outline:none;overflow:auto}.story-editor:focus{box-shadow:0 0 0 1px rgba(74,214,255,.45),0 0 25px rgba(74,214,255,.12)}.story-editor img{max-width:100%;height:auto;border-radius:6px}.story-editor figure{text-align:center;margin:18px auto}.story-editor figcaption{color:#888;font-style:italic}.edytor-actions{display:flex;gap:12px;justify-content:flex-end;flex-wrap:wrap}.btn-save-story,.btn-cancel-story{font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:1px;padding:12px 18px;border-radius:4px;text-decoration:none;cursor:pointer}.btn-save-story{background:rgba(90,255,154,.12);border:1px solid rgba(90,255,154,.6);color:#5aff9a}.btn-save-story:hover{background:#5aff9a;color:#05060c}.btn-cancel-story{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.18);color:#aaa}.btn-cancel-story:hover{color:#fff;border-color:#fff}.private-pill{display:inline-block;color:#ffaa00;border:1px solid rgba(255,170,0,.4);background:rgba(255,170,0,.08);padding:4px 9px;border-radius:20px;font-size:.8em;text-transform:uppercase;font-family:'Oswald',sans-serif;letter-spacing:.8px}
-@media(max-width:900px){.profil-kontener{flex-direction:column}.profil-lewy{width:100%;min-width:0}.stat-grid{grid-template-columns:1fr}}
+/* ═══ PROFIL — skóra gry: szkło, czerwony neon, Oswald / Rajdhani / JetBrains Mono ═══ */
+.profil-kontener{display:grid;grid-template-columns:300px minmax(0,1fr);gap:22px;align-items:start;margin-top:4px}
+.profil-lewy,.karta-info,.profil-tabs{background:rgba(10,8,14,.55);backdrop-filter:blur(10px) saturate(140%);-webkit-backdrop-filter:blur(10px) saturate(140%);border:1px solid var(--border-soft);border-radius:2px;position:relative}
+.profil-lewy::before,.karta-info::before{content:'';position:absolute;top:-1px;left:16px;width:36px;height:1px;background:var(--neon-red);box-shadow:0 0 8px var(--neon-red)}
+.profil-lewy{padding:18px;text-align:center;position:sticky;top:0}
+.profil-avatar{width:100%;aspect-ratio:500/625;background-position:top center!important;background-size:cover!important;background-color:#05060c;border:1px solid var(--border-mid);border-radius:2px;margin-bottom:16px;box-shadow:0 0 22px rgba(255,23,68,.22),inset 0 0 30px rgba(0,0,0,.5);position:relative;overflow:hidden}
+.profil-avatar::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,transparent 60%,rgba(255,23,68,.12));pointer-events:none}
+.profil-nick{font-family:'Oswald',sans-serif;font-weight:500;font-size:1.9em;line-height:1.05;margin:0 0 6px;text-transform:uppercase;letter-spacing:3px;color:#fff;overflow-wrap:anywhere;text-shadow:0 0 4px rgba(255,255,255,.4),0 0 16px var(--neon-red),0 0 32px var(--neon-red-deep)}
+.profil-nick.vip{color:var(--neon-gold);text-shadow:0 0 12px rgba(255,215,0,.55)}
+.profil-status{font-family:'JetBrains Mono',monospace;font-size:.74em;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px}
+.status-on{color:var(--neon-green);text-shadow:0 0 6px rgba(90,255,154,.4)}
+.status-off{color:var(--txt-mute)}
+.odznaki-profil{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin-bottom:12px}
+.odznaka{display:inline-flex;align-items:center;gap:4px;border-radius:1px;font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:1.5px;font-weight:500;border:1px solid;white-space:nowrap}
+.o-vip,.o-proboszcz{color:var(--neon-gold);border-color:rgba(255,215,0,.45);background:rgba(255,215,0,.07)}
+.o-mg{color:#c896ff;border-color:rgba(200,150,255,.45);background:rgba(200,150,255,.08)}
+.o-barman{color:var(--neon-ember);border-color:rgba(255,122,61,.45);background:rgba(255,122,61,.08)}
+.malz-baner{background:rgba(255,23,68,.05);border:1px solid var(--border-soft);border-left:2px solid var(--neon-red);border-radius:2px;padding:10px 12px;margin:14px 0;display:flex;align-items:center;gap:12px}
+.malz-info{flex:1;text-align:left;min-width:0}
+.malz-label{color:var(--neon-red);font-family:'JetBrains Mono',monospace;font-size:.68em;text-transform:uppercase;letter-spacing:2px;margin-bottom:3px}
+.malz-nick{color:#fff;font-family:'Oswald',sans-serif;letter-spacing:1px;text-decoration:none;display:flex;align-items:center;gap:8px}
+.malz-nick:hover{color:var(--neon-red-hot)}
+.malz-mini-av{width:28px;height:28px;border-radius:50%;background-size:cover;background-position:top center;border:1px solid var(--border-mid);flex-shrink:0}
+.malz-dni{color:var(--txt-dim);font-family:'JetBrains Mono',monospace;font-size:.7em;letter-spacing:1px;text-align:right;text-transform:uppercase}
+.malz-dni b{display:block;font-family:'Oswald',sans-serif;font-size:1.7em;font-weight:500;color:#fff;letter-spacing:0}
+.profil-akcje{display:grid;gap:8px;margin-top:4px}
+.profil-akcje form{display:grid;gap:8px;margin:0}
+.btn-akcja-profil{display:block;width:100%;padding:10px 14px;background:rgba(255,23,68,.08);border:1px solid var(--border-mid);color:#fff;font-family:'Oswald',sans-serif;font-weight:500;font-size:.9em;letter-spacing:2px;text-transform:uppercase;text-decoration:none;text-align:center;border-radius:1px;cursor:pointer;transition:.25s}
+.btn-akcja-profil:hover{background:var(--neon-red);color:#fff;box-shadow:0 0 18px rgba(255,23,68,.7);text-shadow:0 0 6px rgba(255,255,255,.8)}
+.btn-akcja-profil.ghost{background:transparent;border-color:var(--border-soft);color:var(--txt-dim)}
+.btn-akcja-profil.ghost:hover{background:rgba(255,23,68,.1);border-color:var(--neon-red);color:#fff;box-shadow:none;text-shadow:none}
+.btn-akcja-profil.ember{background:rgba(255,122,61,.07);border-color:rgba(255,122,61,.4);color:#ffd9c4}
+.btn-akcja-profil.ember:hover{background:var(--neon-ember);border-color:var(--neon-ember);color:#05060c;box-shadow:0 0 18px rgba(255,122,61,.6);text-shadow:none}
+.btn-atak{margin-top:10px;padding:13px 14px;font-size:1em;letter-spacing:3px;background:linear-gradient(135deg,rgba(255,23,68,.18),rgba(179,0,27,.32));border:1px solid var(--neon-red);text-shadow:0 0 8px var(--neon-red);box-shadow:0 0 14px rgba(255,23,68,.35),inset 0 0 18px rgba(255,23,68,.12)}
+.btn-atak:hover{background:linear-gradient(135deg,rgba(255,23,68,.4),rgba(179,0,27,.55));box-shadow:0 0 30px rgba(255,23,68,.75)}
+.btn-pacyfista{margin-top:10px;background:rgba(0,0,0,.4);border-color:rgba(255,255,255,.1);color:var(--txt-mute);cursor:not-allowed}
+.btn-pacyfista:hover{background:rgba(0,0,0,.4);color:var(--txt-mute);box-shadow:none;text-shadow:none}
+.profil-prawy{display:flex;flex-direction:column;gap:16px;min-width:0}
+.profil-tabs{display:flex;flex-wrap:wrap;gap:2px;padding:6px}
+.profil-tab{font-family:'Oswald',sans-serif;font-size:.86em;letter-spacing:2px;text-transform:uppercase;text-decoration:none;color:var(--txt-dim);padding:9px 14px;border-bottom:2px solid transparent;transition:.2s}
+.profil-tab:hover{color:#fff;background:rgba(255,23,68,.06)}
+.profil-tab.active{color:#fff;border-bottom-color:var(--neon-red);background:linear-gradient(180deg,transparent,rgba(255,23,68,.14));text-shadow:0 0 8px rgba(255,23,68,.6)}
+.karta-info{padding:20px 22px}
+.karta-info h3{font-family:'Oswald',sans-serif;font-weight:500;font-size:1.05em;letter-spacing:2px;text-transform:uppercase;color:#fff;margin:0 0 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.karta-info h3 .tag{font-family:'JetBrains Mono',monospace;font-size:.62em;font-weight:400;color:var(--neon-red);letter-spacing:2px;padding:2px 6px;border:1px solid var(--border-soft)}
+.stat-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.stat-box{background:rgba(0,0,0,.38);border:1px solid var(--border-soft);padding:12px 14px 12px 16px;border-radius:2px;position:relative}
+.stat-box::before{content:'';position:absolute;left:0;top:12%;width:2px;height:76%;background:var(--neon-red);box-shadow:0 0 6px var(--neon-red)}
+.stat-box span{display:block;font-family:'JetBrains Mono',monospace;font-size:.66em;letter-spacing:2px;text-transform:uppercase;color:var(--txt-mute);margin-bottom:5px}
+.stat-box b{font-family:'Oswald',sans-serif;font-weight:500;font-size:1.3em;color:#fff;letter-spacing:.5px}
+.stat-box b.hot{color:var(--neon-red-hot);text-shadow:0 0 8px rgba(255,23,68,.4)}
+.stat-box b.ember{color:var(--neon-ember)}
+.stat-box .sep{display:inline;color:var(--txt-mute);margin:0 6px}
+.syn-linia{font-size:1.08em;line-height:1.7;color:var(--txt-dim)}
+.syn-linia b{color:#fff;font-family:'Oswald',sans-serif;font-weight:500;letter-spacing:1px}
+.syn-linia .ranga{color:var(--neon-red-hot);text-transform:uppercase;letter-spacing:2px}
+.pusto{color:var(--txt-mute);font-style:italic}
+.opis-fabularny{border-left:2px solid var(--neon-ember);padding:4px 0 4px 18px;color:var(--txt-main);font-family:'Cormorant Garamond',serif;font-size:1.18em;line-height:1.65;text-wrap:pretty}
+.profil-alert{padding:10px 14px;border-radius:2px;font-family:'JetBrains Mono',monospace;font-size:.82em;letter-spacing:1px}
+.profil-alert.ok{color:var(--neon-green);border:1px solid rgba(90,255,154,.4);background:rgba(90,255,154,.06)}
+.profil-alert.blad{color:var(--neon-red-hot);border:1px solid var(--border-mid);background:rgba(255,23,68,.07)}
+.historia-shell{background:rgba(0,0,0,.3);border:1px solid var(--border-soft);border-radius:2px;padding:20px}
+.historia-meta{font-family:'JetBrains Mono',monospace;color:var(--txt-mute);font-size:.72em;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:16px;padding-bottom:10px;border-bottom:1px dashed rgba(255,23,68,.15);display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.historia-content{color:var(--txt-main);line-height:1.65;overflow-wrap:anywhere}
+.historia-content img{max-width:100%;height:auto;border-radius:2px;border:1px solid var(--border-soft);box-shadow:0 15px 40px rgba(0,0,0,.55)}
+.historia-content figure{margin:18px auto;text-align:center}
+.historia-content figcaption{color:var(--txt-dim);font-size:.9em;margin-top:7px;font-style:italic}
+.historia-empty{border:1px dashed var(--border-soft);padding:32px;text-align:center;color:var(--txt-dim);border-radius:2px;background:rgba(0,0,0,.25);font-family:'Cormorant Garamond',serif;font-style:italic;font-size:1.1em}
+.edytor-wrap{display:grid;gap:14px}
+.edytor-toolbar{position:sticky;top:0;z-index:3;background:rgba(8,5,10,.96);border:1px solid var(--border-mid);border-radius:2px;padding:8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.edytor-toolbar button,.edytor-toolbar select,.edytor-toolbar input[type=text],.edytor-toolbar input[type=color]{background:rgba(0,0,0,.55);border:1px solid var(--border-soft);color:var(--txt-main);border-radius:1px;padding:7px 10px;font-family:'Rajdhani',sans-serif}
+.edytor-toolbar button{cursor:pointer;text-transform:uppercase;font-family:'Oswald',sans-serif;letter-spacing:1px}
+.edytor-toolbar button:hover{border-color:var(--neon-red);color:#fff;background:rgba(255,23,68,.12)}
+.edytor-toolbar label{color:var(--txt-dim);font-family:'JetBrains Mono',monospace;font-size:.72em;letter-spacing:1px;text-transform:uppercase;display:inline-flex;align-items:center;gap:6px}
+.story-editor{min-height:520px;background:rgba(0,0,0,.45);border:1px solid var(--border-soft);border-radius:2px;padding:24px;color:var(--txt-main);line-height:1.65;outline:none;overflow:auto}
+.story-editor:focus{border-color:var(--border-hot);box-shadow:0 0 22px rgba(255,23,68,.12)}
+.story-editor img{max-width:100%;height:auto}
+.story-editor figure{text-align:center;margin:18px auto}
+.story-editor figcaption{color:var(--txt-dim);font-style:italic}
+.edytor-opcje{display:flex;gap:14px;align-items:center;flex-wrap:wrap;color:var(--txt-dim)}
+.edytor-opcje .hint{color:var(--txt-mute);font-family:'JetBrains Mono',monospace;font-size:.75em}
+.edytor-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+.btn-save-story,.btn-cancel-story{display:inline-block;font-family:'Oswald',sans-serif;font-weight:500;text-transform:uppercase;letter-spacing:2px;font-size:.88em;padding:10px 18px;border-radius:1px;text-decoration:none;cursor:pointer;transition:.25s}
+.btn-save-story{background:rgba(255,23,68,.1);border:1px solid var(--border-mid);color:#fff}
+.btn-save-story:hover{background:var(--neon-red);box-shadow:0 0 18px rgba(255,23,68,.7)}
+.btn-cancel-story{background:transparent;border:1px solid var(--border-soft);color:var(--txt-dim)}
+.btn-cancel-story:hover{color:#fff;border-color:var(--neon-red)}
+.private-pill{display:inline-block;color:var(--neon-ember);border:1px solid rgba(255,122,61,.4);background:rgba(255,122,61,.07);padding:2px 8px;border-radius:1px}
+@media(max-width:900px){.profil-kontener{grid-template-columns:1fr}.profil-lewy{position:static}.stat-grid{grid-template-columns:1fr}}
 </style>
 
 <div class="profil-kontener">
@@ -231,8 +304,8 @@ $story_html = $story_public ? ($historia['historia_html'] ?? '') : '';
             <div class="odznaki-profil"><?php echo $odznaki_html; ?></div>
         <?php endif; ?>
 
-        <h1 class="profil-nick" style="color: <?php echo $kolor_nicku; ?>;"><?php echo abyss_e($profil['login']); ?></h1>
-        <div style="margin-bottom: 15px; font-size: 0.95em; font-family: 'Open Sans', sans-serif;"><?php echo $status_online; ?></div>
+        <h1 class="profil-nick<?php echo $klasa_nicku; ?>"><?php echo abyss_e($profil['login']); ?></h1>
+        <div class="profil-status"><?php echo $status_online; ?></div>
 
         <?php if ($malzenstwo_profilu):
             $dni_razem = floor((time() - strtotime($malzenstwo_profilu['data_slubu'])) / 86400);
@@ -249,7 +322,7 @@ $story_html = $story_public ? ($historia['historia_html'] ?? '') : '';
         ?>
         <div class="malz-baner">
             <div class="malz-info">
-                <div class="malz-label">💍 Żonaty/Zamężna z</div>
+                <div class="malz-label">// W związku z</div>
                 <a href="game.php?page=profil&id=<?php echo $partner_id_mal; ?>" class="malz-nick">
                     <div class="malz-mini-av" style="background-image:url('<?php echo $av_par; ?>')"></div>
                     <?php echo abyss_e($partner_login_mal); ?>
@@ -259,22 +332,24 @@ $story_html = $story_public ? ($historia['historia_html'] ?? '') : '';
         </div>
         <?php endif; ?>
 
+        <div class="profil-akcje">
         <?php if ($cel_id !== $id_gracza): ?>
-            <a href="game.php?page=poczta&zakladka=napisz&do=<?php echo abyss_e($profil['login']); ?>" class="btn-akcja-profil btn-wiadomosc">✉️ Wyślij Wiadomość</a>
-            <form method="POST" style="margin: 0; padding: 0;">
+            <a href="game.php?page=poczta&zakladka=napisz&do=<?php echo urlencode($profil['login']); ?>" class="btn-akcja-profil">✉ Wyślij wiadomość</a>
+            <form method="POST">
                 <input type="hidden" name="csrf" value="<?php echo abyss_e($csrf); ?>">
-                <button type="submit" name="akcja_roza" class="btn-akcja-profil btn-roza">🌹 Wyślij Różę (50 $)</button>
-                <button type="submit" name="akcja_zaczep" class="btn-akcja-profil btn-zaczep">👋 Zaczep Obywatela</button>
+                <button type="submit" name="akcja_roza" class="btn-akcja-profil ember">🌹 Wyślij różę · 50 $</button>
+                <button type="submit" name="akcja_zaczep" class="btn-akcja-profil ghost">Zaczep obywatela</button>
             </form>
             <?php if ((int)$profil['tryb_pacyfisty'] === 1 || (int)($gracz['tryb_pacyfisty'] ?? 0) === 1): ?>
-                <button class="btn-akcja-profil btn-pacyfista" disabled>🛡️ Nietykalność (Pacyfista)</button>
+                <button class="btn-akcja-profil btn-pacyfista" disabled>🛡 Nietykalność · pacyfista</button>
             <?php else: ?>
-                <a href="game.php?page=walka_pvp&cel=<?php echo $cel_id; ?>" class="btn-akcja-profil btn-atak" onclick="return confirm('Czy na pewno chcesz zaatakować tego gracza? Koszt: 3 EN.');">⚔️ ZAATAKUJ (3 EN)</a>
+                <a href="game.php?page=walka_pvp&cel=<?php echo $cel_id; ?>" class="btn-akcja-profil btn-atak" onclick="return confirm('Czy na pewno chcesz zaatakować tego gracza? Koszt: 3 EN.');">◤ Zaatakuj · 3 EN ◥</a>
             <?php endif; ?>
         <?php else: ?>
-            <a href="game.php?page=ustawienia" class="btn-akcja-profil btn-wiadomosc" style="border-color:#888;color:#aaa;">⚙️ Edytuj portret</a>
-            <a href="game.php?page=profil&id=<?php echo $id_gracza; ?>&tab=historia&edit=1" class="btn-akcja-profil btn-roza">✦ Edytuj historię</a>
+            <a href="game.php?page=profil&id=<?php echo $id_gracza; ?>&tab=historia&edit=1" class="btn-akcja-profil">✦ Edytuj historię</a>
+            <a href="game.php?page=ustawienia" class="btn-akcja-profil ghost">Zmień portret</a>
         <?php endif; ?>
+        </div>
     </div>
 
     <div class="profil-prawy">
@@ -291,34 +366,34 @@ $story_html = $story_public ? ($historia['historia_html'] ?? '') : '';
 
         <?php if ($tab === 'kartoteka'): ?>
             <div class="karta-info">
-                <h3 style="color:#00ccff;text-shadow:0 0 10px rgba(0,204,255,0.4);border-color:rgba(0,204,255,0.2);">🗂️ Kartoteka Obywatela <span style="color:#666;font-size:.7em;">(ID: <?php echo (int)$profil['id']; ?>)</span></h3>
+                <h3>Kartoteka obywatela <span class="tag">ID <?php echo (int)$profil['id']; ?></span></h3>
                 <div class="stat-grid">
-                    <div class="stat-box"><span>Poziom Zagrożenia</span><b style="color:#00ccff;font-family:'Oswald',sans-serif;font-size:1.4em;">Lvl <?php echo (int)$profil['poziom']; ?></b></div>
-                    <div class="stat-box"><span>Klasa Postaci</span><b><?php echo abyss_e($profil['klasa']); ?></b></div>
-                    <div class="stat-box"><span>Profesja (RP)</span><b style="color:#ffaa00;"><?php echo !empty($profil['profesja_fabularna']) ? abyss_e($profil['profesja_fabularna']) : "Brak"; ?></b></div>
-                    <div class="stat-box"><span>Siła Bojowa</span><b style="color:#ff3333;">Atk: <?php echo (int)$profil['bonus_atak']; ?></b> <span style="display:inline;color:#555;">|</span> <b style="color:#00aaff;">Obr: <?php echo (int)$profil['bonus_obrona']; ?></b></div>
+                    <div class="stat-box"><span>Poziom zagrożenia</span><b class="hot">LVL <?php echo (int)$profil['poziom']; ?></b></div>
+                    <div class="stat-box"><span>Klasa postaci</span><b><?php echo abyss_e($profil['klasa']); ?></b></div>
+                    <div class="stat-box"><span>Profesja (RP)</span><b class="ember"><?php echo !empty($profil['profesja_fabularna']) ? abyss_e($profil['profesja_fabularna']) : "Brak"; ?></b></div>
+                    <div class="stat-box"><span>Siła bojowa</span><b>ATK <?php echo (int)$profil['bonus_atak']; ?></b><span class="sep">/</span><b>OBR <?php echo (int)$profil['bonus_obrona']; ?></b></div>
                 </div>
             </div>
 
             <div class="karta-info">
-                <h3 style="color:#dd88ff;text-shadow:0 0 10px rgba(221,136,255,0.4);border-color:rgba(221,136,255,0.2);">🏴 Przynależność do Syndykatu</h3>
+                <h3>Przynależność <span class="tag">SYNDYKAT</span></h3>
                 <?php if (!empty($profil['nazwa_syndykatu'])): ?>
-                    <div style="font-size:1.15em;font-family:'Open Sans',sans-serif;line-height:1.6;">
-                        <span style="color:#aaa;">Gracz należy do:</span> <b style="color:#fff;">[<?php echo abyss_e($profil['tag_syndykatu']); ?>] <?php echo abyss_e($profil['nazwa_syndykatu']); ?></b><br>
-                        <span style="color:#aaa;">Ranga w strukturze:</span> <b style="color:#dd88ff;font-family:'Oswald',sans-serif;font-size:1.1em;letter-spacing:1px;text-transform:uppercase;"><?php echo abyss_e($profil['syndykat_rola']); ?></b>
+                    <div class="syn-linia">
+                        Rodzina: <b>[<?php echo abyss_e($profil['tag_syndykatu']); ?>] <?php echo abyss_e($profil['nazwa_syndykatu']); ?></b><br>
+                        Ranga: <b class="ranga"><?php echo abyss_e($profil['syndykat_rola']); ?></b>
                     </div>
                 <?php else: ?>
-                    <div style="color:#888;font-style:italic;font-family:'Open Sans',sans-serif;">Ten obywatel to wolny strzelec. Nie jest powiązany z żadną grupą przestępczą.</div>
+                    <div class="pusto">Wolny strzelec. Nie jest powiązany z żadną grupą przestępczą.</div>
                 <?php endif; ?>
             </div>
 
             <div class="karta-info">
-                <h3 style="color:#fff;border-color:rgba(255,255,255,0.2);">📖 Notatki Ulicy (Opis Fabularny)</h3>
+                <h3>Notatki ulicy <span class="tag">OPIS FABULARNY</span></h3>
                 <div class="opis-fabularny"><?php echo $opis; ?></div>
             </div>
         <?php elseif ($tab === 'historia'): ?>
             <div class="karta-info">
-                <h3 style="color:#4ad6ff;text-shadow:0 0 10px rgba(74,214,255,.3);border-color:rgba(74,214,255,.2);">✦ Historia Postaci</h3>
+                <h3>Historia postaci <span class="tag">ARCHIWUM</span></h3>
 
                 <?php if (!$historia['exists']): ?>
                     <div class="profil-alert blad">Brakuje tabeli <b>profile_historie</b>. Uruchom SQL z paczki, żeby aktywować tę zakładkę.</div>
@@ -338,8 +413,8 @@ $story_html = $story_public ? ($historia['historia_html'] ?? '') : '';
                             <button type="button" data-cmd="insertUnorderedList">Lista</button>
                             <button type="button" data-cmd="insertHorizontalRule">Linia</button>
 
-                            <label style="color:#888;font-family:'Oswald';text-transform:uppercase;">Kolor <input type="color" id="story-color" value="#e8e1e8"></label>
-                            <label style="color:#888;font-family:'Oswald';text-transform:uppercase;">Tło <input type="color" id="story-bg" value="#111111"></label>
+                            <label>Kolor <input type="color" id="story-color" value="#e8e1e8"></label>
+                            <label>Tło <input type="color" id="story-bg" value="#111111"></label>
 
                             <select id="story-font">
                                 <option value="Rajdhani">Rajdhani</option>
@@ -363,10 +438,10 @@ $story_html = $story_public ? ($historia['historia_html'] ?? '') : '';
 
                         <div id="story-editor" class="story-editor" contenteditable="true"><?php echo $historia['historia_html'] ?? ''; ?></div>
 
-                        <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;color:#aaa;">
+                        <div class="edytor-opcje">
                             <label><input type="radio" name="widocznosc" value="publiczna" <?php echo ($historia['widocznosc'] ?? 'publiczna') !== 'prywatna' ? 'checked' : ''; ?>> Publiczna</label>
                             <label><input type="radio" name="widocznosc" value="prywatna" <?php echo ($historia['widocznosc'] ?? '') === 'prywatna' ? 'checked' : ''; ?>> Prywatna</label>
-                            <span style="color:#666;">Obrazki wstawiają się w miejscu kursora.</span>
+                            <span class="hint">Obrazki wstawiają się w miejscu kursora.</span>
                         </div>
 
                         <div class="edytor-actions">
@@ -450,13 +525,13 @@ $story_html = $story_public ? ($historia['historia_html'] ?? '') : '';
                         <?php endif; ?>
                     </div>
                     <?php if ($cel_id === $id_gracza): ?>
-                        <div style="margin-top:16px;text-align:right;"><a class="btn-save-story" href="game.php?page=profil&id=<?php echo $id_gracza; ?>&tab=historia&edit=1">Edytuj historię</a></div>
+                        <div style="margin-top:14px;display:flex;justify-content:flex-end"><a class="btn-save-story" href="game.php?page=profil&id=<?php echo $id_gracza; ?>&tab=historia&edit=1">Edytuj historię</a></div>
                     <?php endif; ?>
                 <?php endif; ?>
             </div>
         <?php else: ?>
             <div class="karta-info">
-                <h3 style="color:#ffaa00;border-color:rgba(255,170,0,.25);">Sekcja w przygotowaniu</h3>
+                <h3>Sekcja w przygotowaniu</h3>
                 <div class="historia-empty">
                     Ta zakładka jest gotowa jako miejsce w profilu, ale wymaga następnego modułu.
                     <br><br>

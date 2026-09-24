@@ -213,10 +213,15 @@ function klub_licznik_sal($polaczenie) {
 function klub_wiadomosci($polaczenie, $sala_key, $limit = 50) {
     $s = $polaczenie->real_escape_string($sala_key);
     $limit = (int)$limit;
-    $q = $polaczenie->query("SELECT id, login, tresc, typ, summoner_id, DATE_FORMAT(data_wyslania,'%H:%i') AS czas 
-                             FROM czat 
-                             WHERE sala='$s' 
-                             ORDER BY id DESC 
+    $ja = (int)($_SESSION['id_gracza'] ?? 0);
+    $q = $polaczenie->query("SELECT c.id, c.id_gracza, c.login, c.tresc, c.typ, c.summoner_id, c.usunieta, c.polewki,
+                                    DATE_FORMAT(c.data_wyslania,'%H:%i') AS czas, UNIX_TIMESTAMP(c.data_wyslania) AS ts,
+                                    g.avatar,
+                                    (SELECT COUNT(*) FROM klub_polewki p WHERE p.wpis_id=c.id AND p.od_gracza_id=$ja) AS moja_polewka
+                             FROM czat c
+                             LEFT JOIN gracze g ON g.id = c.id_gracza
+                             WHERE c.sala='$s' 
+                             ORDER BY c.id DESC 
                              LIMIT $limit");
     $out = [];
     if ($q) while($r = $q->fetch_assoc()) $out[] = $r;
@@ -329,8 +334,30 @@ function klub_render_msg($w) {
         }
     }
 
+    // Portret postaci (jak w karczmie) — awatar albo inicjały
+    $ava = !empty($w['avatar']) ? htmlspecialchars($w['avatar'], ENT_QUOTES) : '';
+    $portret = $ava
+        ? "<div class='por' style=\"background-image:url('$ava')\"></div>"
+        : "<div class='por'><span>".htmlspecialchars($inicjaly)."</span></div>";
+
+    // „Polej graczowi” — tylko pod zwykłymi wpisami graczy
+    $ja = (int)($_SESSION['id_gracza'] ?? 0);
+    $autor = (int)($w['id_gracza'] ?? 0);
+    $stopka = '';
+    if (($w['typ'] ?? '') === 'wiadomosc' && $autor > 0 && empty($w['usunieta'])) {
+        $ile = (int)($w['polewki'] ?? 0);
+        $dal = !empty($w['moja_polewka']);
+        $wlasny = ($autor === $ja);
+        $cls = 'polej' . ($dal ? ' dal' : '') . ($wlasny ? ' wlasny' : '');
+        $lbl = $wlasny ? 'Drinki za ten wpis' : ($dal ? 'Polane' : 'Polej graczowi');
+        $stopka = "<div class='msg-foot'><button type='button' class='$cls' data-id='".(int)$w['id']."'"
+                . ($wlasny || $dal ? ' disabled' : '') . " onclick='window.klubPolej(".(int)$w['id'].")'>"
+                . "<span class='ic'>🍸</span><span class='lbl'>$lbl</span><b class='ile'>" . ($ile ?: '') . "</b></button></div>";
+    }
+    $klasa .= ' post';
+
     echo "<div class='$klasa' data-id='".(int)$w['id']."'>
-        <div class='av'>".htmlspecialchars($inicjaly)."</div>
+        $portret
         <div class='body'>
             <div class='who'>
                 <span class='nm'>".htmlspecialchars($login_clean)."</span>
@@ -339,6 +366,7 @@ function klub_render_msg($w) {
                 <span class='when'>".htmlspecialchars($w['czas'])."</span>
             </div>
             <div class='txt'>$tresc_html</div>
+            $stopka
         </div>
     </div>";
 }
@@ -362,8 +390,8 @@ function klub_last_id($polaczenie, $sala_key) {
 /* ── KLUB: layout 3-kolumnowy ─────────────────────────────────── */
 .klub-wrap { --room-accent: var(--neon-red); }
 .klub-3col {
-    display: grid; grid-template-columns: 240px 1fr 240px;
-    gap: 0; min-height: 620px;
+    display: grid; grid-template-columns: 210px minmax(0,1fr) 210px;
+    gap: 0; min-height: 760px;
     background: rgba(6,3,9,0.55); border: 1px solid var(--border-soft);
     border-radius: 2px; overflow: hidden;
     margin-bottom: 20px;
@@ -373,7 +401,7 @@ function klub_last_id($polaczenie, $sala_key) {
 .kol-left, .kol-right {
     background: rgba(10,5,12,0.4); padding: 14px;
     border-right: 1px solid var(--border-soft);
-    max-height: 700px; overflow-y: auto;
+    max-height: none; overflow-y: auto;
 }
 .kol-right { border-right: none; border-left: 1px solid var(--border-soft); }
 .kol-center { min-width: 0; display: flex; flex-direction: column; background: rgba(6,3,9,0.4); position: relative; }
@@ -432,9 +460,10 @@ function klub_last_id($polaczenie, $sala_key) {
 
 /* ── FEED ──────────────────────────────────────────────────────── */
 .feed {
-    flex: 1; overflow-y: auto; padding: 16px 20px;
-    display: flex; flex-direction: column; gap: 12px;
-    max-height: 480px;
+    flex: 1; overflow-y: auto; padding: 18px 26px;
+    display: flex; flex-direction: column; gap: 14px;
+    /* Większe okno: rośnie z ekranem, ale nigdy niższe niż 560 px */
+    height: clamp(560px, calc(100vh - 300px), 1000px);
 }
 .feed .empty {
     color: var(--txt-mute); text-align: center; padding: 40px 20px;
@@ -466,6 +495,48 @@ function klub_last_id($polaczenie, $sala_key) {
 }
 .msg .who .when { font-family: 'JetBrains Mono', monospace; font-size: .66em; color: var(--txt-mute); margin-left: auto; letter-spacing: 1px; }
 .msg .txt { font-family: 'Cormorant Garamond', serif; font-size: 1.08em; line-height: 1.5; color: #e4dde4; word-wrap: break-word; }
+
+/* ── WPIS FABULARNY (portret + dłuższy tekst, jak w karczmie) ────── */
+.msg.post {
+    gap: 18px; padding: 14px 16px 12px;
+    background: rgba(18,10,18,0.45); border: 1px solid var(--border-soft);
+    border-radius: 2px; position: relative;
+}
+.msg.post::before { content:''; position:absolute; top:-1px; left:16px; width:36px; height:1px; background:var(--room-accent); box-shadow:0 0 6px var(--room-accent); }
+.msg.post .por {
+    width: 104px; aspect-ratio: 500/625; flex-shrink: 0; align-self: flex-start;
+    background: linear-gradient(135deg, #2a0a14, #0a0408) top center / cover no-repeat;
+    border: 1px solid var(--border-mid); border-radius: 2px;
+    box-shadow: 0 0 14px rgba(255,23,68,0.15), inset 0 0 20px rgba(0,0,0,0.5);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Oswald', sans-serif; color: var(--room-accent); font-size: 1.4em; letter-spacing: 1px;
+}
+.msg.post .who { padding-bottom: 6px; margin-bottom: 8px; border-bottom: 1px dashed rgba(255,23,68,0.15); }
+.msg.post .who .nm { font-size: 1.12em; letter-spacing: 1.5px; text-transform: uppercase; }
+.msg.post .txt { font-size: 1.16em; line-height: 1.6; white-space: pre-line; text-wrap: pretty; }
+.msg.post.is-mine { border-color: rgba(255,122,61,0.25); }
+.msg.post.barman .por { border-color: var(--neon-red); box-shadow: 0 0 14px rgba(255,23,68,0.4); }
+.msg.post.mg .por { border-color: #c896ff; color: #c896ff; }
+@media(max-width:700px){ .msg.post .por { width: 64px; } .msg.post { gap: 12px; padding: 10px; } }
+
+/* ── POLEJ GRACZOWI ─────────────────────────────────────────────── */
+.msg-foot { display: flex; justify-content: flex-end; margin-top: 10px; }
+.polej {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 5px 11px; background: rgba(255,215,0,0.05);
+    border: 1px solid rgba(255,215,0,0.28); border-radius: 2px;
+    color: #d8c890; cursor: pointer; transition: .2s;
+    font-family: 'Oswald', sans-serif; font-size: .74em; letter-spacing: 2px; text-transform: uppercase;
+}
+.polej .ic { font-size: 1.25em; letter-spacing: 0; filter: drop-shadow(0 0 4px rgba(255,215,0,0.5)); }
+.polej .ile { font-family: 'JetBrains Mono', monospace; color: var(--neon-gold); font-weight: 500; letter-spacing: 0; }
+.polej .ile:empty { display: none; }
+.polej:hover:not([disabled]) { background: rgba(255,215,0,0.14); border-color: var(--neon-gold); color: #fff; box-shadow: 0 0 14px rgba(255,215,0,0.3); }
+.polej.dal { border-color: var(--neon-gold); color: var(--neon-gold); background: rgba(255,215,0,0.1); cursor: default; }
+.polej.wlasny { cursor: default; opacity: .75; }
+.polej.wlasny:not(:has(.ile:not(:empty))) { display: none; }
+.polej.brzdek { animation: polejBrzdek .6s ease; }
+@keyframes polejBrzdek { 0%{transform:scale(1)} 30%{transform:scale(1.12) rotate(-4deg)} 60%{transform:scale(.97) rotate(2deg)} 100%{transform:scale(1)} }
 
 /* RICH-TEXT spans */
 .msg .txt .nar { color: var(--txt-dim); font-style: italic; }
@@ -534,7 +605,7 @@ function klub_last_id($polaczenie, $sala_key) {
 
 .composer-main { display: flex; gap: 10px; align-items: flex-end; }
 .chat-input {
-    flex: 1; min-height: 48px; max-height: 140px;
+    flex: 1; min-height: 72px; max-height: 240px;
     background: rgba(0,0,0,0.55); border: 1px solid var(--border-soft);
     color: #fff; padding: 10px 12px;
     font-family: 'Cormorant Garamond', serif; font-size: 1.05em;
@@ -1193,4 +1264,4 @@ $lacznie_w_klubie = array_sum($licznik_sal);
 </div>
 
 <!-- ══ JS RICH CHAT (auto-refresh, parser, AJAX) ══════════════ -->
-<script src="js/klub.js?v=2"></script>
+<script src="js/klub.js?v=3"></script>

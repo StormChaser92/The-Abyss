@@ -25,6 +25,8 @@ header('Content-Type: application/json; charset=utf-8');
 $id_gracza = (int)$_SESSION['id_gracza'];
 $sala = isset($_GET['sala']) ? preg_replace('/[^a-z0-9\-]/', '', strtolower($_GET['sala'])) : 'sala-glowna';
 $od_id = isset($_GET['od_id']) ? (int)$_GET['od_id'] : 0;
+// Najstarszy wpis widoczny u gracza — od niego odsyłamy aktualne liczniki drinków
+$widoczne_od = isset($_GET['widoczne_od']) ? max(0, (int)$_GET['widoczne_od']) : 0;
 
 // Whitelist sal (tylko aktywne mogą feedować)
 $AKTYWNE_SALE = ['lobby','sala-glowna','sauna','bdsm','tyly','sala-balowa','vip','taras','basen','silownia','masaze','garderoba'];
@@ -71,12 +73,15 @@ $last_id = $od_id;
 if ($sala !== 'lobby') {
     $q = $polaczenie->query("
         SELECT c.id, c.id_gracza, c.login, c.tresc, c.typ, c.summoner_id,
-               c.edytowane_o, c.edycji_licznik, c.usunieta,
+               c.edytowane_o, c.edycji_licznik, c.usunieta, c.polewki,
                DATE_FORMAT(c.data_wyslania,'%H:%i') AS czas,
                UNIX_TIMESTAMP(c.data_wyslania) AS ts,
-               g.login AS summoner_login
+               g.login AS summoner_login,
+               ga.avatar AS avatar,
+               (SELECT COUNT(*) FROM klub_polewki p WHERE p.wpis_id=c.id AND p.od_gracza_id=$id_gracza) AS moja_polewka
         FROM czat c
         LEFT JOIN gracze g ON g.id = c.summoner_id
+        LEFT JOIN gracze ga ON ga.id = c.id_gracza
         WHERE c.sala='$sala_sql' AND c.id > $od_id
         ORDER BY c.id ASC
         LIMIT 100
@@ -98,9 +103,28 @@ if ($sala !== 'lobby') {
                 'summoner_id'    => $r['summoner_id'] ? (int)$r['summoner_id'] : null,
                 'summoner_login' => $r['summoner_login'],
                 'is_mine'        => ((int)$r['id_gracza'] === $id_gracza),
+                'avatar'         => $r['avatar'] ?: null,
+                'polewki'        => (int)$r['polewki'],
+                'moja_polewka'   => (bool)$r['moja_polewka'],
             ];
             $last_id = (int)$r['id'];
         }
+    }
+}
+
+// ── 1b. LICZNIKI DRINKÓW NA WIDOCZNYCH WPISACH ────────────────────
+// Drinki spadają też na starsze wpisy, więc co cykl odsyłamy liczniki od najstarszego widocznego.
+$polewki = [];
+if ($sala !== 'lobby' && $widoczne_od > 0) {
+    $pq2 = $polaczenie->query("
+        SELECT c.id, c.polewki,
+               (SELECT COUNT(*) FROM klub_polewki p WHERE p.wpis_id=c.id AND p.od_gracza_id=$id_gracza) AS moja
+        FROM czat c
+        WHERE c.sala='$sala_sql' AND c.id >= $widoczne_od AND c.polewki > 0
+        ORDER BY c.id DESC LIMIT 200
+    ");
+    if ($pq2) while ($r = $pq2->fetch_assoc()) {
+        $polewki[(int)$r['id']] = ['ile' => (int)$r['polewki'], 'moja' => (bool)$r['moja']];
     }
 }
 
@@ -300,6 +324,7 @@ echo json_encode([
     'sala'       => $sala,
     'last_id'    => $last_id,
     'wiadomosci' => $wiadomosci,
+    'polewki'    => (object)$polewki,
     'rachunek'   => $rachunek,
     'obecni'     => $obecni,
     'szepty'     => $szepty,

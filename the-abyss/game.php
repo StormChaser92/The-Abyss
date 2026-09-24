@@ -1,7 +1,7 @@
 <?php
 session_start();
 ob_start();   // podstrony mogą robić header('Location') mimo że layout już się wypisuje
-ob_start();
+
 
 if (!isset($_SESSION['zalogowany']) || $_SESSION['zalogowany'] !== true) {
     header("Location: index.php");
@@ -80,7 +80,7 @@ if (empty($gracz_r['pochodzenie']) && $strona !== 'wybor_pochodzenia') {
 
 // 3. ONLINE
 $wynik_online = $polaczenie->query("
-    SELECT g.id,g.login,g.avatar,g.klasa,g.profesja_fabularna,g.nazwa_firmy,g.branza_firmy,g.is_premium,
+    SELECT g.id,g.login,g.avatar,g.poziom,g.klasa,g.profesja_fabularna,g.nazwa_firmy,g.branza_firmy,g.is_premium,
            DATEDIFF(NOW(),g.data_rejestracji) AS dni, s.nazwa AS s_nazwa, s.tag AS s_tag
     FROM gracze g LEFT JOIN syndykaty s ON g.syndykat_id=s.id
     WHERE g.ostatnia_aktywnosc >= NOW() - INTERVAL 15 MINUTE ORDER BY g.login ASC");
@@ -480,21 +480,35 @@ body::after{
 .gracz-online .nick-link{color:#fff;text-decoration:none;flex:1}
 .gracz-online .nick-link.vip{color:var(--neon-gold)}
 
-/* Tooltip online */
-.tt{
-    position:absolute;right:calc(100% + 12px);top:0;width:240px;
-    background:rgba(6,4,8,0.97);backdrop-filter:blur(12px);
-    border:1px solid var(--border-mid);border-radius:2px;padding:16px;
-    opacity:0;visibility:hidden;pointer-events:none;
-    transition:opacity .25s,visibility .25s;
-    box-shadow:0 10px 40px rgba(0,0,0,0.9), 0 0 20px rgba(255,23,68,0.15);
-    z-index:200;
+/* Szybki podgląd postaci — wyłania się z czerwonego cienia.
+   Szablon .tt siedzi ukryty w wierszu; JS kopiuje go do #tt-float w <body>,
+   bo prawy sidebar ma overflow:auto i ucinał podgląd wystający w lewo. */
+.gracz-online .tt{display:none}
+#tt-float{
+    position:fixed;z-index:1000;width:220px;pointer-events:none;
+    background:rgba(6,4,8,0.96);border:1px solid var(--border-mid);border-radius:2px;padding:12px;
+    opacity:0;visibility:hidden;
+    filter:blur(10px) brightness(.4);transform:translateX(18px) scale(.96);
+    box-shadow:0 0 0 rgba(255,23,68,0),0 0 0 rgba(0,0,0,0);
+    transition:opacity .35s ease,filter .45s ease,transform .45s cubic-bezier(.2,.8,.2,1),box-shadow .6s ease,visibility 0s linear .45s;
 }
-.gracz-online:hover .tt{opacity:1;visibility:visible}
-.tt-av{width:100%;aspect-ratio:500/625;background-position:top center!important;background-size:cover!important;border-radius:2px;margin-bottom:12px;border:1px solid var(--border-soft)}
-.tt-name{font-family:'Oswald',sans-serif;font-size:1.1em;text-transform:uppercase;text-align:center;margin-bottom:12px;padding-bottom:8px;border-bottom:1px dashed rgba(255,23,68,0.15);letter-spacing:1px}
-.tt-row{display:flex;justify-content:space-between;font-size:.82em;margin-bottom:6px;color:var(--txt-dim);font-family:'JetBrains Mono',monospace}
-.tt-row b{color:var(--txt-main);text-align:right;font-weight:500}
+#tt-float.on{
+    opacity:1;visibility:visible;filter:none;transform:none;
+    box-shadow:0 0 36px rgba(255,23,68,.45),0 0 90px rgba(179,0,27,.3),0 18px 50px rgba(0,0,0,.9);
+    transition:opacity .35s ease,filter .45s ease,transform .45s cubic-bezier(.2,.8,.2,1),box-shadow .6s ease,visibility 0s;
+}
+#tt-float::before{content:'';position:absolute;top:-1px;left:14px;width:36px;height:1px;background:var(--neon-red);box-shadow:0 0 8px var(--neon-red)}
+.tt-av{width:100%;aspect-ratio:500/625;background-position:top center;background-size:cover;background-color:#0a0408;border-radius:2px;margin-bottom:10px;border:1px solid var(--border-soft);position:relative;overflow:hidden}
+.tt-av::after{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% 120%,rgba(255,23,68,.55),transparent 60%);opacity:1;transition:opacity .9s ease .1s}
+#tt-float.on .tt-av::after{opacity:.35}
+.tt-name{font-family:'Oswald',sans-serif;font-weight:500;font-size:1.15em;text-transform:uppercase;letter-spacing:2px;color:#fff;text-align:center;line-height:1.1;overflow-wrap:anywhere;text-shadow:0 0 12px var(--neon-red)}
+.tt-name.vip{color:var(--neon-gold);text-shadow:0 0 10px rgba(255,215,0,.5)}
+.tt-lvl{display:block;text-align:center;font-family:'JetBrains Mono',monospace;font-size:.7em;letter-spacing:3px;color:var(--neon-red-hot);margin:4px 0 10px;padding-bottom:9px;border-bottom:1px dashed rgba(255,23,68,.18)}
+.tt-row{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:baseline;font-size:.8em;margin-bottom:5px}
+.tt-row span{font-family:'JetBrains Mono',monospace;font-size:.82em;letter-spacing:1px;text-transform:uppercase;color:var(--txt-mute)}
+.tt-row b{color:var(--txt-main);text-align:right;font-weight:600;font-family:'Rajdhani',sans-serif;font-size:1.08em;overflow-wrap:anywhere}
+.tt-row b.fab{color:var(--neon-ember)}
+@media(prefers-reduced-motion:reduce){#tt-float,#tt-float.on{transition:opacity .15s;filter:none;transform:none}}
 
 /* ── SYSTEM STATUS (prawy dół) ───────────────────────────────── */
 .sys-status{
@@ -680,19 +694,11 @@ input,select,textarea,button{font-family:'Rajdhani',sans-serif}
             <?php echo ($o['is_premium']?"★ ":"").htmlspecialchars($o['login']); ?>
         </a>
         <div class="tt">
-            <div class="tt-name" style="color:<?php echo $o['is_premium']?'var(--neon-gold)':'#fff'; ?>"><?php echo ($o['is_premium']?"★ ":"").htmlspecialchars($o['login']); ?></div>
             <div class="tt-av" style="background-image:url('<?php echo $img; ?>')"></div>
-            <div class="tt-row"><span>Dni w mieście</span><b><?php echo max(0,$o['dni']); ?></b></div>
-            <div class="tt-row"><span>Klasa</span><b><?php echo htmlspecialchars($o['klasa']); ?></b></div>
-            <div class="tt-row"><span>Profesja</span><b style="color:var(--neon-ember)"><?php echo $o['profesja_fabularna']?:'-'; ?></b></div>
-            <div class="tt-row"><span>Syndykat</span><b style="color:var(--neon-red-hot)"><?php echo $synd; ?></b></div>
-            <?php if(!empty($o['nazwa_firmy'])): ?>
-            <div style="margin-top:10px;padding-top:10px;border-top:1px dashed rgba(255,23,68,0.15);text-align:center">
-                <div style="color:var(--neon-gold);font-family:'Oswald',sans-serif;font-size:.82em;margin-bottom:6px;letter-spacing:1.5px">💼 WŁAŚCICIEL FIRMY</div>
-                <div class="tt-row"><span>Firma</span><b><?php echo htmlspecialchars($o['nazwa_firmy']); ?></b></div>
-                <div class="tt-row"><span>Branża</span><b><?php echo htmlspecialchars($o['branza_firmy']); ?></b></div>
-            </div>
-            <?php endif; ?>
+            <div class="tt-name<?php echo $o['is_premium']?' vip':''; ?>"><?php echo ($o['is_premium']?"★ ":"").htmlspecialchars($o['login']); ?></div>
+            <span class="tt-lvl">LVL <?php echo (int)$o['poziom']; ?></span>
+            <div class="tt-row"><span>Fabularna</span><b class="fab"><?php echo $o['profesja_fabularna'] ? htmlspecialchars($o['profesja_fabularna']) : '—'; ?></b></div>
+            <div class="tt-row"><span>Mechaniczna</span><b><?php echo $o['klasa'] ? htmlspecialchars($o['klasa']) : '—'; ?></b></div>
         </div>
     </div>
     <?php endforeach; ?>
@@ -740,6 +746,40 @@ input,select,textarea,button{font-family:'Rajdhani',sans-serif}
         }catch(e){ el.textContent = 'OFFLINE'; el.style.color = 'var(--neon-red)'; }
     }
     mierz(); setInterval(mierz, 15000);
+})();
+</script>
+<script>
+/* ── Szybki podgląd postaci na liście online ─────────────────────── */
+(function(){
+    const box = document.createElement('div');
+    box.id = 'tt-float';
+    document.body.appendChild(box);
+    let aktywny = null, timer = null;
+    function pokaz(row){
+        const tpl = row.querySelector('.tt');
+        if (!tpl) return;
+        box.innerHTML = tpl.innerHTML;
+        const r = row.getBoundingClientRect();
+        const h = box.offsetHeight || 380;
+        let top = r.top + r.height/2 - h/2;
+        top = Math.max(12, Math.min(top, window.innerHeight - h - 12));
+        box.style.top = top + 'px';
+        box.style.left = Math.max(12, r.left - 220 - 14) + 'px';
+        box.classList.remove('on'); void box.offsetWidth; box.classList.add('on');
+    }
+    document.querySelectorAll('.gracz-online').forEach(row => {
+        row.addEventListener('mouseenter', () => {
+            clearTimeout(timer);
+            aktywny = row;
+            timer = setTimeout(() => { if (aktywny === row) pokaz(row); }, 120);
+        });
+        row.addEventListener('mouseleave', () => {
+            clearTimeout(timer);
+            aktywny = null;
+            box.classList.remove('on');
+        });
+    });
+    window.addEventListener('scroll', () => box.classList.remove('on'), true);
 })();
 </script>
 </body>

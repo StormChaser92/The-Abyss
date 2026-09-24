@@ -108,11 +108,14 @@
             : '';
 
         const div = document.createElement('div');
-        div.className = cls;
+        div.className = cls + ' post';
         div.dataset.id = m.id;
         div.dataset.tresc = m.tresc; // do edycji in-place
+        const portret = m.avatar
+            ? `<div class="por" style="background-image:url('${escapeHtml(m.avatar)}')"></div>`
+            : `<div class="por"><span>${escapeHtml(ini)}</span></div>`;
         div.innerHTML = `
-            <div class="av">${escapeHtml(ini)}</div>
+            ${portret}
             <div class="body">
                 <div class="who">
                     <span class="nm">${escapeHtml(cleanLogin)}</span>
@@ -122,9 +125,55 @@
                     ${actions}
                 </div>
                 <div class="txt">${tresc}</div>
+                ${stopkaPolej(m)}
             </div>
         `;
         return div;
+    }
+
+    // ── POLEJ GRACZOWI ──────────────────────────────────────────────────
+    function stopkaPolej(m) {
+        if (m.typ !== 'wiadomosc' || !m.id_gracza || m.usunieta) return '';
+        const ile = m.polewki || 0;
+        const dal = !!m.moja_polewka, wlasny = !!m.is_mine;
+        const cls = 'polej' + (dal ? ' dal' : '') + (wlasny ? ' wlasny' : '');
+        const lbl = wlasny ? 'Drinki za ten wpis' : (dal ? 'Polane' : 'Polej graczowi');
+        return `<div class="msg-foot"><button type="button" class="${cls}" data-id="${m.id}"${wlasny || dal ? ' disabled' : ''}
+                  onclick="window.klubPolej(${m.id})"><span class="ic">🍸</span><span class="lbl">${lbl}</span><b class="ile">${ile || ''}</b></button></div>`;
+    }
+
+    function ustawPolewke(id, ile, moja) {
+        const btn = feed.querySelector(`.polej[data-id="${id}"]`);
+        if (!btn) return;
+        const el = btn.querySelector('.ile');
+        const nowe = ile ? String(ile) : '';
+        if (el && el.textContent !== nowe) {
+            el.textContent = nowe;
+            btn.classList.remove('brzdek'); void btn.offsetWidth; btn.classList.add('brzdek');
+        }
+        if (moja && !btn.classList.contains('dal') && !btn.classList.contains('wlasny')) {
+            btn.classList.add('dal'); btn.disabled = true;
+            btn.querySelector('.lbl').textContent = 'Polane';
+        }
+    }
+
+    window.klubPolej = async function(id) {
+        const btn = feed.querySelector(`.polej[data-id="${id}"]`);
+        if (!btn || btn.disabled) return;
+        btn.disabled = true;
+        try {
+            const fd = new FormData();
+            fd.append('wpis_id', id);
+            const res = await fetch('api/klub_polej.php', { method: 'POST', body: fd, credentials: 'same-origin' });
+            const d = await res.json();
+            if (d.ok) { ustawPolewke(id, d.ile, true); if (d.msg) pokazFlash(d.msg, 'ok'); }
+            else { btn.disabled = false; pokazFlash(d.msg || 'Nie wyszło', 'blad'); }
+        } catch (e) { btn.disabled = false; }
+    };
+
+    function najstarszyWidoczny() {
+        const pierwszy = feed.querySelector('.msg[data-id]');
+        return pierwszy ? parseInt(pierwszy.dataset.id, 10) : 0;
     }
 
     // ── SCROLL HELPERS ───────────────────────────────────────────
@@ -140,7 +189,7 @@
         if (isFetching) return;
         isFetching = true;
         try {
-            const res = await fetch(`api/klub_feed.php?sala=${encodeURIComponent(sala)}&od_id=${lastId}`, {
+            const res = await fetch(`api/klub_feed.php?sala=${encodeURIComponent(sala)}&od_id=${lastId}&widoczne_od=${najstarszyWidoczny()}`, {
                 method: 'GET',
                 cache: 'no-store',
                 credentials: 'same-origin'
@@ -170,6 +219,11 @@
                     pendingNew += data.wiadomosci.length;
                     showNewToast();
                 }
+            }
+
+            // Liczniki drinków na starszych wpisach
+            if (data.polewki) {
+                for (const [id, p] of Object.entries(data.polewki)) ustawPolewke(id, p.ile, p.moja);
             }
 
             // Rachunek update (tylko sala-glowna)
@@ -583,7 +637,7 @@
     if (input) {
         input.addEventListener('input', () => {
             input.style.height = 'auto';
-            input.style.height = Math.min(input.scrollHeight, 160) + 'px';
+            input.style.height = Math.min(input.scrollHeight, 240) + 'px';
         });
     }
 
