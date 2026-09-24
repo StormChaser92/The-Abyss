@@ -22,6 +22,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         [$ok, $tekst] = eq_zaloz_pancerz($polaczenie, $id_gracza, $_POST['kod'] ?? '');
         $komunikat = "<div class='".($ok ? 'sukces' : 'blad')."'>$tekst</div>";
     }
+    if (isset($_POST['napraw'])) {
+        $g = $polaczenie->query("SELECT * FROM gracze WHERE id=$id_gracza")->fetch_assoc();
+        [$ok, $tekst] = naprawa_wykonaj($polaczenie, $g, $_POST['sprzet'] ?? '');
+        $komunikat = "<div class='".($ok ? 'sukces' : 'blad')."'>$tekst</div>";
+    }
     if (isset($_POST['uzyj_apteczki'])) {
         $t = $polaczenie->query("SELECT apteczki, hp_aktualne, hp_max FROM gracze WHERE id=$id_gracza")->fetch_assoc();
         if ((int)$t['apteczki'] <= 0) {
@@ -41,6 +46,7 @@ $moje  = eq_stan($polaczenie, $id_gracza);
 $kat_b = bronie_katalog();
 $kat_p = eq_katalog_pancerzy();
 $rozklad = eq_rozklad_uniku($gracz);
+$naprawy = naprawa_podglad($gracz);
 
 $lupy = [];
 $q = $polaczenie->query("SELECT nazwa, ilosc FROM przedmioty_gracze WHERE gracz_id=$id_gracza ORDER BY nazwa ASC");
@@ -73,6 +79,22 @@ $kolejnosc_ciosow = ['ostrze', 'tepe', 'palna', 'piesc'];
     .unik-item.zero b { color: #ff3333; }
     .unik-item.suma { border-color: rgba(90,255,154,.4); background: rgba(90,255,154,.06); }
     .unik-item.suma b { color: #5aff9a; }
+
+    .napr-panel { background: rgba(10,10,10,.6); border: 1px solid rgba(255,170,0,.28); border-radius: 8px; padding: 22px 24px; margin-bottom: 30px; }
+    .napr-panel h3 { margin: 0 0 6px; font-family: 'Oswald', sans-serif; text-transform: uppercase; letter-spacing: 1px; color: #ffaa00; font-size: 1.2em; }
+    .napr-panel .pod { color: #777; font-size: .88em; margin-bottom: 16px; }
+    .napr-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+    .napr-karta { background: rgba(0,0,0,.45); border: 1px solid rgba(255,255,255,.06); border-radius: 6px; padding: 16px 18px; }
+    .napr-karta .co { font-family: 'Oswald', sans-serif; text-transform: uppercase; letter-spacing: 1px; color: #fff; margin-bottom: 4px; }
+    .napr-karta .nz { color: #888; font-size: .9em; margin-bottom: 10px; }
+    .napr-bar { background: rgba(0,0,0,.7); border: 1px solid rgba(255,255,255,.08); height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 8px; }
+    .napr-bar div { height: 100%; transition: width .6s; }
+    .napr-liczby { font-family: monospace; font-size: .86em; color: #aaa; margin-bottom: 12px; }
+    .napr-liczby b { color: #fff; }
+    .napr-koszt { font-family: monospace; font-size: .84em; color: #777; margin-bottom: 12px; }
+    .napr-koszt b { color: #ffd700; }
+    .btn-napraw { background: rgba(255,170,0,.15); color: #ffaa00; border: 1px solid #ffaa00; padding: 10px; font-family: 'Oswald', sans-serif; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; border-radius: 4px; width: 100%; cursor: pointer; transition: .3s; }
+    .btn-napraw:hover:not(:disabled) { background: #ffaa00; color: #000; box-shadow: 0 0 15px rgba(255,170,0,.5); }
 
     .kategoria-eq { margin-top: 36px; }
     .kategoria-eq h3 { border-bottom: 1px solid rgba(255,255,255,.1); padding-bottom: 10px; color: #fff; font-family: 'Oswald', sans-serif; text-transform: uppercase; margin-bottom: 18px; font-size: 1.4em; letter-spacing: 1px; }
@@ -154,6 +176,45 @@ $kolejnosc_ciosow = ['ostrze', 'tepe', 'palna', 'piesc'];
         <div class="unik-item suma"><span>Razem</span><b><?php echo $rozklad['RAZEM']; ?></b></div>
     </div>
 </div>
+
+<?php if (!empty($naprawy)): ?>
+<div class="napr-panel">
+    <h3>Naprawa sprzętu</h3>
+    <div class="pod">Sto walk i sprzęt schodzi do zera — wtedy przestaje dawać jakiekolwiek bonusy. Naprawa jest zawsze do pełna i nigdy się nie nie udaje.</div>
+    <div class="napr-grid">
+        <?php foreach ($naprawy as $klucz => $n):
+            $proc = $n['max'] > 0 ? round($n['tr'] / $n['max'] * 100) : 0;
+            $kolor = $proc > 50 ? '#5aff9a' : ($proc > 20 ? '#ffaa00' : '#ff3333');
+            $stac = (int)$gracz['gotowka'] >= $n['kasa']
+                 && (int)$gracz['zlom_stalowy'] >= $n['stal']
+                 && (int)$gracz['czesci_mechaniczne'] >= $n['czesci'];
+        ?>
+            <div class="napr-karta">
+                <div class="co"><?php echo $klucz === 'bron' ? '⚔️ Broń' : '🛡️ Pancerz'; ?></div>
+                <div class="nz"><?php echo htmlspecialchars($n['nazwa']); ?></div>
+                <div class="napr-bar"><div style="width:<?php echo $proc; ?>%; background:<?php echo $kolor; ?>;"></div></div>
+                <div class="napr-liczby">Trwałość: <b style="color:<?php echo $kolor; ?>"><?php echo $n['tr']; ?></b> / <?php echo $n['max']; ?> walk
+                    <?php if ($n['tr'] === 0) echo '<span style="color:#ff3333"> · bonusy nie działają</span>'; ?></div>
+                <?php if ($n['brak'] === 0): ?>
+                    <div class="napr-koszt">W pełni sprawny.</div>
+                    <button class="btn-napraw btn-disabled" disabled>Nic do naprawy</button>
+                <?php else: ?>
+                    <div class="napr-koszt">Koszt: <b><?php echo number_format($n['kasa'], 0, '', ' '); ?> $</b>
+                        <?php if ($n['stal']) echo ' · stal '.$n['stal']; ?>
+                        <?php if ($n['czesci']) echo ' · części '.$n['czesci']; ?>
+                    </div>
+                    <form method="POST" style="margin:0">
+                        <input type="hidden" name="sprzet" value="<?php echo $klucz; ?>">
+                        <button type="submit" name="napraw" class="btn-napraw<?php echo $stac ? '' : ' btn-disabled'; ?>"<?php echo $stac ? '' : ' disabled'; ?>>
+                            <?php echo $stac ? 'Napraw do pełna' : 'Brak środków'; ?>
+                        </button>
+                    </form>
+                <?php endif; ?>
+            </div>
+        <?php endforeach; ?>
+    </div>
+</div>
+<?php endif; ?>
 
 <div class="kategoria-eq">
     <h3 style="color:#ffaa00; border-color:rgba(255,170,0,.3);">⚔️ Zbrojownia</h3>

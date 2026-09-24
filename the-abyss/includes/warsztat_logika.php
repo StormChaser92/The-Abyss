@@ -17,6 +17,9 @@
 
 require_once __DIR__.'/bronie_katalog.php';
 
+/** Pancerze mają katalog w ekwipunek_katalog.php — naprawa go potrzebuje. */
+if (!function_exists('eq_katalog_pancerzy')) require_once __DIR__.'/ekwipunek_katalog.php';
+
 const WARSZTAT_STOPIEN_MAX = 10;
 const WARSZTAT_KROK        = 0.05;   // +5% ataku na stopień
 
@@ -224,6 +227,99 @@ function warsztat_odswiez_zalozona(mysqli $db, int $gid, string $kod, int $stopi
     $a = bron_atak($b, $stopien);
     $db->query("UPDATE gracze SET bonus_atak=$a, bron_stopien=$stopien
                 WHERE id=$gid AND bron_zalozona='$n'");
+}
+
+/* ── naprawa sprzętu ──────────────────────────────────────────────── */
+
+/**
+ * Koszt naprawy. Zwraca [gotowka, stal, czesci, ile_punktow].
+ * Naprawa jest zawsze do pełna — częściowa tylko zaciemniałaby rachunek.
+ * Stawka rośnie z poziomem sprzętu: cięższa broń kosztuje więcej za punkt.
+ */
+function naprawa_koszt(array $b, int $trwalosc, int $trwalosc_max): array {
+    $brak = max(0, $trwalosc_max - $trwalosc);
+    if ($brak === 0) return [0, 0, 0, 0];
+    $poziom  = max(1, (int)($b['poziom'] ?? 1));
+    $gotowka = (int)ceil($brak * (3 + $poziom * 0.9));
+    $stal    = (int)ceil($brak * max(1, (int)($b['stal'] ?? 2)) / 100);
+    $czesci  = (int)ceil($brak * max(1, (int)($b['czesci'] ?? 1)) / 100);
+    return [$gotowka, $stal, $czesci, $brak];
+}
+
+/**
+ * Naprawa u Inżyniera. $sprzet: 'bron'|'pancerz'.
+ * Materiały i gotówka idą z zapasów WŁAŚCICIELA — Inżynier bierze osobno
+ * za robociznę (zlecenia). Naprawa nie może się nie udać: żadnej loterii
+ * przy sprzęcie, który gracz już opłacił.
+ * Zwraca [ok, komunikat].
+ */
+function naprawa_wykonaj(mysqli $db, array $g, string $sprzet): array {
+    $gid = (int)$g['id'];
+    if (!in_array($sprzet, ['bron', 'pancerz'], true)) return [false, 'Nie wiem, co miałbym naprawić.'];
+
+    if ($sprzet === 'bron') {
+        $nazwa = $g['bron_zalozona'] ?? '';
+        if ($nazwa === '') return [false, 'Nie masz broni w dłoni.'];
+        $kol_tr = 'bron_trwalosc'; $kol_max = 'bron_trwalosc_max';
+        $dane = null;
+        foreach (bronie_katalog() as $b) if ($b['nazwa'] === $nazwa) { $dane = $b; break; }
+        if (!$dane) return [false, 'Tej broni nie ma w katalogu.'];
+    } else {
+        $nazwa = $g['pancerz_zalozony'] ?? '';
+        if ($nazwa === '') return [false, 'Nie masz na sobie pancerza.'];
+        $kol_tr = 'pancerz_trwalosc'; $kol_max = 'pancerz_trwalosc_max';
+        $dane = null;
+        foreach (eq_katalog_pancerzy() as $p) if ($p['nazwa'] === $nazwa) {
+            // pancerze nie mają receptury — koszt szacujemy z obrony
+            $dane = $p + ['poziom' => max(1, (int)round($p['obrona'] / 2)), 'stal' => 3, 'czesci' => 2];
+            break;
+        }
+        if (!$dane) return [false, 'Tego pancerza nie ma w katalogu.'];
+    }
+
+    $tr  = (int)$g[$kol_tr];
+    $max = (int)$g[$kol_max];
+    if ($tr >= $max) return [false, 'Ten sprzęt jest w pełni sprawny.'];
+
+    [$kasa, $stal, $czesci, $brak] = naprawa_koszt($dane, $tr, $max);
+    if ((int)$g['gotowka'] < $kasa)
+        return [false, "Naprawa kosztuje $kasa \$, masz {$g['gotowka']}."];
+    if ((int)$g['zlom_stalowy'] < $stal || (int)$g['czesci_mechaniczne'] < $czesci)
+        return [false, "Brakuje materiału: stal $stal, części $czesci."];
+
+    $db->query("UPDATE gracze SET
+        `$kol_tr` = `$kol_max`,
+        gotowka = gotowka - $kasa,
+        zlom_stalowy = zlom_stalowy - $stal,
+        czesci_mechaniczne = czesci_mechaniczne - $czesci
+        WHERE id = $gid");
+
+    $s = $db->real_escape_string($sprzet);
+    $n = $db->real_escape_string("stal $stal, części $czesci");
+    $db->query("INSERT INTO naprawy_log (gracz_id, sprzet, z, na, koszt, komponent)
+                VALUES ($gid, '$s', $tr, $max, $kasa, '$n')");
+
+    $co = $sprzet === 'bron' ? 'Broń' : 'Pancerz';
+    return [true, "$co jak nowy: $tr → $max. Poszło $kasa \$, $stal stali i $czesci części."];
+}
+
+/** Podgląd kosztu naprawy dla obu sztuk — do panelu w warsztacie i dokach. */
+function naprawa_podglad(array $g): array {
+    $out = [];
+    foreach (bronie_katalog() as $b) if ($b['nazwa'] === ($g['bron_zalozona'] ?? '')) {
+        [$k, $s, $c, $brak] = naprawa_koszt($b, (int)$g['bron_trwalosc'], (int)$g['bron_trwalosc_max']);
+        $out['bron'] = ['nazwa'=>$b['nazwa'], 'tr'=>(int)$g['bron_trwalosc'], 'max'=>(int)$g['bron_trwalosc_max'],
+                        'kasa'=>$k, 'stal'=>$s, 'czesci'=>$c, 'brak'=>$brak];
+        break;
+    }
+    foreach (eq_katalog_pancerzy() as $p) if ($p['nazwa'] === ($g['pancerz_zalozony'] ?? '')) {
+        $d = $p + ['poziom' => max(1, (int)round($p['obrona'] / 2)), 'stal' => 3, 'czesci' => 2];
+        [$k, $s, $c, $brak] = naprawa_koszt($d, (int)$g['pancerz_trwalosc'], (int)$g['pancerz_trwalosc_max']);
+        $out['pancerz'] = ['nazwa'=>$p['nazwa'], 'tr'=>(int)$g['pancerz_trwalosc'], 'max'=>(int)$g['pancerz_trwalosc_max'],
+                           'kasa'=>$k, 'stal'=>$s, 'czesci'=>$c, 'brak'=>$brak];
+        break;
+    }
+    return $out;
 }
 
 /* ── zlecenia ──────────────────────────────────────────────────────── */

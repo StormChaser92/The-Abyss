@@ -130,7 +130,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['walcz'])) {
         [$b_tr, $p_tr, $zepsute] = arena_zuzyj_sprzet($polaczenie, $id_gracza, $sesja['walk_wyk']);
         if ($zepsute) {
             $komunikat = "<div class='alert-err'>Zużyte do zera: ".implode(' i ', $zepsute)
-                       . ". Sprzęt nie daje bonusów, dopóki Inżynier go nie naprawi.</div>";
+                       . ". Sprzęt nie daje bonusów — napraw go w ekwipunku.</div>";
         }
 
         /* małe → duże */
@@ -242,14 +242,16 @@ $ROLE = arena_role();
 .bestiar{background:rgba(10,6,12,.55);border:1px solid var(--border-soft);border-radius:2px;overflow:hidden}
 .bestiar-h{padding:14px 18px;background:rgba(0,0,0,.4);border-bottom:1px solid var(--border-soft);font-family:'Oswald',sans-serif;color:#fff;text-transform:uppercase;letter-spacing:2.5px;display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:baseline}
 .bestiar-h .note{font-family:'JetBrains Mono',monospace;font-size:.72em;color:var(--txt-dim);letter-spacing:1px;text-transform:none}
-.t-scroll{overflow-x:visible}
-.t-wr{width:100%;border-collapse:collapse;font-size:.92em}
-.t-wr th{background:rgba(0,0,0,.5);padding:11px 12px;text-align:left;color:var(--neon-red);font-family:'Oswald',sans-serif;text-transform:uppercase;font-size:.72em;letter-spacing:1.6px;border-bottom:1px solid var(--border-mid);font-weight:500;line-height:1.35}
-.t-wr td{padding:11px 12px;border-bottom:1px dashed rgba(255,23,68,.07);color:var(--txt-main);vertical-align:middle}
+.t-scroll{overflow-x:auto}
+.t-wr{width:100%;border-collapse:collapse;font-size:.9em;table-layout:fixed}
+.t-wr col.c-cel{width:auto}.t-wr col.c-lvl{width:44px}.t-wr col.c-typ{width:104px}
+.t-wr col.c-hit{width:112px}.t-wr col.c-ngr{width:96px}.t-wr col.c-akc{width:120px}
+.t-wr th{background:rgba(0,0,0,.5);padding:11px 9px;text-align:left;color:var(--neon-red);font-family:'Oswald',sans-serif;text-transform:uppercase;font-size:.7em;letter-spacing:1.2px;border-bottom:1px solid var(--border-mid);font-weight:500;line-height:1.3}
+.t-wr td{padding:11px 9px;border-bottom:1px dashed rgba(255,23,68,.07);color:var(--txt-main);vertical-align:middle}
 .t-wr tr.w-row:hover td{background:rgba(255,23,68,.06);color:#fff}
-.td-nazwa{font-family:'Oswald',sans-serif;font-size:1.02em;color:#fff;min-width:180px}
-.td-nazwa .opis{display:block;font-family:'Rajdhani',sans-serif;font-size:.84em;color:var(--txt-dim);letter-spacing:0;line-height:1.4;margin-top:2px;max-width:38ch}
-.td-nazwa .mini{display:block;font-family:'JetBrains Mono',monospace;font-size:.68em;color:var(--txt-mute);letter-spacing:1px;margin-top:4px}
+.td-nazwa{font-family:'Oswald',sans-serif;font-size:1em;color:#fff}
+.td-nazwa .opis{display:block;font-family:'Rajdhani',sans-serif;font-size:.84em;color:var(--txt-dim);letter-spacing:0;line-height:1.4;margin-top:2px}
+.td-nazwa .mini{display:block;font-family:'JetBrains Mono',monospace;font-size:.66em;color:var(--txt-mute);letter-spacing:.8px;margin-top:4px}
 .td-nazwa .mini .s-hp{color:rgba(255,61,94,.75)}
 .td-nazwa .mini .s-atk{color:rgba(255,122,61,.75)}
 .td-nazwa .mini .s-un{color:rgba(74,214,255,.75)}
@@ -264,9 +266,9 @@ $ROLE = arena_role();
 .td-stats{font-family:'JetBrains Mono',monospace;font-size:.84em;line-height:1.5;white-space:nowrap}
 .td-stats .s-hp{color:var(--neon-red-hot)}.td-stats .s-atk{color:var(--neon-ember)}.td-stats .s-un{color:var(--neon-cyan)}
 .badge-typ{display:inline-block;padding:3px 10px;border-radius:2px;font-family:'Oswald',sans-serif;font-size:.74em;letter-spacing:1.5px;text-transform:uppercase;color:#000;font-weight:600;white-space:nowrap}
-.badge-rola{display:inline-block;padding:2px 8px;border:1px solid rgba(255,255,255,.12);border-radius:2px;font-family:'JetBrains Mono',monospace;font-size:.68em;letter-spacing:1.2px;text-transform:uppercase;color:var(--txt-dim);white-space:nowrap}
+.badge-rola{display:inline-block;padding:2px 7px;border:1px solid rgba(255,255,255,.12);border-radius:2px;font-family:'JetBrains Mono',monospace;font-size:.64em;letter-spacing:1px;text-transform:uppercase;color:var(--txt-dim);white-space:nowrap;margin-top:3px}
 .farmi{display:block;font-family:'JetBrains Mono',monospace;font-size:.68em;color:var(--txt-mute);letter-spacing:1px;margin-top:3px}
-.rating-mini{display:inline-block;padding:2px 8px;border-radius:2px;font-family:'JetBrains Mono',monospace;font-size:.7em;letter-spacing:1.4px;text-transform:uppercase;white-space:nowrap;border:1px solid}
+.rating-mini{display:inline-block;padding:2px 7px;border-radius:2px;font-family:'JetBrains Mono',monospace;font-size:.66em;letter-spacing:1.1px;text-transform:uppercase;border:1px solid;margin-top:4px}
 .rm-optimal{color:var(--neon-green);border-color:var(--neon-green);background:rgba(90,255,154,.08)}
 .rm-good{color:var(--neon-cyan);border-color:rgba(74,214,255,.3);background:rgba(74,214,255,.04)}
 .rm-easy{color:var(--txt-dim);border-color:rgba(255,255,255,.08)}
@@ -275,8 +277,9 @@ $ROLE = arena_role();
 .rm-too_hard{color:var(--neon-red-hot);border-color:var(--border-mid);background:rgba(255,23,68,.06)}
 .est{font-family:'JetBrains Mono',monospace;font-size:.7em;color:var(--txt-mute);margin-top:3px;white-space:nowrap}
 .td-akcja{text-align:right}
-.ilosc-sel{background:rgba(0,0,0,.7);color:#fff;border:1px solid rgba(255,23,68,.25);padding:6px 8px;font-family:'JetBrains Mono',monospace;font-size:.9em;border-radius:2px;cursor:pointer;width:58px;text-align:center}
-.btn-walka{background:rgba(0,0,0,.5);border:1px solid var(--border-mid);color:var(--neon-red-hot);padding:8px 14px;font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:1.5px;font-size:.84em;cursor:pointer;border-radius:2px}
+.akcja-wrap{display:flex;flex-direction:column;gap:5px;align-items:stretch}
+.ilosc-sel{background:rgba(0,0,0,.7);color:#fff;border:1px solid rgba(255,23,68,.25);padding:5px 6px;font-family:'JetBrains Mono',monospace;font-size:.82em;border-radius:2px;cursor:pointer;width:100%;text-align:center}
+.btn-walka{background:rgba(0,0,0,.5);border:1px solid var(--border-mid);color:var(--neon-red-hot);padding:8px 10px;font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:1.2px;font-size:.82em;cursor:pointer;border-radius:2px;width:100%}
 .btn-walka:hover{background:var(--neon-red);color:#fff;box-shadow:0 0 16px rgba(255,23,68,.6)}
 .log-box{background:rgba(5,3,6,.85);border:1px solid var(--border-soft);border-radius:2px;padding:18px 20px;font-family:'JetBrains Mono',monospace;font-size:.88em;line-height:1.7;max-height:460px;overflow-y:auto;margin-bottom:18px}
 .log-box .lg-r{color:var(--txt-mute);letter-spacing:1px;margin-right:4px;font-size:.85em}
@@ -307,6 +310,8 @@ $ROLE = arena_role();
 .pusto{color:var(--txt-dim);text-align:center;padding:34px 20px;font-style:italic}
 .trwalosc{font-family:'JetBrains Mono',monospace;font-size:.72em;color:var(--txt-mute);letter-spacing:1px;margin-top:8px}
 .trwalosc .low{color:var(--neon-red-hot)}
+.trwalosc .napr-link{display:inline-block;margin-left:8px;color:var(--neon-ember);text-decoration:none;border-bottom:1px dotted rgba(255,122,61,.5)}
+.trwalosc .napr-link:hover{color:#fff;border-color:#fff}
 @media(max-width:900px){.taktyczny{grid-template-columns:1fr}.tk-arsenal{border-left:0;padding-left:0;border-top:1px dashed rgba(255,23,68,.15);padding-top:14px}.farma-grid{grid-template-columns:1fr}}
 </style>
 
@@ -353,6 +358,9 @@ $ROLE = arena_role();
             <span class="<?php echo (int)$gracz['bron_trwalosc'] < 20 ? 'low' : ''; ?>"><?php echo (int)$gracz['bron_trwalosc']; ?>/<?php echo (int)$gracz['bron_trwalosc_max']; ?></span>
             · pancerz
             <span class="<?php echo (int)$gracz['pancerz_trwalosc'] < 20 ? 'low' : ''; ?>"><?php echo (int)$gracz['pancerz_trwalosc']; ?>/<?php echo (int)$gracz['pancerz_trwalosc_max']; ?></span>
+            <?php if ((int)$gracz['bron_trwalosc'] < 20 || (int)$gracz['pancerz_trwalosc'] < 20): ?>
+                <a href="game.php?page=ekwipunek" class="napr-link">napraw w ekwipunku →</a>
+            <?php endif; ?>
         </div>
     </div>
 
@@ -432,9 +440,13 @@ $ROLE = arena_role();
     <?php else: ?>
     <div class="t-scroll">
     <table class="t-wr">
+        <colgroup>
+            <col class="c-cel"><col class="c-lvl"><col class="c-typ">
+            <col class="c-hit"><col class="c-ngr"><col class="c-akc">
+        </colgroup>
         <thead><tr>
-            <th>Cel</th><th>Lvl</th><th>Typ</th><th>Rola</th>
-            <th>Trafienia<br>ja / on</th><th>Nagroda</th><th>Ocena</th><th style="text-align:right">Akcja</th>
+            <th>Cel</th><th>Lvl</th><th>Typ i rola</th>
+            <th>Trafienia<br>ja / on</th><th>Nagroda</th><th style="text-align:right">Akcja</th>
         </tr></thead>
         <tbody>
         <?php foreach ($lista_wrogow as $id_w => $wrog):
@@ -459,8 +471,6 @@ $ROLE = arena_role();
                 <td>
                     <span class="badge-typ" style="background:<?php echo $typ[1]; ?>"><?php echo $typ[0]; ?></span>
                     <?php if ($mn > 1): ?><span class="farmi" style="color:var(--neon-green)">twój cios ×<?php echo number_format($mn, 1); ?></span><?php endif; ?>
-                </td>
-                <td>
                     <span class="badge-rola"><?php echo htmlspecialchars($rol['nazwa'] ?? $wrog['rola']); ?></span>
                     <?php if ($rol): ?><span class="farmi">farmi: <?php echo htmlspecialchars($rol['farmi']); ?></span><?php endif; ?>
                 </td>
@@ -470,17 +480,18 @@ $ROLE = arena_role();
                     <span class="pod">on trafia <?php echo $a['jego_hit']; ?>%<?php echo $a['rundy'] > ARENA_RUNDY ? ' · remis' : ' · '.round($a['rundy']).' rund'; ?></span>
                     <span class="farm">farma: <b><?php echo $a['uniki_est']; ?></b> uników · <b><?php echo $a['wb_est']; ?></b> WB</span>
                 </td>
-                <td class="td-stats"><?php echo (int)$wrog['exp']; ?> PD<br><span style="color:var(--neon-ember)"><?php echo number_format((int)$wrog['kasa'], 0, '', ' '); ?> $</span></td>
-                <td>
+                <td class="td-stats">
+                    <?php echo (int)$wrog['exp']; ?> PD<br>
+                    <span style="color:var(--neon-ember)"><?php echo number_format((int)$wrog['kasa'], 0, '', ' '); ?> $</span>
                     <span class="rating-mini rm-<?php echo $a['ocena'][0]; ?>"><?php echo $a['ocena'][1]; ?></span>
                     <div class="est">obierzesz ~<?php echo (int)$a['obiore']; ?> HP</div>
                 </td>
                 <td class="td-akcja">
-                    <form method="POST" style="display:flex;gap:6px;margin:0;align-items:center;justify-content:flex-end">
+                    <form method="POST" class="akcja-wrap" style="margin:0">
                         <input type="hidden" name="id_wroga" value="<?php echo $id_w; ?>">
                         <select name="ilosc_walk" class="ilosc-sel" title="Ilość walk">
-                            <option value="1">×1</option><option value="3">×3</option>
-                            <option value="5">×5</option><option value="10">×10</option>
+                            <option value="1">×1 walka</option><option value="3">×3 walki</option>
+                            <option value="5">×5 walk</option><option value="10">×10 walk</option>
                         </select>
                         <button type="submit" name="walcz" class="btn-walka">⚔ Walcz</button>
                     </form>
