@@ -23,12 +23,12 @@ $KAT_KOLORY = [
     'Rekrutacyjna'=>'var(--neon-red)',
 ];
 
-// Mapowanie poziomu ryzyka rzutu → próg trudności (ST)
+// Poziom ryzyka akcji → modyfikator szansy w teście k100
 $RYZYKO_PT = [
-    'Niskie'      => ['pt' => 10, 'kolor' => 'var(--neon-green)', 'opis' => 'Sytuacja banalna. Bez wpływu na cel sesji.'],
-    'Średnie'     => ['pt' => 15, 'kolor' => 'var(--neon-gold)',  'opis' => 'Akcja wpływa na fabułę. Grozi lekkim obrażeniem.'],
-    'Wysokie'     => ['pt' => 20, 'kolor' => 'var(--neon-ember)', 'opis' => 'Akcja kluczowa. Poważne ryzyko dla postaci.'],
-    'Ekstremalne' => ['pt' => 25, 'kolor' => 'var(--neon-red-hot)', 'opis' => 'Desperackie. Możliwa śmierć lub trwałe okaleczenie.'],
+    'Niskie'      => ['mod' =>  10, 'kolor' => 'var(--neon-green)', 'opis' => 'Sytuacja banalna. Bez wpływu na cel sesji.'],
+    'Średnie'     => ['mod' =>   0, 'kolor' => 'var(--neon-gold)',  'opis' => 'Akcja wpływa na fabułę. Grozi lekkim obrażeniem.'],
+    'Wysokie'     => ['mod' => -10, 'kolor' => 'var(--neon-ember)', 'opis' => 'Akcja kluczowa. Poważne ryzyko dla postaci.'],
+    'Ekstremalne' => ['mod' => -20, 'kolor' => 'var(--neon-red-hot)', 'opis' => 'Desperackie. Możliwa śmierć lub trwałe okaleczenie.'],
 ];
 
 // ── PAGINACJA ─────────────────────────────────────────────────
@@ -274,73 +274,62 @@ if ($czy_zaakceptowany && !$czy_zakonczona) {
         }
     }
 
-    // ═══ RZUT KOŚCIĄ d20 — PEŁNA FORMUŁA RP ═══
+    // ═══ TEST k100 — Umiejętność albo sam Atrybut ═══
     if (isset($_POST['wykonaj_rzut'])) {
-        $wybrane_um    = isset($_POST['um_rzut'])    ? $_POST['um_rzut']    : [];
-        $wybrane_cechy = isset($_POST['cechy_rzut']) ? $_POST['cechy_rzut'] : [];
+        $um_nazwa      = trim((string)($_POST['um_rzut'] ?? ''));
+        $atr_wybor     = (string)($_POST['atr_rzut'] ?? 'g');
+        $wybrane_cechy = isset($_POST['cechy_rzut']) ? (array)$_POST['cechy_rzut'] : [];
         $ryzyko        = isset($_POST['ryzyko'])     ? $_POST['ryzyko']     : 'Niskie';
         $akcja_opis    = trim($_POST['akcja_opis'] ?? '');
 
         if (!isset($RYZYKO_PT[$ryzyko])) $ryzyko = 'Niskie';
-        $pt = $RYZYKO_PT[$ryzyko]['pt'];
+        $mod_ryzyka   = $RYZYKO_PT[$ryzyko]['mod'];
         $ryzyko_kolor = $RYZYKO_PT[$ryzyko]['kolor'];
 
-        // 1) Umiejętności — dla każdej: bonus_rp_umiejetnosci()
-        //    To daje (PU + flat pochodzenia) × mnożnik zawodu, czyli full RP formuła.
-        $suma_um = 0;
-        $um_parts = [];
-        foreach ($wybrane_um as $um_nazwa) {
-            if (!isset($umiejetnosci_gracza[$um_nazwa])) continue;
-            $w = bonus_rp_umiejetnosci($gracz, $um_nazwa);
-            $suma_um += $w['wartosc_koncowa'];
-            $skladowe = $w['baza_pu'];
-            if ($w['pochodzenie'] > 0) $skladowe .= "+{$w['pochodzenie']}";
-            elseif ($w['pochodzenie'] < 0) $skladowe .= "{$w['pochodzenie']}";
-            if ($w['zawod_proc'] > 0) $skladowe .= "×" . number_format($w['mnoznik_zawodu'], 2);
-            $um_parts[] = htmlspecialchars($um_nazwa) . " [" . $skladowe . " = <b>" . $w['wartosc_koncowa'] . "</b>]";
-        }
-
-        // 2) Cechy — ±3 za każdą
-        $suma_cech = 0;
+        // 1) Zalety / Wady — ±UM_MOD_CECHA za każdą
+        $mod_cech = 0;
         $cechy_parts = [];
         foreach ($wybrane_cechy as $c) {
             $c = trim($c);
             if (in_array($c, $zalety_gracza)) {
-                $suma_cech += 3;
-                $cechy_parts[] = "<span style='color:var(--neon-green)'>" . htmlspecialchars($c) . " +3</span>";
+                $mod_cech += UM_MOD_CECHA;
+                $cechy_parts[] = "<span style='color:var(--neon-green)'>" . htmlspecialchars($c) . " +" . UM_MOD_CECHA . "</span>";
             } elseif (in_array($c, $wady_gracza)) {
-                $suma_cech -= 3;
-                $cechy_parts[] = "<span style='color:var(--neon-red-hot)'>" . htmlspecialchars($c) . " −3</span>";
+                $mod_cech -= UM_MOD_CECHA;
+                $cechy_parts[] = "<span style='color:var(--neon-red-hot)'>" . htmlspecialchars($c) . " −" . UM_MOD_CECHA . "</span>";
             }
         }
 
-        // 3) d20
-        $d20 = rand(1, 20);
-        $krytyk = "";
-        if ($d20 == 20) $krytyk = " <span style='color:var(--neon-gold);font-weight:700;letter-spacing:1px'>★ KRYTYK ★</span>";
-        if ($d20 == 1)  $krytyk = " <span style='color:var(--neon-red-hot);font-weight:700;letter-spacing:1px'>☠ FUMBLE ☠</span>";
+        // 2) Szansa — jeden rzut na akcję
+        $mod_dod = $mod_ryzyka + $mod_cech;
+        if ($um_nazwa !== '' && um_definicja($um_nazwa)) {
+            $t = um_test($gracz, $um_nazwa, in_array($atr_wybor, ['g', 'd'], true) ? $atr_wybor : 'g', $mod_dod);
+            $tytul = "Test Umiejętności: <b>" . htmlspecialchars($um_nazwa) . "</b> (poz. {$t['poziom']})";
+        } else {
+            $ak = isset($UM_ATRYBUTY[$atr_wybor]) ? $atr_wybor : 'I';
+            $t = um_test_atrybutu($gracz, $ak, $mod_dod);
+            $tytul = "Test Atrybutu: <b>" . htmlspecialchars($t['atrybut_nazwa']) . "</b>";
+        }
 
-        // 4) Suma i werdykt — floor na bonusach, bo d20 jest liczbą całkowitą
-        $bonus_int = (int)floor($suma_um) + $suma_cech;
-        $suma = $d20 + $bonus_int;
-        $sukces = ($suma >= $pt);
-        $kolor_w = $sukces ? 'var(--neon-green)' : 'var(--neon-red-hot)';
-        $tekst_w = $sukces ? 'SUKCES' : 'PORAŻKA';
+        // 3) k100
+        $k100  = random_int(1, 100);
+        $wynik = um_wynik($k100, $t['szansa']);
+        $kolor_w = $wynik['poziom'] >= 2 ? 'var(--neon-gold)' : ($wynik['sukces'] ? 'var(--neon-green)' : 'var(--neon-red-hot)');
+        $tekst_w = mb_strtoupper($wynik['nazwa']);
 
-        // 5) Formatowanie postu
+        // 4) Formatowanie postu
         $html  = "<div class='rzut-box'>";
-        $html .= "<div class='rzut-head'><span class='rzut-icon'>🎲</span> <b>Test kostką d20</b> — <span style='color:$ryzyko_kolor'>Ryzyko $ryzyko (PT $pt)</span></div>";
+        $html .= "<div class='rzut-head'><span class='rzut-icon'>🎲</span> <b>Test k100</b> — <span style='color:$ryzyko_kolor'>Ryzyko $ryzyko (" . ($mod_ryzyka >= 0 ? '+' : '') . "$mod_ryzyka)</span></div>";
         if ($akcja_opis !== '') {
             $html .= "<div class='rzut-akcja'>&bdquo;" . htmlspecialchars($akcja_opis) . "&rdquo;</div>";
         }
-        $html .= "<div class='rzut-row'><span class='rzut-lbl'>Rzut d20:</span> <span class='rzut-val'>$d20</span>$krytyk</div>";
-        if (!empty($um_parts)) {
-            $html .= "<div class='rzut-row'><span class='rzut-lbl'>Umiejętności:</span> " . implode(' · ', $um_parts) . " → <b style='color:var(--neon-cyan)'>+" . number_format($suma_um, 1) . "</b></div>";
-        }
+        $html .= "<div class='rzut-row'>$tytul</div>";
+        $html .= "<div class='rzut-row'><span class='rzut-lbl'>Szansa:</span> " . htmlspecialchars(um_opis_testu($t)) . "</div>";
         if (!empty($cechy_parts)) {
-            $html .= "<div class='rzut-row'><span class='rzut-lbl'>Cechy:</span> " . implode(' · ', $cechy_parts) . " → <b>" . ($suma_cech >= 0 ? "+$suma_cech" : $suma_cech) . "</b></div>";
+            $html .= "<div class='rzut-row'><span class='rzut-lbl'>Cechy:</span> " . implode(' · ', $cechy_parts) . "</div>";
         }
-        $html .= "<div class='rzut-wynik'>Suma: <b>$suma</b> / $pt &nbsp;·&nbsp; <b style='color:$kolor_w;letter-spacing:2px'>[$tekst_w]</b></div>";
+        $html .= "<div class='rzut-row'><span class='rzut-lbl'>Rzut k100:</span> <span class='rzut-val'>$k100</span></div>";
+        $html .= "<div class='rzut-wynik'><b>$k100</b> / {$t['szansa']}% &nbsp;·&nbsp; <b style='color:$kolor_w;letter-spacing:2px'>[$tekst_w]</b></div>";
         $html .= "</div>";
 
         $html_safe = $polaczenie->real_escape_string($html);
@@ -1018,11 +1007,11 @@ $akcent_kat = $KAT_KOLORY[$sesja['kategoria']] ?? 'var(--neon-red)';
 
     <?php if ($czy_zaakceptowany && !$czy_zakonczona): ?>
 
-        <!-- ══ GENERATOR RZUTU d20 ═════════════════════════ -->
+        <!-- ══ GENERATOR TESTU k100 ═════════════════════════ -->
         <div class="form-pisania">
-            <div class="form-tytul rzut">🎲 Generator Testu d20</div>
+            <div class="form-tytul rzut">🎲 Test k100</div>
             <div style="color:var(--txt-dim);font-size:.85em;margin-bottom:14px;line-height:1.5">
-                Opisz akcję, wybierz ryzyko, zaznacz umiejętności i cechy które mają zastosowanie. System doda pełny bonus RP (pochodzenie × zawód) do rzutu.
+                Jedna akcja = jeden rzut. Wybierz Umiejętność (albo sam Atrybut), ryzyko i cechy, które mają zastosowanie. Szansa = poziom × 20 + ⅓ Atrybutu + mody, maks. <?php echo UM_PE; ?>%. Krytyczny sukces ≤ <?php echo UM_KRYT_SUKCES; ?>, krytyczna porażka ≥ <?php echo UM_KRYT_PORAZKA; ?>.
             </div>
             <form method="POST" class="gen-rzut">
 
@@ -1035,48 +1024,56 @@ $akcent_kat = $KAT_KOLORY[$sesja['kategoria']] ?? 'var(--neon-red)';
                         <label class="ryzyko-opt <?php echo $akt; ?>" style="color:<?php echo $rd['kolor']; ?>" title="<?php echo htmlspecialchars($rd['opis']); ?>">
                             <input type="radio" name="ryzyko" value="<?php echo $rn; ?>" <?php if($rn=='Niskie') echo 'checked'; ?>>
                             <span class="rk-dot"></span>
-                            <span><?php echo $rn; ?> (PT <?php echo $rd['pt']; ?>)</span>
+                            <span><?php echo $rn; ?> (<?php echo ($rd['mod'] >= 0 ? '+' : '') . $rd['mod']; ?>)</span>
                         </label>
                     <?php endforeach; ?>
                 </div>
 
                 <div class="gen-row">
                     <div class="gen-kol">
-                        <div class="gen-lbl">◆ Umiejętności (pełny bonus RP)</div>
-                        <?php if (empty($umiejetnosci_gracza)): ?>
-                            <div style="color:var(--txt-mute);font-size:.85em;font-style:italic">// Brak rozwiniętych umiejętności</div>
-                        <?php else:
-                            // Pokazujemy tylko umiejętności z PU > 0, sortując malejąco
+                        <div class="gen-lbl">◆ Umiejętność (szansa bez modów ryzyka i cech)</div>
+                        <label class="gen-cb">
+                            <input type="radio" name="um_rzut" value="" checked>
+                            <span>Bez Umiejętności — test Atrybutu</span>
+                        </label>
+                        <?php
                             $um_sort = $umiejetnosci_gracza;
                             arsort($um_sort);
                             foreach ($um_sort as $nazwa => $lvl):
-                                if ($lvl <= 0) continue;
+                                if ($lvl <= 0 || !um_definicja($nazwa)) continue;
                                 $w = bonus_rp_umiejetnosci($gracz, $nazwa);
-                                $koncowa = $w['wartosc_koncowa'];
                         ?>
-                            <label class="gen-cb">
-                                <input type="checkbox" name="um_rzut[]" value="<?php echo htmlspecialchars($nazwa); ?>">
-                                <span><?php echo htmlspecialchars($nazwa); ?></span>
-                                <span class="pu-tag">+<?php echo $koncowa; ?></span>
+                            <label class="gen-cb" title="<?php echo htmlspecialchars(um_opis_testu($w)); ?>">
+                                <input type="radio" name="um_rzut" value="<?php echo htmlspecialchars($nazwa); ?>">
+                                <span><?php echo htmlspecialchars($nazwa); ?> · <?php echo htmlspecialchars($w['atrybut_nazwa']); ?></span>
+                                <span class="pu-tag"><?php echo $w['wartosc_koncowa']; ?>%</span>
                             </label>
-                        <?php endforeach; endif; ?>
+                        <?php endforeach; ?>
+                        <div class="gen-lbl" style="margin-top:10px">◆ Atrybut</div>
+                        <select name="atr_rzut" class="akcja-input" style="margin:0">
+                            <option value="g">Główny Atrybut Umiejętności</option>
+                            <option value="d">Dodatkowy Atrybut (gdy MG uzna za zasadny)</option>
+                            <?php foreach ($UM_ATRYBUTY as $ak => $ad): ?>
+                            <option value="<?php echo $ak; ?>">Test Atrybutu: <?php echo $ad['nazwa']; ?> (<?php echo um_atrybut($gracz, $ak); ?>)</option>
+                            <?php endforeach; ?>
+                        </select>
                     </div>
                     <div class="gen-kol">
-                        <div class="gen-lbl">◆ Zalety / Wady (±3)</div>
+                        <div class="gen-lbl">◆ Zalety / Wady (±<?php echo UM_MOD_CECHA; ?>)</div>
                         <?php
                         $brak = true;
                         foreach ($zalety_gracza as $z) { if (empty($z)) continue; $brak=false; ?>
                             <label class="gen-cb">
                                 <input type="checkbox" name="cechy_rzut[]" value="<?php echo htmlspecialchars($z); ?>">
                                 <span><?php echo htmlspecialchars($z); ?></span>
-                                <span class="zal-tag">+3</span>
+                                <span class="zal-tag">+<?php echo UM_MOD_CECHA; ?></span>
                             </label>
                         <?php }
                         foreach ($wady_gracza as $w) { if (empty($w)) continue; $brak=false; ?>
                             <label class="gen-cb">
                                 <input type="checkbox" name="cechy_rzut[]" value="<?php echo htmlspecialchars($w); ?>">
                                 <span><?php echo htmlspecialchars($w); ?></span>
-                                <span class="wad-tag">−3</span>
+                                <span class="wad-tag">−<?php echo UM_MOD_CECHA; ?></span>
                             </label>
                         <?php } if ($brak): ?>
                             <div style="color:var(--txt-mute);font-size:.85em;font-style:italic">// Brak cech charakteru</div>

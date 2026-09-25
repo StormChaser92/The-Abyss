@@ -10,7 +10,7 @@ const UM_PE              = 80;   // Próg Efektywności — maks. szansa rzutu (
 const UM_PU_START        = 15;
 const UM_PU_AMERYKANIN   = 4;
 const UM_PU_WYKSZTALCONY = 3;    // do potwierdzenia
-const UM_POCHODZENIE_AMERYKANIN = ['USA', 'AMERYKA', 'AMERYKANIN', 'US'];
+const UM_POCHODZENIE_AMERYKANIN = ['USA'];   // klucz z config/pochodzenia.php
 
 $UM_ATRYBUTY = [
     'S'  => ['nazwa' => 'Siła',         'kolumna' => 'sila'],
@@ -185,3 +185,98 @@ function um_wydane(array $um): int {
 
 /** Szansa na teście Umiejętności przed modami MG: poziom×20 + ⅓ Atrybutu, limit PE. */
 function um_szansa(int $poziom, int $atrybut): int { return min(UM_PE, $poziom * 20 + intdiv($atrybut, 3)); }
+
+/* ── TEST k100 ─────────────────────────────────────────────────────────
+   Stare bonusy RP (płaskie z pochodzenia, procentowe z zawodu) działały
+   na skali bez limitu. Tu zamieniamy je na modyfikatory szansy:
+     pochodzenie: 1 punkt = ${UM_MOD_POCHODZENIE_PKT} pkt % (np. +2 → +10)
+     zawód:       bonus % / 2, zaokrąglone (np. 25% → +13)
+     Zaleta/Wada: ±UM_MOD_CECHA za każdą zaznaczoną
+   Premie działają tylko przy poziomie ≥ 1, kary zawsze.
+   Suma modów mieści się w −50…+50, wynik nie przekracza PE.            */
+const UM_MOD_POCHODZENIE_PKT = 5;
+const UM_MOD_ZAWOD_DZIELNIK  = 2;
+const UM_MOD_CECHA           = 10;
+const UM_MOD_MIN             = -50;
+const UM_MOD_MAX             = 50;
+const UM_KRYT_SUKCES         = 5;    // rzut ≤ 5
+const UM_KRYT_PORAZKA        = 95;   // rzut ≥ 95
+const UM_MIN_SUKCES_ZAKRES   = 10;   // ostatnie 10 pkt pod progiem = sukces minimalny
+
+function um_definicja(string $nazwa): ?array {
+    foreach (um_lista() as $u) if ($u['n'] === $nazwa) return $u;
+    return null;
+}
+
+/** Wartość Atrybutu postaci po kluczu S/Z/W/I/Zm/Ch. */
+function um_atrybut(array $g, string $klucz): int {
+    global $UM_ATRYBUTY;
+    return isset($UM_ATRYBUTY[$klucz]) ? (int)($g[$UM_ATRYBUTY[$klucz]['kolumna']] ?? 0) : 0;
+}
+
+/**
+ * Rozbicie szansy na teście Umiejętności.
+ * $atr — 'g' (główny), 'd' (dodatkowy) albo klucz Atrybutu. $mod_dod — mody spoza karty (ryzyko, cechy, MG).
+ */
+function um_test(array $g, string $nazwa, string $atr = 'g', int $mod_dod = 0): array {
+    global $POCHODZENIA_DANE, $ZAWODY_DANE, $UM_ATRYBUTY;
+    $def = um_definicja($nazwa);
+    $um  = !empty($g['umiejetnosci']) ? (json_decode($g['umiejetnosci'], true) ?: []) : [];
+    $poz = min(UM_MAX_POZIOM, (int)($um[$nazwa] ?? 0));
+
+    $ak = $atr === 'g' ? ($def['g'] ?? 'I') : ($atr === 'd' ? ($def['d'] ?? $def['g'] ?? 'I') : $atr);
+    if (!isset($UM_ATRYBUTY[$ak])) $ak = $def['g'] ?? 'I';
+    $wart_atr = um_atrybut($g, $ak);
+
+    $poch_pkt = 0; $poch_kara = 0;
+    $p = $g['pochodzenie'] ?? null;
+    if ($p && isset($POCHODZENIA_DANE[$p]['rp'])) {
+        $poch_pkt  = (int)($POCHODZENIA_DANE[$p]['rp']['umiejetnosci_bonus_flat'][$nazwa] ?? 0);
+        $poch_kara = abs((int)($POCHODZENIA_DANE[$p]['rp']['umiejetnosci_kara_flat'][$nazwa] ?? 0));
+    }
+    $zaw_proc = 0;
+    $z = $g['profesja_fabularna'] ?? null;
+    if ($z && isset($ZAWODY_DANE[$z]['rp']['umiejetnosci_bonus_proc'][$nazwa])) $zaw_proc = (int)$ZAWODY_DANE[$z]['rp']['umiejetnosci_bonus_proc'][$nazwa];
+
+    $mod_poch = ($poz > 0 ? $poch_pkt : 0) * UM_MOD_POCHODZENIE_PKT - $poch_kara * UM_MOD_POCHODZENIE_PKT;
+    $mod_zaw  = $poz > 0 ? (int)round($zaw_proc / UM_MOD_ZAWOD_DZIELNIK) : 0;
+    $mod      = max(UM_MOD_MIN, min(UM_MOD_MAX, $mod_poch + $mod_zaw + $mod_dod));
+
+    $baza   = $poz > 0 ? $poz * 20 + intdiv($wart_atr, 3) : $wart_atr;   // poziom 0 = test samego Atrybutu
+    $szansa = max(0, min(UM_PE, $baza + $mod));
+
+    return [
+        'nazwa' => $nazwa, 'poziom' => $poz, 'atrybut' => $ak, 'atrybut_nazwa' => $UM_ATRYBUTY[$ak]['nazwa'],
+        'atrybut_wart' => $wart_atr, 'baza' => $baza,
+        'poch_pkt' => $poch_pkt - $poch_kara, 'mod_pochodzenia' => $mod_poch,
+        'zawod_proc' => $zaw_proc, 'mod_zawodu' => $mod_zaw, 'mod_dodatkowy' => $mod_dod,
+        'mod' => $mod, 'szansa' => $szansa, 'limit_pe' => ($baza + $mod) > UM_PE,
+    ];
+}
+
+/** Test samego Atrybutu (bez Umiejętności). */
+function um_test_atrybutu(array $g, string $klucz, int $mod_dod = 0): array {
+    global $UM_ATRYBUTY;
+    $w = um_atrybut($g, $klucz);
+    $mod = max(UM_MOD_MIN, min(UM_MOD_MAX, $mod_dod));
+    return ['nazwa' => null, 'poziom' => 0, 'atrybut' => $klucz, 'atrybut_nazwa' => $UM_ATRYBUTY[$klucz]['nazwa'] ?? $klucz,
+            'atrybut_wart' => $w, 'baza' => $w, 'poch_pkt' => 0, 'mod_pochodzenia' => 0, 'zawod_proc' => 0, 'mod_zawodu' => 0,
+            'mod_dodatkowy' => $mod_dod, 'mod' => $mod, 'szansa' => max(0, min(UM_PE, $w + $mod)), 'limit_pe' => ($w + $mod) > UM_PE];
+}
+
+/** Poziom powodzenia: 2 krytyczny sukces, 1 sukces, 0 minimalny sukces, -1 porażka, -2 krytyczna porażka. */
+function um_wynik(int $rzut, int $szansa): array {
+    if ($rzut <= UM_KRYT_SUKCES)  return ['poziom' => 2,  'nazwa' => 'Krytyczny sukces',  'sukces' => true];
+    if ($rzut >= UM_KRYT_PORAZKA) return ['poziom' => -2, 'nazwa' => 'Krytyczna porażka', 'sukces' => false];
+    if ($rzut > $szansa)          return ['poziom' => -1, 'nazwa' => 'Porażka',           'sukces' => false];
+    if ($rzut > $szansa - UM_MIN_SUKCES_ZAKRES) return ['poziom' => 0, 'nazwa' => 'Minimalny sukces', 'sukces' => true];
+    return ['poziom' => 1, 'nazwa' => 'Sukces', 'sukces' => true];
+}
+
+/** Krótki opis rozbicia szansy, np. "3×20 + 18 Siła · +10 poch. · +13 zawód = 80%". */
+function um_opis_testu(array $t): string {
+    $s = $t['poziom'] > 0 ? $t['poziom'] . '×20 + ' . intdiv($t['atrybut_wart'], 3) . ' ' . $t['atrybut_nazwa'] : $t['atrybut_nazwa'] . ' ' . $t['atrybut_wart'];
+    foreach ([['mod_pochodzenia', 'poch.'], ['mod_zawodu', 'zawód'], ['mod_dodatkowy', 'mody']] as [$k, $l])
+        if ($t[$k]) $s .= ' · ' . ($t[$k] > 0 ? '+' : '') . $t[$k] . ' ' . $l;
+    return $s . ' = ' . $t['szansa'] . '%' . ($t['limit_pe'] ? ' (limit PE)' : '');
+}

@@ -3,65 +3,30 @@
    THE ABYSS — HELPERY DO SESJI RP (Centrum Opowieści)
 
    Używane przy testach umiejętności w sesjach fabularnych.
-   Mistrz Gry wywoła test → system policzy:
-     (bazowe_PU + bonus_flat_pochodzenia − kara_flat_pochodzenia) × (1 + bonus_%_zawodu / 100)
+   Od v2 test to k100: szansa = poziom×20 + ⅓ Atrybutu + mody, limit PE.
+   Bonus pochodzenia: 1 pkt = 5 % szansy. Bonus zawodu: % / 2.
+   Szczegóły i stałe: config/umiejetnosci.php.
 
    Zależności:
    - config/pochodzenia.php (musi być włączony pierwszy)
    - config/zawody.php       (musi być włączony pierwszy)
    ═══════════════════════════════════════════════════════════════════════ */
 
+require_once __DIR__ . '/umiejetnosci.php';   // v2: test k100 — um_test(), um_opis_testu()
+
 /**
- * Liczy pełną wartość umiejętności w sesji RP dla konkretnego gracza.
- *
- * @param array  $gracz         wiersz z tabeli `gracze` (musi zawierać: umiejetnosci, pochodzenie, profesja_fabularna)
- * @param string $umiejetnosc   nazwa umiejętności (np. "Matematyka i Rachunkowość")
- *
- * @return array  [
- *    'baza_pu'        => int,   // surowe punkty umiejętności (z JSON-a)
- *    'pochodzenie'    => int,   // płaski bonus/kara pochodzenia (może być ujemny)
- *    'zawod_proc'     => int,   // procent bonusu z zawodu (0-30%)
- *    'po_pochodzeniu' => int,   // (baza + pochodzenie)
- *    'wartosc_koncowa'=> float, // final z zaokrągleniem do 1 miejsca
- *    'mnoznik_zawodu' => float, // 1.0, 1.15, 1.25 itd.
- * ]
+ * Test Umiejętności w systemie k100 (config/umiejetnosci.php → um_test()).
+ * Zachowuje stare klucze, żeby karta.php i pokoj_sesji.php działały bez zmian:
+ * 'wartosc_koncowa' to teraz szansa w %.
  */
-function bonus_rp_umiejetnosci($gracz, $umiejetnosc) {
-    global $POCHODZENIA_DANE, $ZAWODY_DANE;
-
-    // 1) Bazowe PU z JSON-a
-    $json = $gracz['umiejetnosci'] ?? '';
-    $um_gracza = !empty($json) ? json_decode($json, true) : [];
-    $baza = (int)($um_gracza[$umiejetnosc] ?? 0);
-
-    // 2) Bonus/kara płaska pochodzenia
-    $poch_bonus = 0;
-    $poch = $gracz['pochodzenie'] ?? null;
-    if ($poch && isset($POCHODZENIA_DANE[$poch]['rp'])) {
-        $rp = $POCHODZENIA_DANE[$poch]['rp'];
-        $poch_bonus  = (int)($rp['umiejetnosci_bonus_flat'][$umiejetnosc] ?? 0);
-        $poch_bonus -= abs((int)($rp['umiejetnosci_kara_flat'][$umiejetnosc]  ?? 0));
-    }
-
-    // 3) Procent bonusu z zawodu
-    $zaw_proc = 0;
-    $zawod = $gracz['profesja_fabularna'] ?? null;
-    if ($zawod && isset($ZAWODY_DANE[$zawod]['rp']['umiejetnosci_bonus_proc'][$umiejetnosc])) {
-        $zaw_proc = (int)$ZAWODY_DANE[$zawod]['rp']['umiejetnosci_bonus_proc'][$umiejetnosc];
-    }
-
-    // 4) Formuła
-    $po_pochodzeniu = max(0, $baza + $poch_bonus);
-    $mnoznik        = 1.0 + ($zaw_proc / 100.0);
-    $final          = round($po_pochodzeniu * $mnoznik, 1);
-
-    return [
-        'baza_pu'         => $baza,
-        'pochodzenie'     => $poch_bonus,
-        'zawod_proc'      => $zaw_proc,
-        'po_pochodzeniu'  => $po_pochodzeniu,
-        'mnoznik_zawodu'  => $mnoznik,
-        'wartosc_koncowa' => $final,
+function bonus_rp_umiejetnosci($gracz, $umiejetnosc, $atr = 'g', $mod_dod = 0) {
+    $t = um_test($gracz, $umiejetnosc, $atr, (int)$mod_dod);
+    return $t + [
+        'baza_pu'         => $t['poziom'],
+        'pochodzenie'     => $t['poch_pkt'],
+        'po_pochodzeniu'  => $t['baza'] + $t['mod_pochodzenia'],
+        'mnoznik_zawodu'  => 1.0,
+        'wartosc_koncowa' => $t['szansa'],
     ];
 }
 
@@ -111,21 +76,9 @@ function reputacja_opis($wartosc) {
 }
 
 /**
- * Formatuje bonus RP umiejętności do wyświetlenia (np. w karcie postaci).
- *
- * @param array $wynik  rezultat bonus_rp_umiejetnosci()
- * @return string  np. "5 → +2 poch → ×1.25 → 8.8"
+ * Formatuje rozbicie szansy do wyświetlenia, np. "3×20 + 18 Siła · +10 poch. = <strong>78%</strong>".
  */
 function formatuj_bonus_rp($wynik) {
-    $baza = $wynik['baza_pu'];
-    $poch = $wynik['pochodzenie'];
-    $proc = $wynik['zawod_proc'];
-    $final = $wynik['wartosc_koncowa'];
-
-    $s = "$baza";
-    if ($poch > 0) $s .= " +{$poch}";
-    elseif ($poch < 0) $s .= " {$poch}";  // minus już w liczbie
-    if ($proc > 0) $s .= " ×" . number_format($wynik['mnoznik_zawodu'], 2);
-    $s .= " = <strong>$final</strong>";
-    return $s;
+    $s = htmlspecialchars(um_opis_testu($wynik));
+    return preg_replace('/= (\d+%)/', '= <strong>$1</strong>', $s, 1);
 }
