@@ -3,6 +3,7 @@ require_once "db.php";
 require_once __DIR__ . '/../config/pochodzenia.php';
 require_once __DIR__ . '/../config/zawody.php';
 require_once __DIR__ . '/../config/rp_helpers.php';
+require_once __DIR__ . '/../config/uniwersytet.php';
 
 $id_gracza = $_SESSION['id_gracza'];
 
@@ -127,6 +128,11 @@ $wszystkie_zalety_def = [
         "grupa" => "Umysł",
         "opis"  => "Zbudujesz prowizoryczną broń lub narzędzie ze śmieci.",
         "wplyw" => "Improwizujesz w sytuacjach kryzysowych — prowizoryczna broń, naprawa, wytrych. Bonus do Inżynierii i Rzemiosła w terenie."
+    ],
+    "Wykształcony" => [
+        "grupa" => "Umysł",
+        "opis"  => "Masz za sobą lata nauki i szerokie horyzonty. Wymaga co najmniej jednego Licencjatu z Uniwersytetu.",
+        "wplyw" => "Dodatkowe Punkty Umiejętności do rozdania (+" . UM_PU_WYKSZTALCONY . " PU)."
     ],
 
     // ─── PSYCHOLOGICZNE / NERWY ─────────────────────────────
@@ -571,7 +577,9 @@ if ($_SERVER['REQUEST_METHOD']=='POST' && isset($_POST['zapisz_cechy'])) {
     $az = array_unique(array_merge($aktualne_zalety,$nz));
     $aw = array_unique(array_merge($aktualne_wady,$nw));
     $all = array_merge($az,$aw);
-    if (count($az)>$limit_cech || count($aw)>$limit_cech) {
+    if (in_array('Wykształcony', $nz, true) && !in_array('Wykształcony', $aktualne_zalety, true) && !uni_ma_licencjat($polaczenie, (int)$id_gracza)) {
+        $blad_cech = "Zaleta „Wykształcony” wymaga co najmniej jednego Licencjatu z Uniwersytetu.";
+    } elseif (count($az)>$limit_cech || count($aw)>$limit_cech) {
         $blad_cech = "Osiągnięto maksymalny limit $limit_cech zalet i $limit_cech wad!";
     } else {
         $ok = true;
@@ -610,13 +618,13 @@ $zawody = $ZAWODY_DANE;
 
 // WYBÓR ZAWODU
 if ($_SERVER['REQUEST_METHOD']=='POST' && isset($_POST['wybierz_zawod'])) {
-    $gd  = $polaczenie->query("SELECT umiejetnosci,tytul_naukowy FROM gracze WHERE id=$id_gracza")->fetch_assoc();
+    $gd  = $polaczenie->query("SELECT umiejetnosci FROM gracze WHERE id=$id_gracza")->fetch_assoc();
     $pu  = !empty($gd['umiejetnosci']) ? json_decode($gd['umiejetnosci'],true) : [];
-    $wz  = $_POST['zawod'];
+    $wz  = (string)($_POST['zawod'] ?? '');
     if (isset($zawody[$wz])) {
-        $req = $zawody[$wz]['wymagania']; $rt = $zawody[$wz]['wymagany_tytul'] ?? null;
-        $ok = (!$rt || $gd['tytul_naukowy']==$rt);
-        foreach ($req as $n=>$l) if (($pu[$n]??0)<$l) { $ok=false; break; }
+        // Etap 1: dyplom (jeśli Profesja wymaga studiów) + wymagania przeliczone na skalę 1–5.
+        [$ok] = uni_wymog_zawodu($polaczenie, (int)$id_gracza, $zawody[$wz], 1);
+        foreach ($zawody[$wz]['wymagania'] as $n=>$l) if (($pu[$n]??0) < um_wymaganie_etapu((int)$l, 1)) { $ok=false; break; }
         if ($ok) {
             $wz_esc = $polaczenie->real_escape_string($wz);
             $polaczenie->query("UPDATE gracze SET profesja_etap=IF(profesja_fabularna<=>'$wz_esc', profesja_etap, 1), profesja_fabularna='$wz_esc' WHERE id=$id_gracza");
@@ -1279,8 +1287,8 @@ $reputacja = reputacja_grupowa($gracz);
             Obecny zawód:
             <strong><?php echo htmlspecialchars($gracz['profesja_fabularna'] ?: '—'); ?></strong>
         </span>
-        <?php if(!empty($gracz['tytul_naukowy'])): ?>
-        <span class="kariera-tytul">🎓 <?php echo htmlspecialchars($gracz['tytul_naukowy']); ?></span>
+        <?php $tyt_glowny = uni_tytul_glowny($polaczenie, (int)$id_gracza); if ($tyt_glowny): ?>
+        <span class="kariera-tytul">🎓 <?php echo htmlspecialchars($tyt_glowny); ?></span>
         <?php endif; ?>
     </div>
 
@@ -1288,15 +1296,16 @@ $reputacja = reputacja_grupowa($gracz);
 
     <div class="zawody-grid">
     <?php foreach($zawody as $nazwa=>$dane):
-        $req_t   = $dane['wymagany_tytul'] ?? null;
+        [$uni_ok, $req_t] = uni_wymog_zawodu($polaczenie, (int)$id_gracza, $dane, 1);
         $braki   = false;
         $html_r  = "";
         if ($req_t) {
-            if ($gracz['tytul_naukowy']==$req_t)
-                $html_r .= "<div class='req-tytul-ok'>🎓 $req_t ✓</div>";
-            else { $braki=true; $html_r .= "<div class='req-tytul-brak'>🎓 $req_t</div>"; }
+            if ($uni_ok) $html_r .= "<div class='req-tytul-ok'>🎓 " . htmlspecialchars($req_t) . " ✓</div>";
+            else { $braki=true; $html_r .= "<div class='req-tytul-brak'>🎓 " . htmlspecialchars($req_t) . "</div>"; }
         }
         foreach ($dane['wymagania'] as $n=>$l) {
+            $l = um_wymaganie_etapu((int)$l, 1);
+            if ($l <= 0) continue;
             $p = $posiadane_um[$n] ?? 0;
             if ($p < $l) { $braki=true; $html_r .= "<div class='req-brak'>$n ($p/$l)</div>"; }
             else           $html_r .= "<div class='req-ok'>$n ($p/$l) ✓</div>";

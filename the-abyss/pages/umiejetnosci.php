@@ -1,6 +1,7 @@
 <?php
 require_once "db.php";
 require_once __DIR__ . '/../config/umiejetnosci.php';
+require_once __DIR__ . '/../config/uniwersytet.php';
 $id_gracza = (int)$_SESSION['id_gracza'];
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -9,7 +10,7 @@ $id_gracza = (int)$_SESSION['id_gracza'];
    Poziomy 1–4 po 1 PU, poziom 5 za 2 PU. Jeden darmowy reset.
    ═══════════════════════════════════════════════════════════════════════ */
 
-$KOLUMNY = "umiejetnosci, poziom, pochodzenie, zalety, profesja_fabularna, profesja_etap, profesja2, profesja2_etap,
+$KOLUMNY = "id, umiejetnosci, poziom, pochodzenie, zalety, profesja_fabularna, profesja_etap, profesja2, profesja2_etap,
             um_reset_uzyty, sila, zrecznosc, wytrzymalosc, inteligencja, zmysly, charyzma";
 $g = db_wiersz($polaczenie, "SELECT $KOLUMNY FROM gracze WHERE id = ?", [$id_gracza]);
 $um_raw = $g['umiejetnosci'];

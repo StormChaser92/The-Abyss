@@ -1,544 +1,290 @@
 <?php
 require_once "db.php";
-$id_gracza = $_SESSION['id_gracza'];
-$komunikat = "";
+require_once __DIR__ . '/../config/zawody.php';
+require_once __DIR__ . '/../config/uniwersytet.php';
+require_once __DIR__ . '/../includes/uni_lamiglowki.php';
+$id_gracza = (int)$_SESSION['id_gracza'];
 
-// POBIERANIE DANYCH (z 4 nowymi kolumnami kierunków)
-$wynik = $polaczenie->query("SELECT gotowka, energia_aktualna,
-    uni_medycyna, uni_inzynieria, uni_ekonomia, uni_prawo,
-    uni_sztuka, uni_cybernetyka, uni_humanistyka, uni_kryminologia,
-    uni_weterynaria, uni_farmacja, uni_historia, uni_lotnictwo,
-    uni_ostatni_wyklad, tytul_naukowy
-    FROM gracze WHERE id=$id_gracza");
-$gracz = $wynik->fetch_assoc();
+/* ═══════════════════════════════════════════════════════════════════════
+   UNIWERSYTET v2 — Akademia Nauk
+   Łamigłówka otwiera zajęcia, zajęcia trwają 8 h (probówka), jedne na dobę.
+   Ostatnie zajęcia stopnia = egzamin pisemny (AI). Stopnie per kierunek.
+   ═══════════════════════════════════════════════════════════════════════ */
 
-// KIERUNKI STUDIÓW I ICH KONFIGURACJA (12 kierunków)
-$kierunki = [
-    'medycyna' => [
-        'db' => 'uni_medycyna', 'nazwa' => 'Medycyna Akademicka', 'ikona' => 'img/uni_medycyna.png', 'kolor' => '#ff3333',
-        'wymagane_zajecia' => 14, 'koszt_kasy' => 500, 'koszt_en' => 5,
-        'opis' => 'Pozwala w przyszłości pracować jako legalny Lekarz Rodzinny, Chirurg, Psychiatra, Pielęgniarka lub Fizjoterapeuta. Tytuł: Lekarz Medycyny.',
-        'tytul_koncowy' => 'Lekarz Medycyny',
-        'pytania' => [
-            "Pacjent ma odrzut na nowy, tani cyber-wszczep wątroby. Toksyny zalewają organizm. Co podasz mu w pierwszej kolejności, zanim przejdziesz do operacji?",
-            "Podczas strzelaniny w Dokach kula kalibru 9mm uszkodziła tętnicę udową pacjenta. Zostały Ci 2 minuty. Jak zatamujesz krwotok używając sprzętu z ulicy?"
-        ]
-    ],
-    'inzynieria' => [
-        'db' => 'uni_inzynieria', 'nazwa' => 'Inżynieria Zbrojeniowa', 'ikona' => 'img/uni_inzynieria.png', 'kolor' => '#00aaff',
-        'wymagane_zajecia' => 20, 'koszt_kasy' => 600, 'koszt_en' => 5,
-        'opis' => 'Opanowanie zaawansowanej technologii. Tytuł Głównego Inżyniera otwiera drogę do zawodów Architekta i Inżyniera Elektroniki.',
-        'tytul_koncowy' => 'Główny Inżynier',
-        'pytania' => [
-            "Tworzymy karabin pulsacyjny. Cewki magnetyczne przegrzewają się po trzecim strzale, a chłodzenie cieczą odpada ze względu na wagę. Jak ustabilizujesz temperaturę lufy?",
-            "Twój dron bojowy traci połączenie w tunelach metra z powodu silnych zakłóceń elektromagnetycznych. Jak zmodyfikujesz jego antenę odbiorczą, by utrzymać sygnał?"
-        ]
-    ],
-    'ekonomia' => [
-        'db' => 'uni_ekonomia', 'nazwa' => 'Ekonomia i Logistyka', 'ikona' => 'img/uni_ekonomia.png', 'kolor' => '#ffd700',
-        'wymagane_zajecia' => 10, 'koszt_kasy' => 1000, 'koszt_en' => 3,
-        'opis' => 'Klucz do kariery jako Księgowy, Przedsiębiorca, Spedytor lub Kadrowa. Daje tytuł Magistra Ekonomii.',
-        'tytul_koncowy' => 'Magister Ekonomii',
-        'pytania' => [
-            "Lokalny syndykat chce wyprać 5 milionów brudnych dolarów w ciągu miesiąca przez sieć Twoich fałszywych kasyn. Jak podzielisz transakcje, by nie zaalarmować urzędu skarbowego?",
-            "Cena syntetycznego tlenu drastycznie wzrosła. Masz monopol na dystrybucję w sektorze 4. Jak zoptymalizujesz logistykę, by zmaksymalizować zysk przy niezadowolonych mieszkańcach?"
-        ]
-    ],
-    'prawo' => [
-        'db' => 'uni_prawo', 'nazwa' => 'Prawo i Administracja', 'ikona' => 'img/uni_prawo.png', 'kolor' => '#dd88ff',
-        'wymagane_zajecia' => 18, 'koszt_kasy' => 800, 'koszt_en' => 4,
-        'opis' => 'Niezbędne do pracy jako Adwokat, Prokurator, Sędzia lub Polityk. Daje tytuł Magistra Prawa.',
-        'tytul_koncowy' => 'Magister Prawa',
-        'pytania' => [
-            "Twój klient, szef gangu, został złapany z nielegalną bronią. Znalazłeś jednak lukę: nakaz przeszukania magazynu zawierał zły numer budynku. Jak sformułujesz wniosek o oddalenie dowodów?",
-            "Korporacja oskarża małą firmę inżynieryjną o kradzież patentu. Reprezentujesz korporację. Jak udowodnisz przed sędzią, że inżynieria odwrotna w tym przypadku złamała prawa autorskie?"
-        ]
-    ],
-    'sztuka' => [
-        'db' => 'uni_sztuka', 'nazwa' => 'Akademia Sztuk Pięknych', 'ikona' => 'img/uni_sztuka.png', 'kolor' => '#ff66b3',
-        'wymagane_zajecia' => 12, 'koszt_kasy' => 400, 'koszt_en' => 4,
-        'opis' => 'Wymagane dla prestiżowych Reżyserów i elitarnych Projektantów Mody. Daje tytuł Magistra Sztuki.',
-        'tytul_koncowy' => 'Magister Sztuki',
-        'pytania' => [
-            "Tworzysz instalację artystyczną, która ma być ukrytym przekazem podprogowym dla rebeliantów w mieście. Jakich bodźców wizualnych użyjesz, by ominąć algorytmy cenzury korporacji?",
-            "Zaprojektuj linię ubrań haute couture, która jednocześnie ukrywa sygnaturę cieplną przed dronami zwiadowczymi. Jakie materiały wybierzesz?"
-        ]
-    ],
-    'cybernetyka' => [
-        'db' => 'uni_cybernetyka', 'nazwa' => 'Cybernetyka i Informatyka', 'ikona' => 'img/uni_cybernetyka.png', 'kolor' => '#00ffcc',
-        'wymagane_zajecia' => 16, 'koszt_kasy' => 900, 'koszt_en' => 4,
-        'opis' => 'Sztuka łamania korporacyjnych zabezpieczeń. Wymagane dla Hakerów i Programistów. Tytuł: Inżynier Cybernetyki.',
-        'tytul_koncowy' => 'Inżynier Cybernetyki',
-        'pytania' => [
-            "Napostkałeś Czarny Lód (Black ICE) na serwerze bankowym, który w ułamek sekundy pali zwoje nerwowe hakera. Opisz sekwencję skryptów, których użyjesz do izolacji tego protokołu.",
-            "Chcesz przejąć kontrolę nad flotą dronów dostawczych. Mają zmienne szyfrowanie kwantowe. Jak wykorzystasz opóźnienie w ich komunikacji z centralą, by wstrzyknąć złośliwy kod?"
-        ]
-    ],
-    'humanistyka' => [
-        'db' => 'uni_humanistyka', 'nazwa' => 'Pedagogika i Dziennikarstwo', 'ikona' => 'img/uni_humanistyka.png', 'kolor' => '#ffaa00',
-        'wymagane_zajecia' => 10, 'koszt_kasy' => 300, 'koszt_en' => 3,
-        'opis' => 'Manipulacja słowem. Wymagane dla Nauczycieli, Wykładowców, Dziennikarzy, Bibliotekarzy i Fotoreporterów. Tytuł: Magister Edukacji.',
-        'tytul_koncowy' => 'Magister Edukacji',
-        'pytania' => [
-            "Korporacja zrzuciła toksyczne odpady do rzeki, a w mieście wybucha panika. Napisz krótki, manipulacyjny artykuł, który odwróci uwagę opinii publicznej od korporacji i zrzuci winę na mutanty z kanałów.",
-            "Tłum protestujących zbiera się pod fabryką Twojego pracodawcy. Masz przemówić przez megafon. Co powiesz, by zasiać niezgodę w tłumie i doprowadzić do ich pokojowego rozejścia się?"
-        ]
-    ],
-    'kryminologia' => [
-        'db' => 'uni_kryminologia', 'nazwa' => 'Kryminologia i Bezpieczeństwo', 'ikona' => 'img/uni_kryminologia.png', 'kolor' => '#888888',
-        'wymagane_zajecia' => 14, 'koszt_kasy' => 650, 'koszt_en' => 4,
-        'opis' => 'Poznaj umysł przestępcy. Niezbędne dla Detektywów Policyjnych i Klawiszy Więziennych. Tytuł: Licencjat Kryminologii.',
-        'tytul_koncowy' => 'Licencjat Kryminologii',
-        'pytania' => [
-            "Jesteś na miejscu zbrodni. Ofiara ma usunięte wszystkie cyber-wszczepy, ale brak jest śladów krwi w zaułku. Co to mówi o miejscu morderstwa i profilu sprawcy?",
-            "Masz przed sobą podejrzanego o morderstwo korporacyjnego VIP-a. Jego tętno i oddech są sztucznie regulowane przez implanty, więc wariograf nie działa. Jakie techniki psychologiczne zastosujesz, by wymusić zeznanie?"
-        ]
-    ],
+// Klucz OpenAI — bez niego egzamin dostaje losową ocenę 5–10 (jak dotąd).
+$klucz_api_google = "AIzaSyDHBrN8G9ajQEg4MEWV3a3KnDF_2BhLwMU";
 
-    /* ═══════════════════════ NOWE KIERUNKI ═══════════════════════ */
-
-    'weterynaria' => [
-        'db' => 'uni_weterynaria', 'nazwa' => 'Weterynaria', 'ikona' => 'img/uni_weterynaria.png', 'kolor' => '#88ff88',
-        'wymagane_zajecia' => 14, 'koszt_kasy' => 500, 'koszt_en' => 5,
-        'opis' => 'Leczenie zwierząt — od bezpańskich psów po modyfikowane bestie syndykatu. Otwiera zawód Weterynarza. Tytuł: Lekarz Weterynarii.',
-        'tytul_koncowy' => 'Lekarz Weterynarii',
-        'pytania' => [
-            "Do Twojej kliniki trafia pies bojowy psyche-modified syndykatu — zaszczepiona agresja, tętno 180/min, krwawe ślady na pysku. Właściciel oferuje 10k za uspokojenie zwierzęcia i wypisanie bez pytań. Jak ustabilizujesz psa i jaki środek neutralizujący ich kokteil hormonów wściekłości zastosujesz?",
-            "Bogacz przyprowadza rzadką jaszczurkę, przemycaną z zakazanych stref Ameryki Południowej. Odmawia ujawnienia pochodzenia zwierzęcia. Gad choruje na coś, czego nie ma w żadnym podręczniku. Jak poprowadzisz diagnostykę, nie łamiąc tajemnicy klienta i nie trafiając na listę CITES?"
-        ]
-    ],
-    'farmacja' => [
-        'db' => 'uni_farmacja', 'nazwa' => 'Farmacja', 'ikona' => 'img/uni_farmacja.png', 'kolor' => '#ff88cc',
-        'wymagane_zajecia' => 12, 'koszt_kasy' => 600, 'koszt_en' => 4,
-        'opis' => 'Chemia leków, recept i licencji. Otwiera zawód Farmaceuty i wzmacnia każdy związany z medycyną. Tytuł: Magister Farmacji.',
-        'tytul_koncowy' => 'Magister Farmacji',
-        'pytania' => [
-            "Klient bez recepty prosi Cię o silny opioid — twierdzi, że znajomy lekarz obiecał. Za ladą obserwuje inspekcja farmaceutyczna. Jakie legalne zamienniki zaproponujesz, by jednocześnie pomóc klientowi, nie pójść siedzieć i nie stracić licencji?",
-            "Opracowujesz syntetyczny lek na uporczywy kaszel dla dzielnicy przemysłowej. Surowce z legalnego rynku są za drogie, ale te z szarej strefy są zanieczyszczone. Jak zmodyfikujesz formułę, by używać tańszych prekursorów bez ryzyka wywołania efektu psychotropowego?"
-        ]
-    ],
-    'historia' => [
-        'db' => 'uni_historia', 'nazwa' => 'Historia i Archeologia', 'ikona' => 'img/uni_historia.png', 'kolor' => '#bb9966',
-        'wymagane_zajecia' => 10, 'koszt_kasy' => 400, 'koszt_en' => 3,
-        'opis' => 'Wiedza o przeszłości, artefaktach i autentyczności. Otwiera zawody Historyka/Archeologa i Bibliotekarza. Tytuł: Magister Historii.',
-        'tytul_koncowy' => 'Magister Historii',
-        'pytania' => [
-            "W ruinach podmetrowych znalazłeś fresk sprzed 2000 lat, który podważa oficjalną narrację o założeniu miasta. Muzeum oferuje 50 tysięcy za ciszę, prywatny kolekcjoner — 500 tysięcy za wywóz za granicę. Jak uzasadnisz przed komisją UNESCO, że fresk musi zostać w mieście publicznie?",
-            "Korporacja wydobywa rzekomy kosmiczny artefakt z pustyni Lower Manhattan. Jesteś powołanym ekspertem — Twoja analiza pokazuje, że to replika z polimeru XXII wieku. Jak sformułujesz oficjalny raport, by naukowo zdyskredytować fałszerstwo i nie zniknąć w bagażniku następnego dnia?"
-        ]
-    ],
-    'lotnictwo' => [
-        'db' => 'uni_lotnictwo', 'nazwa' => 'Lotnictwo Cywilne', 'ikona' => 'img/uni_lotnictwo.png', 'kolor' => '#00aaee',
-        'wymagane_zajecia' => 16, 'koszt_kasy' => 1200, 'koszt_en' => 5,
-        'opis' => 'Licencja pilota liniowego. Otwiera karierę Pilota Liniowego i wzmacnia każdy zawód związany z transportem. Tytuł: Pilot Liniowy.',
-        'tytul_koncowy' => 'Pilot Liniowy',
-        'pytania' => [
-            "Lecisz rejsem transatlantyckim z VIP-ami syndykatu na pokładzie. Radar wskazuje eskortę trzech korporacyjnych dronów przechwytujących na kursie kolizyjnym. Masz 90 sekund do strefy kontroli ruchu. Jaką taktykę ewazyjną zastosujesz, by chronić pasażerów, nie łamiąc procedur bezpieczeństwa ICAO?",
-            "Awaria silnika numer 2 nad zatoką Lower Manhattan Bay. Procedura AW-733 nakazuje powrót na lotnisko, ale masz uzasadnione podejrzenie, że to sabotaż i lądowanie grozi śmiercią załogi. Jak podejmiesz decyzję o wodowaniu awaryjnym i którego kanału radiowego użyjesz, by ominąć skompromitowaną wieżę kontroli lotów?"
-        ]
-    ],
+$UNI_IKONY = [
+    'medycyna' => '<path d="M12 3v18"/><path d="M8 6c0-2 8-2 8 0s-8 3-8 5 8 3 8 5-8 2-8 4"/><path d="M5 5c2 0 3 1 4 2M19 5c-2 0-3 1-4 2"/>',
+    'inzynieria' => '<path d="M9 3h6M10 3v6L4.5 19a1.5 1.5 0 0 0 1.3 2h12.4a1.5 1.5 0 0 0 1.3-2L14 9V3"/><path d="M7 15h10"/>',
+    'ekonomia' => '<path d="M3 16l2 4h14l2-4z"/><path d="M6 16V11h12v5"/><path d="M9 11V7h6v4"/><path d="M11 7V4h2"/>',
+    'prawo' => '<path d="M12 3v18M7 21h10M5 7h14"/><path d="M5 7l-3 6a3 3 0 0 0 6 0zM19 7l-3 6a3 3 0 0 0 6 0z"/>',
+    'sztuka' => '<rect x="5" y="5" width="14" height="14" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/>',
+    'cybernetyka' => '<rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4"/>',
+    'humanistyka' => '<path d="M2 5c3-1 7-1 10 1 3-2 7-2 10-1v14c-3-1-7-1-10 1-3-2-7-2-10-1z"/><path d="M12 6v14"/>',
+    'kryminologia' => '<path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z"/><path d="M13 8l-3 4h4l-3 4"/>',
+    'weterynaria' => '<path d="M12 3c3 4 5 7 5 10a5 5 0 0 1-10 0c0-3 2-6 5-10z"/><path d="M3 19c3 2 6 2 9 0s6-2 9 0"/>',
+    'farmacja' => '<path d="M6 4h12l-1 6a5 5 0 0 1-10 0z"/><path d="M12 15v5M8 20h8"/><path d="M8 7h8"/>',
+    'historia' => '<path d="M3 9l9-5 9 5z"/><path d="M5 9v9M9.5 9v9M14.5 9v9M19 9v9M3 21h18M4 18h16"/>',
+    'lotnictwo' => '<path d="M2 13l20-8-6 16-4-6-6-2z"/><path d="M12 15l4-6"/>',
+    'teologia' => '<path d="M2 6c3-1 7-1 10 1 3-2 7-2 10-1v13c-3-1-7-1-10 1-3-2-7-2-10-1z"/><path d="M12 7v13"/><path d="M6 10h3M7.5 8.5v4"/>',
+    'zdrowie' => '<path d="M12 20s-8-5-8-11a4 4 0 0 1 8-1 4 4 0 0 1 8 1c0 6-8 11-8 11z"/><path d="M5 12h4l1.5-3 2 5 1.5-2H19"/>',
+    'biologia' => '<path d="M5 19C5 10 11 5 20 4c-1 9-6 15-15 15z"/><path d="M5 19l8-8"/>',
+    'architektura' => '<path d="M12 3l-7 18M12 3l7 18"/><circle cx="12" cy="4" r="1.5"/><path d="M7 15h10"/>',
+    'awf' => '<path d="M3 10v4M6 8v8M18 8v8M21 10v4M6 12h12"/>',
+    'teatr' => '<path d="M9 18V6l11-2v12"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>',
+    'media' => '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"/>',
+    'psychologia' => '<path d="M9 21v-4c-3-1-5-4-5-7a8 8 0 0 1 16 0c0 1-1 2 0 3l1 2h-2v3h-3v3"/><path d="M10 8a2 2 0 1 1 3 2"/>',
 ];
 
-// OBLICZANIE CZASU ODNOWIENIA
-$teraz = time();
-$ostatni_wyklad = strtotime($gracz['uni_ostatni_wyklad']);
-$czas_odnowienia = 24 * 3600;
-$sekundy_od_wykladu = $teraz - $ostatni_wyklad;
+function uv_stan(mysqli $db, int $gid): array {
+    $g = db_wiersz($db, "SELECT gotowka, energia_aktualna, energia_max, zalety,
+        UNIX_TIMESTAMP(uni_ostatnie_zajecia) AS ost, UNIX_TIMESTAMP() AS teraz FROM gracze WHERE id = ?", [$gid]);
+    $p = [];
+    foreach (db_wiersze($db, "SELECT kierunek, stopien, zajecia FROM uni_postep WHERE gracz_id = ?", [$gid]) as $w)
+        $p[$w['kierunek']] = ['s' => (int)$w['stopien'], 'z' => (int)$w['zajecia']];
+    $akt = db_wiersz($db, "SELECT kierunek, UNIX_TIMESTAMP(start) AS s, UNIX_TIMESTAMP(koniec) AS k FROM uni_zajecia WHERE gracz_id = ?", [$gid]);
+    $do_nast = $g['ost'] ? max(0, (int)$g['ost'] + UNI_ODSTEP_S - (int)$g['teraz']) : 0;
+    return ['g' => $g, 'p' => $p, 'akt' => $akt, 'do_nast' => $do_nast, 'wolne' => !$akt && $do_nast === 0, 'teraz' => (int)$g['teraz']];
+}
+function uv_p(array $st, string $kid): array { return $st['p'][$kid] ?? ['s' => 0, 'z' => 0]; }
+/** Stan kierunku: null gdy wszystko ukończone, inaczej [stopień w toku 1–3, zaliczone, wymagane, czy_egzamin]. */
+function uv_kier(array $st, string $kid): ?array {
+    $p = uv_p($st, $kid);
+    if ($p['s'] >= 3) return null;
+    $nr = $p['s'] + 1; $w = uni_wymagane_zajecia($kid, $nr);
+    return [$nr, $p['z'], $w, $p['z'] >= $w - 1];
+}
 
-$mozna_studiowac = ($sekundy_od_wykladu >= $czas_odnowienia);
-$pozostalo_sekund = max(0, $czas_odnowienia - $sekundy_od_wykladu);
+$st = uv_stan($polaczenie, $id_gracza);
+$komunikat = ''; $klasa_kom = ''; $lam_js = null; $egz = null;
+$akcja = $_POST['akcja'] ?? '';
+$kid   = (string)($_POST['kierunek'] ?? '');
 
-// STATUS EGZAMINU
-$widok_egzaminu = false;
-$aktualny_kierunek_egzamin = "";
-$pytanie_egzaminacyjne = "";
-
-// ========================================================
-// LOGIKA 1: ROZPOCZĘCIE EGZAMINU
-// ========================================================
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['rozpocznij_egzamin'])) {
-    $wybrany_id = $_POST['id_kierunku'];
-    if (array_key_exists($wybrany_id, $kierunki)) {
-        $widok_egzaminu = true;
-        $aktualny_kierunek_egzamin = $wybrany_id;
-
-        $pule_pytan = $kierunki[$wybrany_id]['pytania'] ?? ["Opisz najważniejszy aspekt Twojej wiedzy zdobytej na tym wydziale."];
-        $pytanie_egzaminacyjne = $pule_pytan[array_rand($pule_pytan)];
-        $_SESSION['aktywne_pytanie'] = $pytanie_egzaminacyjne;
-        $_SESSION['egzamin_kierunek'] = $wybrany_id;
+// ── 1. START ŁAMIGŁÓWKI ─────────────────────────────────────────────
+if ($akcja === 'lam_start' && isset($UNI_KIERUNKI[$kid])) {
+    $k = uv_kier($st, $kid);
+    if (!$st['wolne'])                       { $komunikat = 'Dzisiejsze zajęcia są już za Tobą albo trwają.'; $klasa_kom = 'err'; }
+    elseif (!$k || $k[3])                    { $komunikat = 'Na tym kierunku czeka egzamin albo wszystko jest ukończone.'; $klasa_kom = 'err'; }
+    elseif ($st['g']['gotowka'] < uni_czesne($kid, $k[0]) || $st['g']['energia_aktualna'] < $UNI_KIERUNKI[$kid]['energia']) { $komunikat = 'Brak środków na czesne albo za mało energii.'; $klasa_kom = 'err'; }
+    else {
+        $d = uni_lam_losuj($k[0]);
+        $_SESSION['uni_lam'] = ['k' => $kid, 'nr' => $k[0], 'z' => $k[1], 'd' => $d];
+        $lam_js = uni_lam_publiczne($d) + ['kolor' => $UNI_KIERUNKI[$kid]['kolor']];
     }
 }
 
-// ========================================================
-// LOGIKA 2: WERYFIKACJA EGZAMINU PRZEZ AI (API)
-// ========================================================
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['zatwierdz_egzamin'])) {
-    $wybrany_id = (string)($_POST['id_kierunku'] ?? '');
-    $odpowiedz_gracza = trim((string)($_POST['odpowiedz_gracza'] ?? ''));
-    $pytanie = $_SESSION['aktywne_pytanie'] ?? null;
+// ── 2. ROZWIĄZANIE → START ZAJĘĆ ────────────────────────────────────
+if ($akcja === 'lam_rozwiaz') {
+    $s = $_SESSION['uni_lam'] ?? null;
+    unset($_SESSION['uni_lam']);
+    $odp = json_decode((string)($_POST['odp'] ?? ''), true);
+    $k = $s ? uv_kier($st, $s['k']) : null;
+    if (!$s || !$k || $k[0] !== $s['nr'] || $k[1] !== $s['z'] || $k[3]) { $komunikat = 'Łamigłówka wygasła. Zacznij jeszcze raz.'; $klasa_kom = 'err'; }
+    elseif (!uni_lam_sprawdz($s['d'], $odp))  { $komunikat = 'Rozwiązanie się nie zgadza.'; $klasa_kom = 'err'; }
+    else {
+        $kasa = uni_czesne($s['k'], $s['nr']); $en = (int)$UNI_KIERUNKI[$s['k']]['energia'];
+        $polaczenie->begin_transaction();
+        try {
+            // Warunek „raz na dobę” i opłata w jednym UPDATE — dwa kliknięcia nie przejdą oba.
+            $ok = db_zmien($polaczenie, "UPDATE gracze SET gotowka = gotowka - ?, energia_aktualna = energia_aktualna - ?, uni_ostatnie_zajecia = NOW()
+                WHERE id = ? AND gotowka >= ? AND energia_aktualna >= ? AND (uni_ostatnie_zajecia IS NULL OR uni_ostatnie_zajecia <= NOW() - INTERVAL ? SECOND)",
+                [$kasa, $en, $id_gracza, $kasa, $en, UNI_ODSTEP_S]) === 1;
+            if ($ok) db_zmien($polaczenie, "INSERT INTO uni_zajecia (gracz_id, kierunek, start, koniec) VALUES (?, ?, NOW(), NOW() + INTERVAL ? SECOND)", [$id_gracza, $s['k'], UNI_CZAS_ZAJEC_S]);
+            $ok ? $polaczenie->commit() : $polaczenie->rollback();
+        } catch (Throwable $e) { $polaczenie->rollback(); $ok = false; }
+        if ($ok) { echo "<script>location.href='game.php?page=uniwersytet&start=1';</script>"; exit; }
+        $komunikat = 'Nie udało się rozpocząć zajęć — odśwież stronę.'; $klasa_kom = 'err';
+    }
+}
 
-    // Egzamin tylko po LOGICE 1 dla tego samego kierunku i tylko na ostatnich zajęciach.
-    // Wcześniej formularz można było wysyłać w kółko: każde zdanie = +1 zajęcia i tytuł, bez kosztu i limitu dnia.
-    $egz_ok = isset($kierunki[$wybrany_id]) && $pytanie !== null
-           && ($_SESSION['egzamin_kierunek'] ?? '') === $wybrany_id
-           && $mozna_studiowac
-           && (int)$gracz[$kierunki[$wybrany_id]['db']] === (int)$kierunki[$wybrany_id]['wymagane_zajecia'] - 1;
-    unset($_SESSION['egzamin_kierunek']);
-    if (!$egz_ok) {
-        unset($_SESSION['aktywne_pytanie']);
-        $komunikat = "<div class='blad'>Ten egzamin już się odbył albo nie jest dostępny.</div>";
-    } else {
-    $k = $kierunki[$wybrany_id];
-    $kolumna_db = $k['db'];
+// ── 3. ZALICZENIE PEŁNEJ PROBÓWKI ───────────────────────────────────
+if ($akcja === 'zalicz' && $st['akt'] && $st['teraz'] >= (int)$st['akt']['k']) {
+    $kz = $st['akt']['kierunek'];
+    if (db_zmien($polaczenie, "DELETE FROM uni_zajecia WHERE gracz_id = ? AND koniec <= NOW()", [$id_gracza]) === 1) {
+        db_zmien($polaczenie, "INSERT INTO uni_postep (gracz_id, kierunek, stopien, zajecia) VALUES (?, ?, 0, 1)
+            ON DUPLICATE KEY UPDATE zajecia = zajecia + 1", [$id_gracza, $kz]);
+    }
+    echo "<script>location.href='game.php?page=uniwersytet&zal=" . urlencode($kz) . "';</script>"; exit;
+}
 
-    // --- INTEGRACJA API AI (CURL) ---
-    // WAŻNE: TUTAJ WKLEJ SWÓJ KLUCZ API OPENAI
-    $klucz_api_openai = "TUTAJ_WKLEJ_SWOJ_KLUCZ";
+// ── 4. EGZAMIN — pytanie ────────────────────────────────────────────
+if ($akcja === 'egz_start' && isset($UNI_KIERUNKI[$kid])) {
+    $k = uv_kier($st, $kid);
+    if ($st['wolne'] && $k && $k[3]) {
+        $pula = $UNI_KIERUNKI[$kid]['pytania'];
+        $_SESSION['uni_egz'] = ['k' => $kid, 'nr' => $k[0], 'q' => $pula[array_rand($pula)]];
+        $egz = $_SESSION['uni_egz'];
+    } else { $komunikat = 'Egzamin nie jest teraz dostępny.'; $klasa_kom = 'err'; }
+}
 
-    $prompt_systemowy = "Jesteś surowym, bezwzględnym dziekanem wydziału '{$k['nazwa']}' na cyberpunkowym uniwersytecie. Egzaminujesz studenta, aby wydać mu dyplom '{$k['tytul_koncowy']}'.";
-    $prompt_uzytkownika = "Pytanie: $pytanie\n\nOdpowiedź studenta: $odpowiedz_gracza\n\nOceń tę odpowiedź merytorycznie oraz pod kątem wczucia się w rolę (roleplay) w skali 1 do 10. Zwróć wynik w CZYSTYM formacie JSON: {\"ocena\": 8, \"komentarz\": \"Twój mroczny komentarz zwrotny dla studenta\"}. Nic więcej.";
-
-    $ai_odpowiedz = "";
-    $ocena = 0;
-
-    if ($klucz_api_openai == "TUTAJ_WKLEJ_SWOJ_KLUCZ") {
-        $ocena = rand(5, 10);
-        $ai_odpowiedz = "System AI symuluje odpowiedź: Twój kod zadziałał, ale musisz wkleić swój Klucz API w pliku, by oceniać prawdziwe odpowiedzi!";
-    } else {
-        $dane_api = [
-            "model" => "gpt-3.5-turbo",
-            "messages" => [
-                ["role" => "system", "content" => $prompt_systemowy],
-                ["role" => "user", "content" => $prompt_uzytkownika]
-            ],
-            "temperature" => 0.7
-        ];
-
-        $ch = curl_init('https://api.openai.com/v1/chat/completions');
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($dane_api));
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Content-Type: application/json',
-            'Authorization: Bearer ' . $klucz_api_openai
-        ]);
-
-        $wynik_curl = curl_exec($ch);
-        curl_close($ch);
-
-        $response = json_decode($wynik_curl, true);
-
-        if (isset($response['choices'][0]['message']['content'])) {
-            $ai_json = json_decode($response['choices'][0]['message']['content'], true);
-            $ocena = isset($ai_json['ocena']) ? (int)$ai_json['ocena'] : 0;
-            $ai_odpowiedz = isset($ai_json['komentarz']) ? $ai_json['komentarz'] : "Błąd przesyłu danych z matrycy Dziekana.";
+// ── 5. EGZAMIN — odpowiedź i ocena AI ───────────────────────────────
+if ($akcja === 'egz_wyslij') {
+    $e = $_SESSION['uni_egz'] ?? null;
+    unset($_SESSION['uni_egz']);
+    $odp = trim((string)($_POST['odpowiedz'] ?? ''));
+    $k = $e ? uv_kier($st, $e['k']) : null;
+    // Egzamin to dzisiejsze zajęcia: zajmujemy dobę zanim zapytamy AI.
+    $zajete = $e && $k && $k[3] && $k[0] === $e['nr'] && $odp !== '' && db_zmien($polaczenie,
+        "UPDATE gracze SET uni_ostatnie_zajecia = NOW() WHERE id = ? AND (uni_ostatnie_zajecia IS NULL OR uni_ostatnie_zajecia <= NOW() - INTERVAL ? SECOND)
+         AND NOT EXISTS (SELECT 1 FROM uni_zajecia WHERE gracz_id = ?)", [$id_gracza, UNI_ODSTEP_S, $id_gracza]) === 1;
+    if (!$zajete) { $komunikat = 'Ten egzamin już się odbył albo nie jest dostępny.'; $klasa_kom = 'err'; }
+    else {
+        $kd = $UNI_KIERUNKI[$e['k']]; $tytul = uni_tytul($e['k'], $e['nr']);
+        $ocena = 0; $komentarz = '';
+        if ($klucz_api_openai === "TUTAJ_WKLEJ_SWOJ_KLUCZ") {
+            $ocena = random_int(5, 10);
+            $komentarz = 'Brak klucza API — ocena losowa. Wklej klucz w pages/uniwersytet.php.';
         } else {
-            $ocena = 0;
-            $ai_odpowiedz = "Wystąpił błąd w łączności z neural-netem Dziekana. Uznano to za próbę oszustwa na egzaminie!";
+            $ch = curl_init('https://api.openai.com/v1/chat/completions');
+            curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true, CURLOPT_TIMEOUT => 30,
+                CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Authorization: Bearer ' . $klucz_api_openai],
+                CURLOPT_POSTFIELDS => json_encode(['model' => 'gpt-3.5-turbo', 'temperature' => 0.7, 'messages' => [
+                    ['role' => 'system', 'content' => "Jesteś surowym dziekanem wydziału '{$kd['nazwa']}' na cyberpunkowym uniwersytecie The Abyss. Egzaminujesz studenta na stopień '$tytul'. Wymagania rosną ze stopniem (Licencjat, Magister, Doktor)."],
+                    ['role' => 'user', 'content' => "Pytanie: {$e['q']}\n\nOdpowiedź studenta: $odp\n\nOceń merytorycznie i pod kątem wczucia się w rolę w skali 1–10. Zwróć CZYSTY JSON: {\"ocena\": 8, \"komentarz\": \"krótki mroczny komentarz\"}."],
+                ]])]);
+            $r = json_decode((string)curl_exec($ch), true); curl_close($ch);
+            $j = json_decode($r['choices'][0]['message']['content'] ?? '', true);
+            $ocena = (int)($j['ocena'] ?? 0);
+            $komentarz = (string)($j['komentarz'] ?? 'Błąd łączności z matrycą Dziekana — uznano za próbę oszustwa.');
         }
-    }
-
-    // --- ROZSTRZYGNIĘCIE EGZAMINU ---
-    if ($ocena >= 7) {
-        $nowy_tytul = $k['tytul_koncowy'];
-        $nowy_tytul_safe = $polaczenie->real_escape_string($nowy_tytul);
-        $polaczenie->query("UPDATE gracze SET
-            $kolumna_db = $kolumna_db + 1,
-            tytul_naukowy = '$nowy_tytul_safe',
-            uni_ostatni_wyklad = NOW()
-            WHERE id = $id_gracza");
-
-        $gracz[$kolumna_db] += 1;
-        $gracz['tytul_naukowy'] = $nowy_tytul;
-
-        $komunikat = "<div class='sukces' style='border-color:#ffd700; color:#ffd700; box-shadow: 0 0 20px rgba(255,215,0,0.5);'>
-            <h2 style='font-family:Oswald; margin-top:0;'>EGZAMIN ZDANY! (Ocena: $ocena/10)</h2>
-            <p style='color:#ccc; font-style:italic;'>\"$ai_odpowiedz\"</p>
-            <p>Otrzymujesz tytuł: <b style='color:#fff;'>$nowy_tytul</b>!</p>
-        </div>";
-        unset($_SESSION['aktywne_pytanie']);
-    } else {
-        $polaczenie->query("UPDATE gracze SET energia_aktualna = energia_aktualna - 5, uni_ostatni_wyklad = NOW() WHERE id = $id_gracza");
-        $gracz['energia_aktualna'] -= 5;
-
-        $komunikat = "<div class='blad' style='border-color:#ff3333; box-shadow: 0 0 20px rgba(255,51,51,0.5);'>
-            <h2 style='font-family:Oswald; margin-top:0;'>EGZAMIN OBLANY! (Ocena: $ocena/10)</h2>
-            <p style='color:#ccc; font-style:italic;'>\"$ai_odpowiedz\"</p>
-            <p>Dziekan wyrzucił Cię z gabinetu. Tracisz 5 Energii z powodu potężnego stresu. Spróbuj ponownie jutro!</p>
-        </div>";
-        unset($_SESSION['aktywne_pytanie']);
-    }
-    $mozna_studiowac = false;
-    }
-}
-
-// ========================================================
-// LOGIKA 3: STANDARDOWY WYKŁAD (Zdarzenia Losowe)
-// ========================================================
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['id_kierunku']) && !isset($_POST['rozpocznij_egzamin']) && !isset($_POST['zatwierdz_egzamin'])) {
-    $wybrany_id = $_POST['id_kierunku'];
-
-    if (array_key_exists($wybrany_id, $kierunki)) {
-        $k = $kierunki[$wybrany_id];
-        $kolumna_db = $k['db'];
-        $postep_gracza = $gracz[$kolumna_db];
-
-        if (!$mozna_studiowac) {
-            $komunikat = "<div class='blad'>Byłeś już dzisiaj na zajęciach! Wykładowcy też muszą odpocząć. Wróć jutro.</div>";
-        } elseif ($postep_gracza >= $k['wymagane_zajecia']) {
-            $komunikat = "<div class='info'>Już ukończyłeś ten kierunek! Masz dyplom w kieszeni.</div>";
-        } elseif ($gracz['gotowka'] < $k['koszt_kasy']) {
-            $komunikat = "<div class='blad'>Brak środków na opłacenie czesnego ({$k['koszt_kasy']} $).</div>";
-        } elseif ($gracz['energia_aktualna'] < $k['koszt_en']) {
-            $komunikat = "<div class='blad'>Jesteś zbyt zmęczony na naukę ({$k['koszt_en']} EN). Odpocznij.</div>";
+        if ($ocena >= UNI_EGZAMIN_PROG) {
+            db_zmien($polaczenie, "INSERT INTO uni_postep (gracz_id, kierunek, stopien, zajecia) VALUES (?, ?, 1, 0)
+                ON DUPLICATE KEY UPDATE stopien = stopien + 1, zajecia = 0", [$id_gracza, $e['k']]);
+            db_zmien($polaczenie, "INSERT INTO os_czasu (gracz_id, zrodlo, tresc) VALUES (?, 'uniwersytet', ?)",
+                [$id_gracza, "Uzyskał(a) tytuł: $tytul (Akademia Nauk, ocena $ocena/10)."]);
+            $komunikat = "EGZAMIN ZDANY ($ocena/10). Tytuł: $tytul · +" . UNI_PU_ZA_STOPIEN . " PU · wpis na Oś Czasu. „" . $komentarz . "”"; $klasa_kom = 'gold';
         } else {
-            $kk = (int)$k['koszt_kasy']; $ke = (int)$k['koszt_en'];
-            $zaliczone = db_zmien($polaczenie, "UPDATE gracze SET
-                gotowka = gotowka - ?,
-                energia_aktualna = energia_aktualna - ?,
-                `$kolumna_db` = `$kolumna_db` + 1,
-                uni_ostatni_wyklad = NOW()
-                WHERE id = ? AND gotowka >= ? AND energia_aktualna >= ? AND `$kolumna_db` = ?",
-                [$kk, $ke, (int)$id_gracza, $kk, $ke, (int)$postep_gracza]) === 1;
-            if (!$zaliczone) {
-                $komunikat = "<div class='blad'>Zajęcia już zaliczone albo zabrakło środków — odśwież stronę.</div>";
-            } else {
-            $gracz['gotowka'] -= $k['koszt_kasy'];
-            $gracz['energia_aktualna'] -= $k['koszt_en'];
-            $gracz[$kolumna_db] += 1;
-            $mozna_studiowac = false;
-
-            $komunikat = "<div class='sukces'>Ukończyłeś kolejne zajęcia z kierunku <b>{$k['nazwa']}</b>! Twoja wiedza rośnie.</div>";
-            }
+            db_zmien($polaczenie, "UPDATE gracze SET energia_aktualna = GREATEST(0, energia_aktualna - ?) WHERE id = ?", [UNI_EGZAMIN_KARA_EN, $id_gracza]);
+            $komunikat = "EGZAMIN OBLANY ($ocena/10). −" . UNI_EGZAMIN_KARA_EN . " EN, kolejna próba jutro. „" . $komentarz . "”"; $klasa_kom = 'err';
         }
     }
 }
+
+if (isset($_GET['start'])) { $komunikat = 'Zajęcia rozpoczęte — probówka napełni się za ' . (UNI_CZAS_ZAJEC_S / 3600) . ' h.'; }
+if (isset($_GET['zal']) && isset($UNI_KIERUNKI[$_GET['zal']])) { $komunikat = 'Zaliczone zajęcia: ' . $UNI_KIERUNKI[$_GET['zal']]['nazwa'] . '.'; }
+
+$st = uv_stan($polaczenie, $id_gracza);   // po zapisach
+$pu_uni = uni_pu($polaczenie, $id_gracza);
+$ma_lic = uni_ma_licencjat($polaczenie, $id_gracza);
+$h = fn($s) => htmlspecialchars((string)$s, ENT_QUOTES);
+$zl = fn($v) => number_format((int)$v, 0, ',', ' ');
+$TARCZA = '<svg viewBox="0 0 18 22"><path d="M9 1l7 3v7c0 5-3 8-7 10-4-2-7-5-7-10V4z"/></svg>';
+$USD = '<svg class="usd" viewBox="0 0 24 24"><path d="M12 2v20M17 6c-1-2-9-2-9 2s9 2 9 6-8 4-9 2"/></svg>';
+$BOLT = '<svg class="bolt" viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>';
+$WAVE = '<svg class="wave%s" viewBox="0 0 200 12" preserveAspectRatio="none"><path d="M0 6 Q12.5 0 25 6 T50 6 T75 6 T100 6 T125 6 T150 6 T175 6 T200 6 V12 H0Z"/></svg>';
+
+// Dwa kierunki, z których liczą się PU
+$top = $st['p']; uasort($top, fn($a, $b) => $b['s'] <=> $a['s']);
+$top_pu = array_keys(array_filter(array_slice($top, 0, UNI_PU_MAKS_KIERUNKOW, true), fn($x) => $x['s'] > 0));
 ?>
+<link rel="stylesheet" href="css/uniwersytet.css">
+<div class="uv">
+<header class="u-head">
+  <div><div class="lbl">5th Ave · Uptown</div><h1>Akademia Nauk</h1><p>Rozwiąż łamigłówkę, żeby zacząć zajęcia. Potem zostaje tylko czekać, aż probówka się wypełni. Jedne zajęcia dziennie, na jednym kierunku naraz.</p></div>
+  <div class="u-stats">
+    <div class="st"><span class="lbl">Gotówka</span><b class="g"><?php echo $zl($st['g']['gotowka']); ?> $</b></div>
+    <div class="st"><span class="lbl">Energia</span><b><?php echo (int)$st['g']['energia_aktualna']; ?> / <?php echo (int)$st['g']['energia_max']; ?></b></div>
+    <div class="st"><span class="lbl">PU z Uniwersytetu</span><b><?php echo $pu_uni; ?> / <?php echo UNI_PU_ZA_STOPIEN * 3 * UNI_PU_MAKS_KIERUNKOW; ?></b></div>
+    <div class="st"><span class="lbl">Zaleta „Wykształcony”</span><b class="<?php echo $ma_lic ? 'ok' : 'no'; ?>"><?php echo $ma_lic ? 'dostępna' : 'wymaga Licencjatu'; ?></b></div>
+  </div>
+</header>
 
-<style>
-    .uni-header {
-        text-align: center; padding: 25px 0 30px 0; border-bottom: 1px solid #333;
-        margin-bottom: 30px; position: relative;
-    }
-    .uni-header h1 {
-        font-family: 'Oswald', sans-serif; font-size: 2.8em; color: #fff;
-        text-transform: uppercase; letter-spacing: 6px;
-        text-shadow: 0 0 20px rgba(255,215,0,0.4), 0 0 40px rgba(255,51,51,0.15);
-        margin: 0; font-weight: 500;
-    }
-    .uni-header p {
-        color: #aaa; font-style: italic; font-size: 1.1em;
-        font-family: 'Open Sans', sans-serif; margin-top: 8px;
-    }
-    .uni-header::after {
-        content: ''; position: absolute; bottom: -1px; left: 50%; transform: translateX(-50%);
-        width: 180px; height: 1px; background: #ffd700; box-shadow: 0 0 10px #ffd700;
-    }
-    .cooldown-box {
-        background: rgba(10,10,20,0.8); backdrop-filter: blur(10px);
-        padding: 25px; border: 1px solid #444; border-left: 4px solid #00aaff;
-        border-radius: 6px; margin-bottom: 30px; text-align: center;
-        box-shadow: 0 5px 25px rgba(0,0,0,0.6);
-    }
-    .cooldown-box h2 {
-        font-family: 'Oswald', sans-serif; font-size: 1.6em;
-        margin: 0 0 10px 0; letter-spacing: 2px;
-    }
-    .karty-grid {
-        display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
-        gap: 20px; margin-top: 20px;
-    }
-    .karta-kierunku {
-        display: flex; align-items: stretch; background: rgba(20,20,30,0.8);
-        backdrop-filter: blur(8px); border: 1px solid #333; border-radius: 6px;
-        overflow: hidden; transition: 0.3s; box-shadow: 0 5px 15px rgba(0,0,0,0.7);
-        position: relative;
-    }
-    .karta-kierunku:hover { transform: translateY(-3px); border-color: #555; }
-    .kierunek-ikona {
-        width: 130px; padding: 20px; display: flex; align-items: center; justify-content: center;
-        background: rgba(0,0,0,0.4); border-right: 1px solid rgba(255,255,255,0.05);
-        position: relative; flex-shrink: 0;
-    }
-    .kierunek-ikona img { width: 100px; height: 100px; object-fit: contain; z-index: 2; }
-    .kierunek-glow {
-        position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-        width: 100px; height: 100px; border-radius: 50%;
-        filter: blur(40px); opacity: 0.4; z-index: 1;
-    }
-    .kierunek-info { flex: 1; padding: 18px 22px; display: flex; flex-direction: column; justify-content: center; }
-    .kierunek-info h3 {
-        font-family: 'Oswald', sans-serif; font-size: 1.5em; margin: 0 0 8px 0;
-        letter-spacing: 1.5px; text-transform: uppercase;
-    }
-    .kierunek-info p { color: #aaa; font-size: 0.95em; font-family: 'Open Sans', sans-serif; margin-bottom: 12px; line-height: 1.45; }
-    .postep-bg {
-        background: rgba(0,0,0,0.5); height: 20px; border-radius: 3px;
-        border: 1px solid #333; overflow: hidden; position: relative;
-    }
-    .postep-fill { height: 100%; border-radius: 2px; transition: 0.5s; box-shadow: 0 0 10px currentColor; }
-    .postep-text { text-align: right; color: #aaa; font-family: 'JetBrains Mono', monospace; font-size: 0.85em; margin-top: 4px; letter-spacing: 1px; }
+<?php if ($komunikat): ?><div class="msg <?php echo $klasa_kom; ?>"><?php echo $h($komunikat); ?></div><?php endif; ?>
 
-    .kierunek-akcja {
-        padding: 18px; display: flex; flex-direction: column; justify-content: center;
-        align-items: center; border-left: 1px solid rgba(255,255,255,0.05);
-        min-width: 170px; background: rgba(0,0,0,0.2);
-    }
-    .kierunek-koszt { color: #aaa; font-size: 0.85em; margin-bottom: 12px; text-align: center; font-family: 'JetBrains Mono', monospace; }
-    .btn-studiuj {
-        background: rgba(0,0,0,0.6); color: #fff; border: 1px solid #555;
-        padding: 10px 18px; font-family: 'Oswald', sans-serif; font-size: 0.95em;
-        text-transform: uppercase; letter-spacing: 1.5px; cursor: pointer;
-        border-radius: 3px; transition: 0.25s; width: 100%;
-    }
-    .btn-studiuj:hover { background: rgba(255,255,255,0.08); box-shadow: 0 0 15px rgba(255,255,255,0.15); }
-    .btn-zablokowany { background: #111; color: #555; border-color: #333; cursor: not-allowed; }
-
-    .sukces, .blad, .info {
-        padding: 15px 20px; margin-bottom: 20px; border-radius: 4px; border-left: 4px solid;
-        font-family: 'Open Sans', sans-serif;
-    }
-    .sukces { background: rgba(0,255,100,0.07); border-color: #0f0; color: #9fff9f; }
-    .blad { background: rgba(255,0,0,0.08); border-color: #ff3333; color: #ff9999; }
-    .info { background: rgba(0,170,255,0.07); border-color: #00aaff; color: #99ccff; }
-
-    /* Egzamin Dziekanatu */
-    .egzamin-modal {
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.85); backdrop-filter: blur(8px);
-        z-index: 999; display: flex; justify-content: center; align-items: center;
-    }
-    .egzamin-pudlo {
-        background: linear-gradient(135deg, rgba(20,0,0,0.95), rgba(40,10,10,0.95));
-        border: 2px solid #ff3333; padding: 40px; border-radius: 8px;
-        max-width: 700px; width: 90%; box-shadow: 0 0 60px rgba(255,51,51,0.5);
-    }
-    .egzamin-tytul {
-        color: #ff3333; font-family: 'Oswald', sans-serif; font-size: 1.8em; letter-spacing: 3px;
-        text-transform: uppercase; margin-top: 0; text-shadow: 0 0 15px #ff3333;
-        border-bottom: 1px dashed rgba(255,51,51,0.5); padding-bottom: 15px; margin-bottom: 30px;
-    }
-    .egzamin-prompt { color: #fff; font-size: 1.2em; line-height: 1.6; margin-bottom: 30px; border-left: 4px solid #ff3333; padding-left: 20px; background: rgba(255,0,0,0.1); padding: 15px;}
-    .egzamin-textarea {
-        width: 100%; height: 200px; background: rgba(0,0,0,0.8); color: #00ff00;
-        border: 1px solid #ff3333; padding: 20px; font-family: monospace; font-size: 1.1em;
-        border-radius: 6px; box-sizing: border-box; resize: vertical; margin-bottom: 20px;
-    }
-    .egzamin-textarea:focus { outline: none; box-shadow: 0 0 15px rgba(255,51,51,0.5); }
-
-    .btn-egzamin-akcja {
-        background: rgba(255, 0, 0, 0.2); color: #fff; border: 2px solid #ff3333;
-        padding: 15px 40px; font-family: 'Oswald', sans-serif; font-size: 1.3em;
-        text-transform: uppercase; cursor: pointer; border-radius: 6px; font-weight: 700;
-        text-shadow: 0 0 10px #ff3333; box-shadow: 0 0 20px rgba(255,51,51,0.4);
-        transition: 0.3s;
-    }
-    .btn-egzamin-akcja:hover { background: #ff3333; color: #000; box-shadow: 0 0 40px rgba(255,51,51,0.8); }
-
-    /* Pulsujący guzik przed egzaminem */
-    .btn-egzamin { background: rgba(150, 0, 0, 0.4); color: #ff3333; border: 2px solid #ff3333; text-shadow: 0 0 10px #ff3333; box-shadow: inset 0 0 10px rgba(255,51,51,0.2), 0 0 15px rgba(255,51,51,0.1); animation: puls-egzamin 2s infinite; }
-    .btn-egzamin:hover { background: rgba(255, 51, 51, 0.2); color: #fff; box-shadow: inset 0 0 20px rgba(255,51,51,0.5), 0 0 20px rgba(255,51,51,0.6); text-shadow: 0 0 10px #fff; }
-    @keyframes puls-egzamin { 0% { border-color: #aa0000; box-shadow: 0 0 5px rgba(170,0,0,0.2); } 50% { border-color: #ff3333; box-shadow: 0 0 20px rgba(255,51,51,0.5); } 100% { border-color: #aa0000; box-shadow: 0 0 5px rgba(170,0,0,0.2); } }
-</style>
-
-<?php if ($widok_egzaminu): ?>
-<div class="egzamin-modal">
-    <div class="egzamin-pudlo">
-        <h2 class="egzamin-tytul">TERMINAL DZIEKANATU // EGZAMIN DYPLOMOWY</h2>
-        <div class="egzamin-prompt">
-            <span style="color:#ff3333; font-family: Oswald; text-transform:uppercase;">Pytanie systemu:</span><br>
-            <?php echo $pytanie_egzaminacyjne; ?>
-        </div>
-
-        <form method="POST">
-            <input type="hidden" name="id_kierunku" value="<?php echo $aktualny_kierunek_egzamin; ?>">
-            <textarea name="odpowiedz_gracza" class="egzamin-textarea" placeholder="Wprowadź odpowiedź... System AI przeanalizuje Twoją wiedzę." required></textarea>
-
-            <div style="display: flex; justify-content: space-between;">
-                <a href="game.php?page=uniwersytet" style="color: #888; text-decoration: none; padding: 15px; font-family: Oswald;">[ Anuluj i ucieknij ]</a>
-                <button type="submit" name="zatwierdz_egzamin" class="btn-egzamin-akcja">ZATWIERDŹ ODPOWIEDŹ</button>
-            </div>
-        </form>
+<section class="rack">
+  <div class="rack-h"><h2>Stojak — zajęcia w toku</h2><span class="lbl"><?php
+    echo $st['akt'] ? 'Trwają zajęcia — kolejne po ich zakończeniu i upływie doby od startu' : ($st['do_nast'] > 0 ? 'Dzisiejsze zajęcia za Tobą' : 'Możesz dziś rozpocząć jedne zajęcia'); ?></span></div>
+  <div class="tubes">
+  <?php if ($st['akt']):
+      $a = $st['akt']; $kd = $UNI_KIERUNKI[$a['kierunek']] ?? null; $ks = uv_kier($st, $a['kierunek']);
+      $pr = min(1, ($st['teraz'] - $a['s']) / max(1, $a['k'] - $a['s'])); $done = $pr >= 1; ?>
+    <div class="tb<?php echo $done ? ' done' : ''; ?>" style="--k:<?php echo $kd['kolor'] ?? '#ff3d5e'; ?>" data-start="<?php echo (int)$a['s']; ?>" data-koniec="<?php echo (int)$a['k']; ?>">
+      <div class="tb-cork"></div>
+      <div class="tb-glass"><div class="liq" style="height:<?php echo max(4, round($pr * 100)); ?>%"><?php printf($WAVE, ''); printf($WAVE, ' w2'); for ($i = 0; $i < 4; $i++) echo '<span class="bub" style="left:' . (12 + $i * 9) . 'px;animation-delay:' . ($i * .8) . 's"></span>'; ?></div></div>
+      <div class="tb-info"><b><?php echo $h($kd['nazwa'] ?? $a['kierunek']); ?></b>
+        <?php if ($ks): ?><small><?php echo $UNI_STOPNIE[$ks[0]]['nazwa']; ?> · zajęcia <?php echo $ks[1] + 1; ?>/<?php echo $ks[2]; ?></small><?php endif; ?>
+        <?php if ($done): ?>
+          <form method="POST" action="game.php?page=uniwersytet"><input type="hidden" name="akcja" value="zalicz"><button type="submit" class="tb-btn">Zalicz zajęcia</button></form>
+        <?php else: ?>
+          <span class="tb-t">--:--:--</span><small class="tb-p"><?php echo floor($pr * 100); ?>%</small>
+        <?php endif; ?>
+      </div>
     </div>
-</div>
+  <?php elseif ($st['do_nast'] > 0): ?>
+    <div class="tb empty"><div class="tb-cork" style="opacity:.35"></div><div class="tb-glass"></div><div class="tb-info"><b>Sale zamknięte</b><small>Kolejne zajęcia za</small><span class="tb-t" style="--k:var(--brass-hi)" data-cd="<?php echo $st['teraz'] + $st['do_nast']; ?>">--:--:--</span></div></div>
+  <?php else: ?>
+    <div class="tb empty"><div class="tb-cork" style="opacity:.35"></div><div class="tb-glass"></div><div class="tb-info"><b>Wolne miejsce</b><small>Wybierz kierunek poniżej i rozwiąż łamigłówkę</small></div></div>
+  <?php endif; ?>
+  </div>
+</section>
+
+<section style="display:flex;flex-direction:column;gap:12px">
+  <div class="sec-h"><h2>Dyplomy</h2><span class="lbl">PU liczone z <?php echo UNI_PU_MAKS_KIERUNKOW; ?> kierunków z najwyższymi stopniami (złote)</span></div>
+  <div class="dipl">
+  <?php $jest = false; foreach ($UNI_KIERUNKI as $id => $kd) { $s = uv_p($st, $id)['s']; for ($i = 1; $i <= $s; $i++) { $jest = true; $pu = in_array($id, $top_pu, true); ?>
+    <div class="dp<?php echo $pu ? ' pu' : ''; ?>" style="--k:<?php echo $kd['kolor']; ?>"><b><?php echo $h(uni_tytul($id, $i)); ?></b><small><?php echo $pu ? '+' . UNI_PU_ZA_STOPIEN . ' PU · ' : ''; ?>odblokowuje: <?php echo $UNI_STOPNIE[$i]['etapy']; ?></small></div>
+  <?php } } if (!$jest) echo '<span class="dp-empty">// Brak dyplomów</span>'; ?>
+  </div>
+</section>
+
+<section style="display:flex;flex-direction:column;gap:12px">
+  <div class="sec-h"><div class="sec-t"><svg viewBox="0 0 24 24"><path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c3 2 9 2 12 0v-5"/><path d="M22 9v6"/></svg>Kierunki studiów <i>///</i></div><span class="lbl">Licencjat → Magister (×1,5 zajęć, ×2 czesne) → Doktor (×2 zajęć, ×3 czesne)</span></div>
+  <div class="grid">
+  <?php foreach ($UNI_KIERUNKI as $id => $kd):
+      $p = uv_p($st, $id); $k = uv_kier($st, $id);
+      $akt_tu = $st['akt'] && $st['akt']['kierunek'] === $id;
+      $prof = [];
+      foreach ($ZAWODY_DANE ?? [] as $zn => $zd) if (($zd['wymagany_kierunek'] ?? null) === $id) $prof[] = $zn . (($zd['kierunek_od_etapu'] ?? 1) > 1 ? ' (od etapu ' . (int)$zd['kierunek_od_etapu'] . ')' : '');
+  ?>
+    <article class="kc" style="--k:<?php echo $kd['kolor']; ?>">
+      <div class="kc-h"><svg class="ic" viewBox="0 0 24 24"><?php echo $UNI_IKONY[$id] ?? $UNI_IKONY['humanistyka']; ?></svg>
+        <div><h3><?php echo $h($kd['nazwa']); ?></h3><p>Teraz: <?php echo $k ? '<span>' . $h(uni_tytul($id, $k[0])) . '</span>' : 'wszystkie stopnie ukończone'; ?></p></div></div>
+      <div class="kc-mid">
+        <?php if ($k): ?><div class="prog"><div class="prog-row"><span>Zajęcia</span><b><?php echo $k[1]; ?> / <?php echo $k[2]; ?></b></div><div class="bar"><i style="width:<?php echo round($k[1] / $k[2] * 100, 1); ?>%"></i></div></div>
+        <?php else: ?><div class="prog"></div><?php endif; ?>
+        <div class="flasks"><?php foreach ($UNI_STOPNIE as $nr => $sd): ?><div class="fl<?php echo $nr <= $p['s'] ? ' on' : ($k && $nr === $k[0] ? ' cur' : ''); ?>"><?php echo $TARCZA; ?><small><?php echo $sd['skrot']; ?></small></div><?php endforeach; ?></div>
+      </div>
+      <?php if ($prof): ?><div class="prof">Profesje: <b><?php echo $h(implode(', ', $prof)); ?></b></div><?php endif; ?>
+      <?php if ($k): ?><div class="cost"><span>Czesne <?php echo $USD; ?><b><?php echo $zl(uni_czesne($id, $k[0])); ?> $</b></span><span>Energia <?php echo $BOLT; ?><b class="en"><?php echo (int)$kd['energia']; ?></b></span><span><?php echo UNI_CZAS_ZAJEC_S / 3600; ?> h</span></div><?php endif; ?>
+      <form method="POST" action="game.php?page=uniwersytet" style="margin:0">
+        <input type="hidden" name="kierunek" value="<?php echo $id; ?>">
+        <?php if (!$k): ?><button type="button" class="kstat" disabled>Doktorat ukończony ✦</button>
+        <?php elseif ($akt_tu): ?><button type="button" class="kstat" disabled>Zajęcia w toku ◢</button>
+        <?php elseif ($st['akt']): ?><button type="button" class="kstat" disabled>Trwają inne zajęcia</button>
+        <?php elseif ($st['do_nast'] > 0): ?><button type="button" class="kstat" disabled>Kolejne zajęcia za <span data-cd="<?php echo $st['teraz'] + $st['do_nast']; ?>" data-krotko="1">--:--</span></button>
+        <?php elseif ($k[3]): ?><button type="submit" name="akcja" value="egz_start" class="kstat exam">Egzamin: <?php echo $UNI_STOPNIE[$k[0]]['nazwa']; ?> ▸</button>
+        <?php elseif ($st['g']['gotowka'] < uni_czesne($id, $k[0]) || $st['g']['energia_aktualna'] < $kd['energia']): ?><button type="button" class="kstat" disabled>Brak gotówki lub energii</button>
+        <?php else: ?><button type="submit" name="akcja" value="lam_start" class="kstat go">Rozpocznij zajęcia ▸</button><?php endif; ?>
+      </form>
+    </article>
+  <?php endforeach; ?>
+  </div>
+</section>
+
+<section class="rules">
+  <div><b>Stopnie a Profesje.</b> Licencjat odblokowuje etap 1 Profesji, Magister etapy 2–3, Doktor etap 4.</div>
+  <div><b>PU.</b> Każdy stopień daje <?php echo UNI_PU_ZA_STOPIEN; ?> PU, liczone z maks. <?php echo UNI_PU_MAKS_KIERUNKOW; ?> kierunków — razem do <?php echo UNI_PU_ZA_STOPIEN * 3 * UNI_PU_MAKS_KIERUNKOW; ?> PU.</div>
+  <div><b>Zaleta „Wykształcony”.</b> Można ją wybrać, gdy postać ma co najmniej jeden Licencjat.</div>
+  <div><b>Egzamin.</b> Ostatnie zajęcia każdego stopnia to egzamin pisemny, który ocenia Dziekan (AI). Egzamin liczy się jako zajęcia na dany dzień.</div>
+</section>
+
+<div class="mod" id="uvMod"><div class="mod-box" style="--k:<?php echo $lam_js['kolor'] ?? ($egz ? '#ffd700' : 'var(--brass)'); ?>">
+<?php if ($lam_js): $kd = $UNI_KIERUNKI[$_SESSION['uni_lam']['k']]; $nr = $_SESSION['uni_lam']['nr']; ?>
+  <div class="mod-h"><div><div class="lbl"><?php echo $h($kd['nazwa']); ?> · <?php echo $UNI_STOPNIE[$nr]['nazwa']; ?> · zajęcia <?php echo $_SESSION['uni_lam']['z'] + 1; ?>/<?php echo uni_wymagane_zajecia($_SESSION['uni_lam']['k'], $nr); ?></div><h3><?php echo UNI_LAM_TYPY[$lam_js['typ']]; ?></h3></div><button type="button" class="x" data-zamknij aria-label="Zamknij">×</button></div>
+  <div id="uvLam"></div>
+  <form method="POST" action="game.php?page=uniwersytet" id="uvLamForm"><input type="hidden" name="akcja" value="lam_rozwiaz"><input type="hidden" name="odp" value=""></form>
+  <div class="mod-foot"><span>Trudność: <?php echo $UNI_STOPNIE[$nr]['nazwa']; ?></span><span>Po rozwiązaniu: −<?php echo $zl(uni_czesne($_SESSION['uni_lam']['k'], $nr)); ?> $, −<?php echo (int)$kd['energia']; ?> EN, <?php echo UNI_CZAS_ZAJEC_S / 3600; ?> h zajęć</span></div>
+<?php elseif ($egz): $kd = $UNI_KIERUNKI[$egz['k']]; ?>
+  <div class="mod-h"><div><div class="lbl">Terminal Dziekanatu · egzamin dyplomowy</div><h3><?php echo $h(uni_tytul($egz['k'], $egz['nr'])); ?></h3></div><button type="button" class="x" data-zamknij aria-label="Zamknij">×</button></div>
+  <div class="q"><?php echo $h($egz['q']); ?></div>
+  <form method="POST" action="game.php?page=uniwersytet" style="display:flex;flex-direction:column;gap:12px">
+    <input type="hidden" name="akcja" value="egz_wyslij">
+    <textarea name="odpowiedz" required placeholder="Odpowiedź w roli postaci…"></textarea>
+    <div class="mod-foot"><span>Dziekan (AI) ocenia 1–10, zdany od <?php echo UNI_EGZAMIN_PROG; ?>. Oblany: −<?php echo UNI_EGZAMIN_KARA_EN; ?> EN, kolejna próba jutro.</span><button type="submit" class="kbtn" style="--k:#ffd700">Wyślij do Dziekana</button></div>
+  </form>
 <?php endif; ?>
-
-<div class="uni-header">
-    <h1>Akademia Nauk</h1>
-    <p>Wiedza to potęga. A w tym mieście potęga decyduje o tym, kto przeżyje.</p>
+</div></div>
 </div>
-
-<?php echo $komunikat; ?>
-
-<div class="cooldown-box">
-    <?php if (!empty($gracz['tytul_naukowy'])): ?>
-        <div style="color: #ffd700; font-family: 'Oswald', sans-serif; font-size: 1.3em; margin-bottom: 15px; text-shadow: 0 0 10px rgba(255,215,0,0.4);">
-            🎓 Twój aktualny tytuł: <b style="text-transform: uppercase; letter-spacing: 1px;"><?php echo $gracz['tytul_naukowy']; ?></b>
-        </div>
-    <?php endif; ?>
-
-    <?php if ($mozna_studiowac): ?>
-        <h2 style="color: #00ff00; text-shadow: 0 0 10px rgba(0,255,0,0.3);">✓ Sale wykładowe są otwarte</h2>
-        <p style="color: #aaa; font-family: 'Open Sans', sans-serif;">Możesz wziąć udział w jednych zajęciach dziennie. Wybierz mądrze.</p>
-    <?php else: ?>
-        <h2 style="color: #ffaa00; text-shadow: 0 0 10px rgba(255,170,0,0.3);">⏳ Trwa regeneracja umysłu...</h2>
-        <p style="color: #aaa; font-family: 'Open Sans', sans-serif;">Wykłady są bardzo wyczerpujące. Następne zajęcia będą dostępne za:</p>
-        <div style="font-family: 'Oswald', sans-serif; font-size: 2.5em; font-weight: 700; color: #fff; letter-spacing: 2px; text-shadow: 0 2px 5px rgba(0,0,0,0.8);">
-            <?php echo gmdate("H:i:s", $pozostalo_sekund); ?>
-        </div>
-    <?php endif; ?>
-</div>
-
-<div class="karty-grid">
-<?php foreach ($kierunki as $id_k => $dane):
-    $postep = $gracz[$dane['db']];
-    $max = $dane['wymagane_zajecia'];
-    $procent = min(100, ($postep / $max) * 100);
-    $ukonczone = ($postep >= $max);
-
-    $sciezka_do_pliku = $dane['ikona'];
-    if (file_exists($sciezka_do_pliku)) {
-        $ikona_html = "<img src='{$sciezka_do_pliku}' alt='{$dane['nazwa']}'>";
-    } else {
-        $ikona_html = "<div style='width: 100px; height: 100px; background-color: {$dane['kolor']}; border-radius: 10px; opacity: 0.5;'></div>";
-    }
-?>
-    <div class="karta-kierunku" style="<?php if($ukonczone) echo 'border-color: '.$dane['kolor'].'; box-shadow: 0 0 20px rgba(0,0,0,0.8), inset 0 0 15px '.$dane['kolor'].'33;'; ?>">
-
-        <div class="kierunek-ikona">
-            <div class="kierunek-glow" style="background-color: <?php echo $dane['kolor']; ?>;"></div>
-            <?php echo $ikona_html; ?>
-        </div>
-
-        <div class="kierunek-info">
-            <h3 style="color: <?php echo $dane['kolor']; ?>; text-shadow: 0 0 10px <?php echo $dane['kolor']; ?>88;"><?php echo $dane['nazwa']; ?></h3>
-            <p><?php echo $dane['opis']; ?></p>
-
-            <div class="postep-bg"><div class="postep-fill" style="background: <?php echo $dane['kolor']; ?>; color: <?php echo $dane['kolor']; ?>; width: <?php echo $procent; ?>%;"></div></div>
-            <div class="postep-text">Zaliczono: <b style="color:#fff;"><?php echo $postep; ?> / <?php echo $max; ?></b></div>
-        </div>
-
-        <div class="kierunek-akcja">
-            <div class="kierunek-koszt">
-                Koszt: <b style="color: #00ff00;"><?php echo $dane['koszt_kasy']; ?> $</b> | <b style="color: #00ccff;"><?php echo $dane['koszt_en']; ?> EN</b>
-            </div>
-            <form method="POST" style="margin: 0;">
-                <input type="hidden" name="id_kierunku" value="<?php echo $id_k; ?>">
-
-                <?php if ($ukonczone): ?>
-                    <button type="button" class="btn-studiuj btn-zablokowany" disabled>🎓 UKOŃCZONO</button>
-
-                <?php elseif ($postep == ($max - 1) && $mozna_studiowac): ?>
-                    <button type="submit" name="rozpocznij_egzamin" value="tak" class="btn-studiuj btn-egzamin">PODEJDŹ DO EGZAMINU!</button>
-
-                <?php elseif (!$mozna_studiowac): ?>
-                    <button type="button" class="btn-studiuj btn-zablokowany" disabled>CZEKAJ NA JUTRO</button>
-
-                <?php else: ?>
-                    <button type="submit" class="btn-studiuj" style="border-color: <?php echo $dane['kolor']; ?>; color: <?php echo $dane['kolor']; ?>;">WEŹ UDZIAŁ</button>
-                <?php endif; ?>
-            </form>
-        </div>
-    </div>
-<?php endforeach; ?>
-</div>
+<script>window.UNI_V2=<?php echo json_encode(['teraz' => $st['teraz'], 'lam' => $lam_js, 'egz' => (bool)$egz], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG); ?>;</script>
+<script src="js/uniwersytet.js"></script>

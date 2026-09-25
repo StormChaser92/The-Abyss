@@ -171,6 +171,12 @@ function um_zrodla(array $g): array {
                   : ['Profesja ' . ($i + 1) . ': brak', null, false];
     }
     $r[] = ['Zaleta: Wykształcony', $wyk ? UM_PU_WYKSZTALCONY : null, $wyk];
+    // Uniwersytet: 2 PU za stopień z maks. 2 kierunków (config/uniwersytet.php)
+    global $polaczenie;
+    if (function_exists('uni_pu') && isset($g['id']) && $polaczenie instanceof mysqli) {
+        $pu_uni = uni_pu($polaczenie, (int)$g['id']);
+        $r[] = ['Uniwersytet (dyplomy)', $pu_uni ?: null, $pu_uni > 0];
+    }
     return $r;
 }
 
@@ -183,13 +189,22 @@ function um_wydane(array $um): int {
     return $s;
 }
 
+/**
+ * Wymagania Profesji z config/zawody.php są w starej skali (do ~14).
+ * Przeliczenie na 1–5: etap 1 = stary / 5 (zaokr., min. 1), każdy kolejny etap +1, maks. 5.
+ */
+function um_wymaganie_etapu(int $stare, int $etap): int {
+    if ($stare <= 0) return 0;
+    return min(UM_MAX_POZIOM, max(1, (int)round($stare / 5)) + max(0, $etap - 1));
+}
+
 /** Szansa na teście Umiejętności przed modami MG: poziom×20 + ⅓ Atrybutu, limit PE. */
 function um_szansa(int $poziom, int $atrybut): int { return min(UM_PE, $poziom * 20 + intdiv($atrybut, 3)); }
 
 /* ── TEST k100 ─────────────────────────────────────────────────────────
    Stare bonusy RP (płaskie z pochodzenia, procentowe z zawodu) działały
    na skali bez limitu. Tu zamieniamy je na modyfikatory szansy:
-     pochodzenie: 1 punkt = ${UM_MOD_POCHODZENIE_PKT} pkt % (np. +2 → +10)
+     pochodzenie: 1 punkt = 5 pkt % (np. +2 → +10)
      zawód:       bonus % / 2, zaokrąglone (np. 25% → +13)
      Zaleta/Wada: ±UM_MOD_CECHA za każdą zaznaczoną
    Premie działają tylko przy poziomie ≥ 1, kary zawsze.
