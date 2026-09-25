@@ -8,6 +8,7 @@
    ═══════════════════════════════════════════════════════════════════════ */
 
 require_once __DIR__ . '/panel_mg.php';
+require_once __DIR__ . '/../config/zalety_wady.php';
 
 const PD_WIDELKI = ['niski' => [1, 5], 'umiarkowany' => [3, 8], 'wysoki' => [5, 12], 'ekstremalny' => [8, 20]];
 const PD_REP = ['elita' => 'Elita', 'ulica' => 'Ulica', 'syndykat' => 'Syndykat', 'wladze' => 'Władze', 'spoleczenstwo' => 'Społecz.'];
@@ -60,7 +61,22 @@ function pd_obsluz(mysqli $db, array $s, int $gid, bool $czy_mg): string {
             $prz = trim(mb_substr((string)($_POST['prz'][$id] ?? ''), 0, 200));
             $oc = trim(mb_substr((string)($_POST['ocena'][$id] ?? ''), 0, 300));
             $os = trim(mb_substr((string)($_POST['os'][$id] ?? ''), 0, 1000));
-            $wada = in_array($_POST['wada'][$id] ?? '', PD_WADY, true) ? $_POST['wada'][$id] : null;
+            // Zmiany Zalet i Wad przez MG (po darmowej zmianie gracza tylko tędy).
+            // Nowa Wada usuwa Zalety/Wady, z którymi się wyklucza (np. Jednooki → traci Sokoli Wzrok).
+            // Nowa Zaleta nie może się z niczym wykluczać. Limit 20 PZ nie dotyczy zmian fabularnych.
+            $wada = isset(ZW_KATEGORIA_W[$_POST['wada'][$id] ?? '']) ? $_POST['wada'][$id] : null;
+            $zal  = isset(ZW_KATEGORIA_Z[$_POST['zal'][$id] ?? '']) ? $_POST['zal'][$id] : null;
+            $usun = (string)($_POST['usun'][$id] ?? '');
+            $row0 = db_wiersz($db, "SELECT zalety, wady FROM gracze WHERE id = ?", [$id]);
+            $mz = pm_cechy($row0['zalety'] ?? ''); $mw = pm_cechy($row0['wady'] ?? ''); $stracone = [];
+            if ($usun !== '') { $mz = array_values(array_diff($mz, [$usun])); $mw = array_values(array_diff($mw, [$usun])); }
+            $wyk = function (string $n) { $o = []; foreach (ZW_PARY as [$a, $b]) { if ($a === $n) $o[] = $b; if ($b === $n) $o[] = $a; } return $o; };
+            if ($wada && !in_array($wada, $mw, true)) {
+                $x = $wyk($wada); $stracone = array_values(array_intersect(array_merge($mz, $mw), $x));
+                $mz = array_values(array_diff($mz, $x)); $mw = array_values(array_diff($mw, $x)); $mw[] = $wada;
+            }
+            if ($zal && !in_array($zal, $mz, true) && !array_intersect(array_merge($mz, $mw), $wyk($zal))) $mz[] = $zal; else $zal = null;
+            db_q($db, "UPDATE gracze SET zalety = ?, wady = ? WHERE id = ?", [$mz ? implode(', ', $mz) : 'Brak', $mw ? implode(', ', $mw) : 'Brak', $id]);
             $rep = []; foreach (PD_REP as $k => $_) $rep[$k] = max(-3, min(3, (int)($_POST['rep'][$id][$k] ?? 0)));
             db_q($db, "INSERT INTO sesje_podsumowanie (sesja_id, gracz_id, mg_id, reputacja_elita, reputacja_ulica, reputacja_syndykat, reputacja_wladze, reputacja_spoleczenstwo, notatka_mg, konsekwencja_wada, pw, gotowka, przedmiot, poziom_postaci, os_wpis, rekonwalescencja)
                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE pw = VALUES(pw), gotowka = VALUES(gotowka)",
@@ -69,8 +85,8 @@ function pd_obsluz(mysqli $db, array $s, int $gid, bool $czy_mg): string {
             $row = db_wiersz($db, "SELECT reputacja_sesyjna, wady FROM gracze WHERE id = ?", [$id]);
             $old = $row['reputacja_sesyjna'] ? (json_decode($row['reputacja_sesyjna'], true) ?: []) : [];
             foreach ($rep as $k => $v) $old[$k] = (int)($old[$k] ?? 0) + $v;
-            $wady = pm_cechy($row['wady'] ?? ''); if ($wada && !in_array($wada, $wady, true)) $wady[] = $wada;
-            db_q($db, "UPDATE gracze SET pw = pw + ?, gotowka = gotowka + ?, reputacja_sesyjna = ?, wady = ? WHERE id = ?", [$pw, $kasa, json_encode($old, JSON_UNESCAPED_UNICODE), $wady ? implode(', ', $wady) : 'Brak', $id]);
+            db_q($db, "UPDATE gracze SET pw = pw + ?, gotowka = gotowka + ?, reputacja_sesyjna = ? WHERE id = ?", [$pw, $kasa, json_encode($old, JSON_UNESCAPED_UNICODE), $id]);
+            db_q($db, "UPDATE sesje_podsumowanie SET nowa_zaleta = ?, usuniete = ? WHERE sesja_id = ? AND gracz_id = ?", [$zal, trim(implode(', ', array_filter(array_merge([$usun], $stracone))), ', ') ?: null, $sid, $id]);
             db_q($db, "INSERT INTO os_czasu (gracz_id, zrodlo, tresc, sesja_id) VALUES (?, 'opowiesc', ?, ?)", [$id, $os ?: 'Udział w Opowieści.', $sid]);
             powiadom($db, $id, "Opowieść <i>" . bz_h($s['tytul']) . "</i> zakończona: <b>+$pw PW</b>" . ($kasa ? ", +" . number_format($kasa, 0, ',', ' ') . " $" : '') . ($r ? ", Rekonwalescencja " . PD_DNI_REKONW . " dni" : '') . ". <a href='game.php?page=pokoj_sesji&id=$sid&zakladka=podsumowanie' style='color:var(--neon-cyan)'>[ Podsumowanie ]</a>");
         }
@@ -149,9 +165,16 @@ function pd_formularz(mysqli $db, array $s, string $tab, string $blad = ''): voi
           <div class='pd-2'><div class='pd-f'><span class='lbl'>Gotówka $</span><input type='number' name='kasa[$id]' min='0' step='100' value='0'></div><div class='pd-f'><span class='lbl'>Przedmiot fabularny</span><input type='text' name='prz[$id]' maxlength='200' placeholder='opis, bez mechaniki'></div></div>
           <div class='pd-f'><span class='lbl'>Reputacja (−3…+3)</span><div class='pd-rep'>";
         foreach (PD_REP as $k => $n) echo "<label>$n<input type='number' name='rep[$id][$k]' min='-3' max='3' value='0'></label>";
-        echo "</div></div></div><div class='pd-c'><div class='pd-f'><span class='lbl'>Konsekwencja: nowa Wada</span><select name='wada[$id]'><option value=''>—</option>";
-        foreach (PD_WADY as $w) echo "<option>" . $h($w) . "</option>";
-        echo "</select></div>";
+        $mz = pm_cechy($g['zalety'] ?? ''); $mw = pm_cechy($g['wady'] ?? '');
+        echo "</div></div></div><div class='pd-c' data-pd-zw='" . $h(json_encode(array_merge($mz, $mw), JSON_UNESCAPED_UNICODE)) . "'>";
+        echo "<div class='pd-f'><span class='lbl'>Konsekwencja: nowa Wada</span><select name='wada[$id]' data-pd-w><option value=''>—</option>";
+        foreach (ZW_KAT_W as $kk => $kn) { echo "<optgroup label='" . $h($kn) . "'>"; foreach (ZW_KATEGORIA_W as $n => $k2) if ($k2 === $kk && !in_array($n, $mw, true)) echo "<option>" . $h($n) . "</option>"; echo "</optgroup>"; }
+        echo "</select><small class='pd-hint' data-pd-ww style='color:#ff3d5e'></small></div>";
+        echo "<div class='pd-2'><div class='pd-f'><span class='lbl'>Nagroda: nowa Zaleta</span><select name='zal[$id]' data-pd-z><option value=''>—</option>";
+        foreach (ZW_KAT_Z as $kk => $kn) { echo "<optgroup label='" . $h($kn) . "'>"; foreach (ZW_KATEGORIA_Z as $n => $k2) if ($k2 === $kk && !in_array($n, $mz, true)) echo "<option>" . $h($n) . "</option>"; echo "</optgroup>"; }
+        echo "</select></div><div class='pd-f'><span class='lbl'>Usuń Zaletę / Wadę</span><select name='usun[$id]'><option value=''>—</option>";
+        foreach (array_merge($mz, $mw) as $n) echo "<option>" . $h($n) . "</option>";
+        echo "</select></div></div><small class='pd-hint' data-pd-zz style='color:#ff3d5e'></small>";
         echo $g['_uraz'] >= 3 ? "<label class='pd-uraz'><input type='checkbox' name='rek[]' value='$id' checked><span>Z trackera walki: <b>Uraz " . RW_URAZ[min(4, $g['_uraz'])] . "</b>. Na karcie: <b>Rekonwalescencja " . PD_DNI_REKONW . " dni</b>.</span></label>"
                               : "<p class='pd-hint'>" . ($g['_uraz'] ? 'Uraz ' . RW_URAZ[$g['_uraz']] . ' — nie przechodzi na kartę.' : 'Bez Urazów z walki.') . "</p>";
         echo "<div class='pd-f'><span class='lbl'>Wpis na Oś Czasu</span><textarea name='os[$id]' maxlength='1000' style='min-height:70px' placeholder='Co ta postać zrobiła w tej Opowieści'></textarea></div></div></div>";
@@ -159,7 +182,11 @@ function pd_formularz(mysqli $db, array $s, string $tab, string $blad = ''): voi
     echo "</div><p class='pd-hint'>Podsumowanie działa od razu. Adminka Fabularna ma " . PD_DNI_PRZEGLADU . " dni na przegląd i poprawki.</p><button class='pd-btn' type='submit'>Zakończ i opublikuj</button></form></div>";
     echo "<script>document.querySelectorAll('[data-pd]').forEach(c=>{const s=c.querySelector('[data-pd-lv]'),r=c.querySelector('[data-pd-pw]'),o=r.nextElementSibling,m=c.querySelector('[data-pd-min]');
       s.onchange=()=>{const x=s.selectedOptions[0];r.min=x.dataset.min;r.max=x.dataset.max;r.value=Math.round((+x.dataset.min+ +x.dataset.max)/2);o.textContent=r.value;m.textContent=x.dataset.min;c.style.setProperty('--lc',x.dataset.kolor)};
-      r.oninput=()=>o.textContent=r.value;s.onchange()});</script>";
+      r.oninput=()=>o.textContent=r.value;s.onchange()});
+      const PP=" . json_encode(ZW_PARY, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS) . ",WK=n=>PP.filter(p=>p.includes(n)).map(p=>p[0]===n?p[1]:p[0]);
+      document.querySelectorAll('[data-pd-zw]').forEach(c=>{const ma=JSON.parse(c.dataset.pdZw),w=c.querySelector('[data-pd-w]'),z=c.querySelector('[data-pd-z]'),ww=c.querySelector('[data-pd-ww]'),zz=c.querySelector('[data-pd-zz]');
+        const up=()=>{const s=w.value?WK(w.value).filter(x=>ma.includes(x)):[];ww.textContent=s.length?'Postać utraci: '+s.join(', '):'';
+          const k=z.value?WK(z.value).filter(x=>ma.includes(x)||x===w.value):[];zz.textContent=k.length?'Ta Zaleta wyklucza się z: '+k.join(', ')+' — nie zostanie dodana.':''};w.onchange=up;z.onchange=up});</script>";
 }
 
 /** Nad starym widokiem Podsumowania: Wieść + PW/gotówka postaci. */
@@ -194,7 +221,7 @@ function pd_widget(mysqli $db): void {
 function pd_os_czasu(mysqli $db, int $gid): void {
     $h = 'rw_h';
     $g = db_wiersz($db, "SELECT pw, rekonwalescencja_do, TIMESTAMPDIFF(DAY, NOW(), rekonwalescencja_do) AS dni FROM gracze WHERE id = ?", [$gid]);
-    $l = db_wiersze($db, "SELECT o.*, s.tytul, s.poziom AS s_poziom, p.pw, p.gotowka, p.przedmiot, p.poziom_postaci, p.konsekwencja_wada, p.rekonwalescencja
+    $l = db_wiersze($db, "SELECT o.*, s.tytul, s.poziom AS s_poziom, p.pw, p.gotowka, p.przedmiot, p.poziom_postaci, p.konsekwencja_wada, p.rekonwalescencja, p.nowa_zaleta, p.usuniete
         FROM os_czasu o LEFT JOIN sesje_rpg s ON s.id = o.sesja_id LEFT JOIN sesje_podsumowanie p ON p.sesja_id = o.sesja_id AND p.gracz_id = o.gracz_id
         WHERE o.gracz_id = ? ORDER BY o.data DESC LIMIT 50", [$gid]);
     echo "<div class='blok'><div class='blok-tytul'>🕰 Oś Czasu <span class='note'>PW łącznie: <b style='color:#fff'>" . (int)$g['pw'] . "</b></span></div>";
@@ -206,7 +233,7 @@ function pd_os_czasu(mysqli $db, int $gid): void {
     echo "<div style='display:flex;flex-direction:column;gap:10px;padding-left:22px;border-left:2px solid rgba(255,23,68,.5)'>";
     foreach ($l as $o) {
         $kol = $o['zrodlo'] === 'uniwersytet' ? '#4ad6ff' : (RP_POZIOMY[$o['poziom_postaci'] ?: ($o['s_poziom'] ?? '')]['kolor'] ?? '#ff3d5e');
-        $meta = $o['zrodlo'] === 'opowiesc' && $o['tytul'] ? $h($o['tytul']) . " · " . $h(RP_POZIOMY[$o['poziom_postaci']]['n'] ?? '') . " · <b style='color:#fff'>+" . (int)$o['pw'] . " PW</b>" . ((int)$o['gotowka'] ? ' · ' . number_format((int)$o['gotowka'], 0, ',', ' ') . ' $' : '') . ($o['przedmiot'] ? ' · ' . $h($o['przedmiot']) : '') . ($o['konsekwencja_wada'] ? ' · Wada: ' . $h($o['konsekwencja_wada']) : '') . ((int)$o['rekonwalescencja'] ? ' · Rekonwalescencja' : '')
+        $meta = $o['zrodlo'] === 'opowiesc' && $o['tytul'] ? $h($o['tytul']) . " · " . $h(RP_POZIOMY[$o['poziom_postaci']]['n'] ?? '') . " · <b style='color:#fff'>+" . (int)$o['pw'] . " PW</b>" . ((int)$o['gotowka'] ? ' · ' . number_format((int)$o['gotowka'], 0, ',', ' ') . ' $' : '') . ($o['przedmiot'] ? ' · ' . $h($o['przedmiot']) : '') . ($o['konsekwencja_wada'] ? ' · Wada: ' . $h($o['konsekwencja_wada']) : '') . ($o['nowa_zaleta'] ? ' · Zaleta: ' . $h($o['nowa_zaleta']) : '') . ($o['usuniete'] ? ' · Utracone: ' . $h($o['usuniete']) : '') . ((int)$o['rekonwalescencja'] ? ' · Rekonwalescencja' : '')
               : ($o['zrodlo'] === 'uniwersytet' ? 'Uniwersytet' : $h($o['zrodlo']));
         echo "<div style='position:relative;padding:10px 12px;background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.08)'><i style='position:absolute;left:-29px;top:13px;width:12px;height:12px;transform:rotate(45deg);background:$kol;box-shadow:0 0 8px $kol'></i>"
            . "<div style='display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap'><span style=\"font-family:'Oswald',sans-serif;letter-spacing:1px;color:#fff\">$meta</span><small style=\"font-family:'JetBrains Mono',monospace;color:#cfc6d2\">" . date('d.m.Y', strtotime($o['data'])) . "</small></div>"
