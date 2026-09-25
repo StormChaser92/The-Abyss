@@ -27,6 +27,16 @@ $SALE = [
 $sala = isset($_GET['sala']) ? preg_replace('/[^a-z0-9\-]/', '', strtolower($_GET['sala'])) : 'lobby';
 if (!isset($SALE[$sala])) $sala = 'lobby';
 $dane_sali = $SALE[$sala];
+
+// ── WYDARZENIA W KLUBIE (Opowieści „klub”) — includes/klub_opowiesc.php ──
+require_once __DIR__ . "/../includes/klub_opowiesc.php";
+$ko_sesja = $sala === 'sala-glowna' ? ko_wybierz($polaczenie, (int)$id_gracza) : null;
+$ko_mg = $ko_sesja && ko_prowadzi($polaczenie, $ko_sesja, (int)$id_gracza);
+$ko_blad = '';
+if ($ko_mg) {
+    $GLOBALS['PM_POWROT'] = 'game.php?page=czat&sala=sala-glowna&op=' . (int)$ko_sesja['id'];
+    $ko_blad = pm_obsluz($polaczenie, $ko_sesja, (int)$id_gracza, true, true);
+}
 $komunikat = "";
 
 // ── DANE GRACZA ────────────────────────────────────────────────────
@@ -1102,6 +1112,7 @@ $licznik_sal = klub_licznik_sal($polaczenie);
 $lacznie_w_klubie = array_sum($licznik_sal);
 ?>
 
+<?php if ($sala === 'sala-glowna') ko_pasek($polaczenie, $ko_sesja, (int)$id_gracza); ?>
 <div class="klub-wrap">
 
     <div class="klub-topbar">
@@ -1266,3 +1277,4 @@ $lacznie_w_klubie = array_sum($licznik_sal);
 
 <!-- ══ JS RICH CHAT (auto-refresh, parser, AJAX) ══════════════ -->
 <script src="js/klub.js?v=3"></script>
+<?php if ($ko_mg) pm_render($polaczenie, $ko_sesja, (int)$id_gracza, true, true, $ko_blad); ?>

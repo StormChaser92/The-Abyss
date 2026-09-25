@@ -245,17 +245,10 @@ function czy_manager($id_gracza, $id_firmy) {
 }
 
 // ────────────────────────────────────────────────────────────────────
-// czy_mg($id_gracza) — czy gracz to Mistrz Gry (admin uprawnień)
+// czy_mg($id_gracza | $login) — jedna definicja w config/mg.php
+// (po id sprawdza is_mg i listę loginów MG; wcześniej były dwie funkcje o tej nazwie)
 // ────────────────────────────────────────────────────────────────────
-function czy_mg($id_gracza) {
-    global $polaczenie;
-    $id_gracza = (int)$id_gracza;
-    if ($id_gracza <= 0) return false;
-    $r = $polaczenie->query("SELECT is_mg FROM gracze WHERE id = $id_gracza");
-    if (!$r || $r->num_rows === 0) return false;
-    $row = $r->fetch_assoc();
-    return !empty($row['is_mg']);
-}
+require_once __DIR__ . '/../config/mg.php';
 
 // ────────────────────────────────────────────────────────────────────
 // policz_pracownikow($id_firmy) — liczba pracowników (wliczając właściciela)

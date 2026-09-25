@@ -5,6 +5,7 @@ require_once __DIR__ . '/../config/zawody.php';
 require_once __DIR__ . '/../config/rp_helpers.php';
 require_once __DIR__ . '/../config/uniwersytet.php';
 require_once __DIR__ . '/../includes/karta_profesje.php';
+require_once __DIR__ . '/../includes/podsumowanie.php';
 
 $id_gracza = $_SESSION['id_gracza'];
 
@@ -552,6 +553,13 @@ $konflikty = [
     ['Świetna Pamięć Słuchowa','Głuchy','Niedosłuch'],
 ];
 
+// ── PUNKTY ZDOLNOŚCI: nowe Zalety/Wady, kategorie, pary wykluczeń (config/zalety_wady.php) ──
+require_once __DIR__ . '/../config/zalety_wady.php';
+require_once __DIR__ . '/../includes/karta_zalety.php';
+$wszystkie_zalety_def += ZW_NOWE_ZALETY;
+$wszystkie_wady_def   += ZW_NOWE_WADY;
+$zw_pary = zw_pary($konflikty);
+
 // Pobierz dane gracza (podstawowe — do walidacji POST)
 $row = $polaczenie->query("SELECT zalety,wady,umiejetnosc_szabrowania,umiejetnosc_inzynierii,pochodzenie FROM gracze WHERE id=$id_gracza")->fetch_assoc();
 $aktualne_zalety = ($row['zalety']=='Brak'||empty($row['zalety'])) ? [] : explode(", ",$row['zalety']);
@@ -566,34 +574,25 @@ $limit_cech = ($poch_wstepne && isset($poch_wstepne['bonusy']['limit_cech']))
     ? (int)$poch_wstepne['bonusy']['limit_cech']
     : 7;
 
-// ── ZAPIS CECH ─────────────────────────────────────────────────
+// ── ZAPIS ZALET I WAD (Punkty Zdolności) ───────────────────────
+// Bonus Pochodzenia do dawnego limitu cech (np. 8 zamiast 7) zamienia się w dodatkowe PZ.
+$zw_bonus = max(0, $limit_cech - 7);
+$blad_cech = $blad_cech ?? '';
 if ($_SERVER['REQUEST_METHOD']=='POST' && isset($_POST['zapisz_cechy'])) {
-    $nz = array_values(array_filter((array)($_POST['zalety'] ?? []), 'is_string'));
-    $nw = array_values(array_filter((array)($_POST['wady']   ?? []), 'is_string'));
-    // Tylko cechy z katalogu — wcześniej formularz przyjmował dowolny tekst jako zaletę.
-    $znane_z = array_map('strval', array_keys($wszystkie_zalety_def));
-    $znane_w = array_map('strval', array_keys($wszystkie_wady_def));
-    $nz = array_values(array_intersect($nz, $znane_z));
-    $nw = array_values(array_intersect($nw, $znane_w));
-    $az = array_unique(array_merge($aktualne_zalety,$nz));
-    $aw = array_unique(array_merge($aktualne_wady,$nw));
-    $all = array_merge($az,$aw);
-    if (in_array('Wykształcony', $nz, true) && !in_array('Wykształcony', $aktualne_zalety, true) && !uni_ma_licencjat($polaczenie, (int)$id_gracza)) {
+    $zw_g = db_wiersz($polaczenie, "SELECT poziom, zw_zmiana_uzyta FROM gracze WHERE id = ?", [(int)$id_gracza]);
+    $nz = array_values(array_unique(array_intersect(array_filter((array)($_POST['zalety'] ?? []), 'is_string'), array_map('strval', array_keys($wszystkie_zalety_def)))));
+    $nw = array_values(array_unique(array_intersect(array_filter((array)($_POST['wady']   ?? []), 'is_string'), array_map('strval', array_keys($wszystkie_wady_def)))));
+    if (!empty($zw_g['zw_zmiana_uzyta'])) {
+        $blad_cech = "Darmowa zmiana została już wykorzystana. Zalety i Wady zmienia teraz Mistrz Gry w Podsumowaniu.";
+    } elseif (in_array('Wykształcony', $nz, true) && !uni_ma_licencjat($polaczenie, (int)$id_gracza)) {
         $blad_cech = "Zaleta „Wykształcony” wymaga co najmniej jednego Licencjatu z Uniwersytetu.";
-    } elseif (count($az)>$limit_cech || count($aw)>$limit_cech) {
-        $blad_cech = "Osiągnięto maksymalny limit $limit_cech zalet i $limit_cech wad!";
+    } elseif ($e = zw_waliduj($nz, $nw, zw_pula((int)$zw_g['poziom'], $zw_bonus), $zw_pary)) {
+        $blad_cech = $e;
     } else {
-        $ok = true;
-        foreach ($konflikty as $g) {
-            $f = array_intersect($g,$all);
-            if (count($f)>1) { $ok=false; $blad_cech="Wykluczające się cechy: ".implode(" oraz ",$f)."!"; break; }
-        }
-        if ($ok) {
-            $zt = empty($az)?"Brak":$polaczenie->real_escape_string(implode(", ",$az));
-            $wt = empty($aw)?"Brak":$polaczenie->real_escape_string(implode(", ",$aw));
-            $polaczenie->query("UPDATE gracze SET zalety='$zt',wady='$wt' WHERE id=$id_gracza");
-            echo "<script>location.href='game.php?page=karta';</script>"; exit;
-        }
+        // Warunek w UPDATE: dwa szybkie kliknięcia nie zapiszą dwóch zmian.
+        db_zmien($polaczenie, "UPDATE gracze SET zalety = ?, wady = ?, zw_zmiana_uzyta = 1 WHERE id = ? AND zw_zmiana_uzyta = 0",
+            [$nz ? implode(', ', $nz) : 'Brak', $nw ? implode(', ', $nw) : 'Brak', (int)$id_gracza]);
+        echo "<script>location.href='game.php?page=karta';</script>"; exit;
     }
 }
 
@@ -1144,126 +1143,11 @@ $reputacja = reputacja_grupowa($gracz);
     </div>
 </div>
 
-<!-- ══ CHARAKTER ══════════════════════════════════════════════════ -->
-<div class="blok">
-    <div class="blok-tytul">🎭 Charakter <span class="note">cechy fabularne</span></div>
-    <p style="color:var(--txt-dim);margin-bottom:18px;font-size:.88em;line-height:1.5">
-        Limit <?php echo $limit_cech; ?> zalet i <?php echo $limit_cech; ?> wad. <strong style="color:var(--neon-red-hot)">Nabytych wad nie można cofnąć.</strong>
-    </p>
+<!-- ══ ZALETY I WADY (includes/karta_zalety.php) ═══════════════════ -->
+<?php zw_render($gracz, $wszystkie_zalety_def, $wszystkie_wady_def, $zw_pary, zw_pula((int)$gracz['poziom'], $zw_bonus), $blad_cech); ?>
 
-    <form method="POST" action="game.php?page=karta">
-    <div class="cechy-flex">
-
-        <!-- ZALETY -->
-        <div class="cechy-kol">
-            <div class="cechy-kol-tytul zalety-tytul">
-                Zalety <span class="cnt">(<?php echo count($aktualne_zalety); ?>/<?php echo $limit_cech; ?>)</span>
-            </div>
-            <div>
-                <?php foreach($aktualne_zalety as $z) echo "<span class='cecha-tag z'>✓ ".htmlspecialchars($z)."</span>"; ?>
-                <?php if(empty($aktualne_zalety)) echo "<span class='brak-cech'>// Brak nabytej przewagi</span>"; ?>
-            </div>
-            <button type="button" class="btn-toggle z" onclick="tog('lista-z')">
-                <span>▸ Dobierz zalety</span>
-                <span class="free"><?php echo $limit_cech-count($aktualne_zalety); ?> wolnych</span>
-            </button>
-            <div id="lista-z" class="lista-uk">
-                <?php
-                // Grupowanie zalet według pola 'grupa'
-                $grupy_zal = [];
-                foreach ($wszystkie_zalety_def as $n => $d) {
-                    $g = $d['grupa'] ?? 'Inne';
-                    if (!isset($grupy_zal[$g])) $grupy_zal[$g] = [];
-                    $grupy_zal[$g][$n] = $d;
-                }
-                foreach ($grupy_zal as $gn => $cechy): ?>
-                    <div class="grupa-naglowek zal"><?php echo htmlspecialchars($gn); ?></div>
-                    <?php foreach ($cechy as $n => $d):
-                        $nabyta = in_array($n, $aktualne_zalety); ?>
-                    <label class="cb-item<?php echo $nabyta?' nabyta':''; ?>">
-                        <input type="checkbox" name="zalety[]" value="<?php echo htmlspecialchars($n); ?>" class="cecha-cb"
-                            <?php echo $nabyta?'checked onclick="return false;"':''; ?>>
-                        <div class="cb-tresc">
-                            <div class="cb-nazwa"><?php echo htmlspecialchars($n); ?><?php if($nabyta) echo " <span style='color:var(--neon-green);font-size:.8em'>(Nabyte)</span>"; ?></div>
-                            <div class="cb-opis"><?php echo htmlspecialchars($d['opis']); ?></div>
-                        </div>
-                        <div class="cecha-tooltip tt-prawo">
-                            <div class="tt-header">
-                                <div class="tt-nazwa"><?php echo htmlspecialchars($n); ?></div>
-                                <div class="tt-grupa zal"><?php echo htmlspecialchars($gn); ?></div>
-                            </div>
-                            <div class="tt-sekcja">
-                                <div class="tt-label">▸ Opis fabularny</div>
-                                <div class="tt-tresc"><?php echo htmlspecialchars($d['opis']); ?></div>
-                            </div>
-                            <div class="tt-sekcja">
-                                <div class="tt-label">▸ Wpływ na grę</div>
-                                <div class="tt-tresc"><?php echo htmlspecialchars($d['wplyw']); ?></div>
-                            </div>
-                        </div>
-                    </label>
-                    <?php endforeach; ?>
-                <?php endforeach; ?>
-            </div>
-        </div>
-
-        <!-- WADY -->
-        <div class="cechy-kol">
-            <div class="cechy-kol-tytul wady-tytul">
-                Wady <span class="cnt">(<?php echo count($aktualne_wady); ?>/<?php echo $limit_cech; ?>)</span>
-            </div>
-            <div>
-                <?php foreach($aktualne_wady as $w) echo "<span class='cecha-tag w'>✗ ".htmlspecialchars($w)."</span>"; ?>
-                <?php if(empty($aktualne_wady)) echo "<span class='brak-cech'>// Brak widocznych słabości</span>"; ?>
-            </div>
-            <button type="button" class="btn-toggle w" onclick="tog('lista-w')">
-                <span>▸ Dobierz wady</span>
-                <span class="free"><?php echo $limit_cech-count($aktualne_wady); ?> wolnych</span>
-            </button>
-            <div id="lista-w" class="lista-uk">
-                <?php
-                // Grupowanie wad według pola 'grupa'
-                $grupy_wad = [];
-                foreach ($wszystkie_wady_def as $n => $d) {
-                    $g = $d['grupa'] ?? 'Inne';
-                    if (!isset($grupy_wad[$g])) $grupy_wad[$g] = [];
-                    $grupy_wad[$g][$n] = $d;
-                }
-                foreach ($grupy_wad as $gn => $cechy): ?>
-                    <div class="grupa-naglowek wad"><?php echo htmlspecialchars($gn); ?></div>
-                    <?php foreach ($cechy as $n => $d):
-                        $nabyta = in_array($n, $aktualne_wady); ?>
-                    <label class="cb-item<?php echo $nabyta?' nabyta':''; ?>">
-                        <input type="checkbox" name="wady[]" value="<?php echo htmlspecialchars($n); ?>" class="cecha-cb"
-                            <?php echo $nabyta?'checked onclick="return false;"':''; ?>>
-                        <div class="cb-tresc">
-                            <div class="cb-nazwa"><?php echo htmlspecialchars($n); ?><?php if($nabyta) echo " <span style='color:var(--neon-red-hot);font-size:.8em'>(Nabyte)</span>"; ?></div>
-                            <div class="cb-opis"><?php echo htmlspecialchars($d['opis']); ?></div>
-                        </div>
-                        <div class="cecha-tooltip tt-lewo">
-                            <div class="tt-header">
-                                <div class="tt-nazwa"><?php echo htmlspecialchars($n); ?></div>
-                                <div class="tt-grupa wad"><?php echo htmlspecialchars($gn); ?></div>
-                            </div>
-                            <div class="tt-sekcja">
-                                <div class="tt-label">▸ Opis fabularny</div>
-                                <div class="tt-tresc"><?php echo htmlspecialchars($d['opis']); ?></div>
-                            </div>
-                            <div class="tt-sekcja">
-                                <div class="tt-label">▸ Wpływ na grę</div>
-                                <div class="tt-tresc"><?php echo htmlspecialchars($d['wplyw']); ?></div>
-                            </div>
-                        </div>
-                    </label>
-                    <?php endforeach; ?>
-                <?php endforeach; ?>
-            </div>
-        </div>
-    </div>
-
-    <button type="submit" name="zapisz_cechy" class="btn-zapisz-cechy">Zaktualizuj Historię Postaci →</button>
-    </form>
-</div>
+<!-- ══ OŚ CZASU (includes/podsumowanie.php) ═══════════════════════ -->
+<?php pd_os_czasu($polaczenie, (int)$id_gracza); ?>
 
 <!-- ══ KARIERA ════════════════════════════════════════════════════ -->
 <div class="blok">
@@ -1347,31 +1231,4 @@ function tog(id) {
     el.style.display = el.style.display==='block' ? 'none' : 'block';
 }
 
-// ── WALIDACJA CECH ────────────────────────────────────────
-const konflikty = <?php echo json_encode($konflikty); ?>;
-const LIMIT = <?php echo (int)$limit_cech; ?>;
-document.querySelectorAll('.cecha-cb').forEach(cb => cb.addEventListener('change', validate));
-function validate() {
-    const sel = [...document.querySelectorAll('.cecha-cb:checked')].map(c=>c.value);
-    const cz  = document.querySelectorAll('input[name="zalety[]"]:checked').length;
-    const cw  = document.querySelectorAll('input[name="wady[]"]:checked').length;
-    document.querySelectorAll('.cecha-cb').forEach(cb => {
-        if (cb.classList.contains('nabyta')) return;
-        let blok = false;
-        if (!cb.checked) {
-            if (cb.name==='zalety[]' && cz>=LIMIT) blok=true;
-            if (cb.name==='wady[]'   && cw>=LIMIT) blok=true;
-        }
-        konflikty.forEach(g => {
-            if (g.includes(cb.value)) {
-                const other = g.filter(x => sel.includes(x) && x!==cb.value);
-                if (other.length) { blok=true; cb.checked=false; }
-            }
-        });
-        cb.disabled = blok;
-        cb.closest('.cb-item').style.opacity = blok ? '.3' : '1';
-        cb.closest('.cb-item').style.cursor  = blok ? 'not-allowed' : 'pointer';
-    });
-}
-validate();
 </script>

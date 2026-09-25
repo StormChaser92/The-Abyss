@@ -3,10 +3,18 @@
    THE ABYSS — CONFIG/RANGI.PHP
    Rangi prowadzących, poziomy trudności i rodzaje Opowieści.
    Ranga siedzi w gracze.ranga_rp (nadaje ją MG lub Adminka: pages/rangi.php).
-   Loginy z config/mg.php są zawsze traktowane jak MG.
+   Konta z gracze.is_mg = 1 albo z listy $MISTRZOWIE_GRY (config/mg.php) są zawsze MG.
+   Uwaga: nie dołączamy config/mg.php — helpers/firmy.php ma własne czy_mg()
+   i dwie deklaracje kończą się błędem „Cannot redeclare czy_mg()”.
    ═══════════════════════════════════════════════════════════════════════ */
 
-require_once __DIR__ . '/mg.php';
+/** Czy konto jest MG z urzędu (flaga is_mg lub login z listy MG). */
+function rp_mg_konto(array $g): bool {
+    global $MISTRZOWIE_GRY;
+    if (!empty($g['is_mg'])) return true;
+    foreach (($MISTRZOWIE_GRY ?? ['StormChaser92']) as $l) if (strcasecmp((string)$l, (string)($g['login'] ?? '')) === 0) return true;
+    return false;
+}
 
 const RP_RANGI = [
     'gracz'     => ['n' => 'Gracz',             'typy' => ['sesja', 'swobodna'],         'poziomy' => ['swobodna', 'niski', 'umiarkowany']],
@@ -35,10 +43,10 @@ const RP_POZIOMY = [
 function rp_ranga(mysqli $db, int $gid): string {
     static $c = [];
     if (isset($c[$gid])) return $c[$gid];
-    $g = db_wiersz($db, "SELECT login, ranga_rp FROM gracze WHERE id = ?", [$gid]);
+    $g = db_wiersz($db, "SELECT login, ranga_rp, is_mg FROM gracze WHERE id = ?", [$gid]);
     $r = $g['ranga_rp'] ?? 'gracz';
     if (!isset(RP_RANGI[$r])) $r = 'gracz';
-    if ($r === 'gracz' && $g && czy_mg($g['login'])) $r = 'mg';
+    if ($r === 'gracz' && $g && rp_mg_konto($g)) $r = 'mg';
     return $c[$gid] = $r;
 }
 
@@ -57,7 +65,7 @@ function rp_wymaga_akceptacji(string $ranga, string $typ): bool { return !empty(
 function rp_nadzorcy(mysqli $db): array {
     global $MISTRZOWIE_GRY;
     $ids = [];
-    foreach (db_wiersze($db, "SELECT id, login, ranga_rp FROM gracze WHERE ranga_rp IN ('mg','adminka')") as $w) $ids[(int)$w['id']] = true;
-    foreach ($MISTRZOWIE_GRY as $l) { $w = db_wiersz($db, "SELECT id FROM gracze WHERE login = ?", [$l]); if ($w) $ids[(int)$w['id']] = true; }
+    foreach (db_wiersze($db, "SELECT id FROM gracze WHERE ranga_rp IN ('mg','adminka') OR is_mg = 1") as $w) $ids[(int)$w['id']] = true;
+    foreach (($MISTRZOWIE_GRY ?? ['StormChaser92']) as $l) { $w = db_wiersz($db, "SELECT id FROM gracze WHERE login = ?", [$l]); if ($w) $ids[(int)$w['id']] = true; }
     return array_keys($ids);
 }

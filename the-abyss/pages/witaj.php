@@ -484,3 +484,7 @@ $akcje = match($klasa) {
 </div>
 
 <?php endif; ?>
+
+<?php // Wieści z Centrum Opowieści (includes/podsumowanie.php)
+require_once __DIR__ . '/../includes/podsumowanie.php';
+pd_widget($polaczenie); ?>

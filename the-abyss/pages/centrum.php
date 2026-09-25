@@ -2,6 +2,7 @@
 require_once "db.php";
 require_once __DIR__ . '/../includes/bezpieczne.php';
 require_once __DIR__ . '/../config/rangi.php';
+require_once __DIR__ . '/../includes/podsumowanie.php';
 $id_gracza = (int)$_SESSION['id_gracza'];
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -187,7 +188,7 @@ $link = fn(array $z) => 'game.php?page=centrum&' . http_build_query(array_filter
   <header class="co-head">
     <div><div class="lbl">Ranga: <?php echo $h($R['n']); ?></div><h1>Centrum Opowieści</h1><p>Sesje prowadzone przez Mistrzów Gry, Wydarzenia w Klubie i Opowieści Swobodne, które gracze zakładają sami.</p></div>
     <div class="co-act">
-      <?php if ($nadzor): ?><a class="co-btn ghost" href="game.php?page=centrum&zgl=1#zgl">Zgłoszenia <?php if ($zgloszenia) echo '<b>' . count($zgloszenia) . '</b>'; ?></a><a class="co-btn ghost" href="game.php?page=rangi">Rangi</a><?php endif; ?>
+      <?php if ($nadzor): ?><a class="co-btn ghost" href="game.php?page=centrum&zgl=1#zgl">Zgłoszenia <?php if ($zgloszenia) echo '<b>' . count($zgloszenia) . '</b>'; ?></a><a class="co-btn ghost" href="game.php?page=przeglad">Przegląd</a><a class="co-btn ghost" href="game.php?page=rangi">Rangi</a><?php endif; ?>
       <a class="co-btn" href="#nowa" onclick="document.getElementById('nowa').open=true">+ Załóż Opowieść</a>
     </div>
   </header>
@@ -212,6 +213,23 @@ $link = fn(array $z) => 'game.php?page=centrum&' . http_build_query(array_filter
   </section>
   <?php endif; ?>
 
+  <?php $widok = ($_GET['widok'] ?? '') === 'wiesci' ? 'wiesci' : 'lista'; ?>
+  <div class="co-bar" style="padding:0;background:none;border:0;border-bottom:1px solid var(--bs);gap:2px">
+    <a class="co-chip<?php echo $widok === 'lista' ? ' on' : ''; ?>" href="game.php?page=centrum">Opowieści</a>
+    <a class="co-chip<?php echo $widok === 'wiesci' ? ' on' : ''; ?>" href="game.php?page=centrum&widok=wiesci">Wieści</a>
+  </div>
+  <?php if ($widok === 'wiesci'): ?>
+  <section style="display:flex;flex-direction:column;gap:12px">
+    <?php $ws = pd_wiesci($polaczenie); foreach ($ws as $w): $L = RP_POZIOMY[$w['poziom']] ?? RP_POZIOMY['niski']; ?>
+      <article class="co-card" id="w<?php echo (int)$w['id']; ?>" style="--lc:<?php echo $L['kolor']; ?>;padding:16px 18px">
+        <div class="co-tags"><span class="co-tag lv"><?php echo $h($L['n']); ?></span><span class="co-tag"><?php echo date('d.m.Y', strtotime($w['data_zakonczenia'])); ?></span></div>
+        <h3 style="font-family:'Cormorant Garamond',serif;font-weight:600;font-size:1.7em;letter-spacing:0"><a href="game.php?page=pokoj_sesji&id=<?php echo (int)$w['id']; ?>&zakladka=podsumowanie"><?php echo $h($w['wiesc_tytul']); ?></a></h3>
+        <p style="font-family:'Cormorant Garamond',serif;font-size:1.15em;line-height:1.55;color:#ece4ec;-webkit-line-clamp:unset;display:block"><?php echo nl2br($h($w['wiesc_tresc'])); ?></p>
+        <div class="co-meta"><span>Prowadził(a) <b><?php echo $h($w['prow']); ?></b></span><?php if ($w['uczestnicy']) echo '<span>' . $h($w['uczestnicy']) . '</span>'; ?></div>
+      </article>
+    <?php endforeach; if (!$ws) echo '<div class="co-empty">Jeszcze nie ma Wieści.</div>'; ?>
+  </section>
+  <?php else: ?>
   <div class="co-bar">
     <a class="co-chip<?php echo !$f_typ ? ' on' : ''; ?>" href="<?php echo $h($link(['typ' => ''])); ?>">Wszystkie</a>
     <?php foreach (RP_TYPY as $k => $t): ?><a class="co-chip<?php echo $f_typ === $k ? ' on' : ''; ?>" href="<?php echo $h($link(['typ' => $k])); ?>"><?php echo $h($t['n']); ?></a><?php endforeach; ?>
@@ -242,6 +260,8 @@ $link = fn(array $z) => 'game.php?page=centrum&' . http_build_query(array_filter
     </div></div>
   <?php endforeach; ?>
   </section>
+
+  <?php endif; ?>
 
   <details class="co-new" id="nowa"<?php echo $blad ? ' open' : ''; ?>>
     <summary><span class="lbl">Zakładasz jako: <?php echo $h($R['n']); ?></span><div style="font-family:'Oswald',sans-serif;font-size:1.5em;letter-spacing:3px;text-transform:uppercase;color:#fff">Nowa Opowieść</div></summary>

@@ -19,12 +19,30 @@ const PM_KOSCI  = [4, 6, 8, 10, 12, 20, 100];
 function pm_prowadzacy(array $s, bool $czy_mg): bool { return $czy_mg && ($s['poziom'] ?? '') !== 'swobodna'; }
 function pm_sam(array $s, bool $czy_mg, bool $zaakc): bool { return $zaakc && ($s['poziom'] ?? '') === 'swobodna'; }
 function pm_cechy(?string $s): array { return (!$s || $s === 'Brak') ? [] : array_values(array_filter(array_map('trim', explode(',', $s)), 'strlen')); }
-function pm_wroc(int $sid, string $tab = ''): void { echo "<script>location.href='game.php?page=pokoj_sesji&id=$sid" . ($tab ? "&pm=$tab" : '') . "';</script>"; exit; }
+/** Powrót po akcji. Na Sali Głównej Klubu czat.php ustawia $GLOBALS['PM_POWROT']. */
+function pm_wroc(int $sid, string $tab = ''): void {
+    $baza = $GLOBALS['PM_POWROT'] ?? "game.php?page=pokoj_sesji&id=$sid";
+    echo "<script>location.href=" . json_encode($baza . ($tab ? "&pm=$tab" : '')) . ";</script>"; exit;
+}
+function pm_klub(mysqli $db, int $sid): bool { return (db_wiersz($db, "SELECT typ_opowiesci FROM sesje_rpg WHERE id = ?", [$sid])['typ_opowiesci'] ?? '') === 'klub'; }
 
-/** Cele testów: zaakceptowani gracze + NPC Opowieści. */
+/** Gracze Opowieści: zaakceptowani (rola Gracz), a w Wydarzeniu w Klubie także goście obecni na Sali Głównej. */
+function pm_gracze(mysqli $db, int $sid): array {
+    $l = [];
+    foreach (db_wiersze($db, "SELECT g.* FROM sesje_uczestnicy u JOIN gracze g ON g.id = u.gracz_id WHERE u.sesja_id = ? AND u.rola = 'Gracz' AND u.status_akceptacji = 'Zaakceptowany' ORDER BY g.login", [$sid]) as $g) $l[(int)$g['id']] = $g;
+    if (pm_klub($db, $sid)) {
+        $mg = db_wiersze($db, "SELECT gracz_id FROM sesje_uczestnicy WHERE sesja_id = ? AND rola = 'Mistrz Gry'", [$sid]);
+        $bez = array_map(fn($r) => (int)$r['gracz_id'], $mg); $bez[] = (int)(db_wiersz($db, "SELECT mg_id FROM sesje_rpg WHERE id = ?", [$sid])['mg_id'] ?? 0);
+        foreach (db_wiersze($db, "SELECT * FROM gracze WHERE klub_sala = 'sala-glowna' AND ostatnia_aktywnosc >= NOW() - INTERVAL 5 MINUTE ORDER BY login") as $g)
+            if (!in_array((int)$g['id'], $bez, true)) $l[(int)$g['id']] = $g;
+    }
+    return $l;
+}
+
+/** Cele testów: gracze Opowieści + NPC. */
 function pm_cele(mysqli $db, int $sid): array {
     $c = [];
-    foreach (db_wiersze($db, "SELECT g.* FROM sesje_uczestnicy u JOIN gracze g ON g.id = u.gracz_id WHERE u.sesja_id = ? AND u.rola = 'Gracz' AND u.status_akceptacji = 'Zaakceptowany' ORDER BY g.login", [$sid]) as $g)
+    foreach (pm_gracze($db, $sid) as $g)
         $c['g' . $g['id']] = ['nazwa' => $g['login'], 'row' => $g, 'npc' => false, 'zal' => pm_cechy($g['zalety'] ?? ''), 'wad' => pm_cechy($g['wady'] ?? '')];
     foreach (db_wiersze($db, "SELECT * FROM sesje_npc WHERE sesja_id = ? ORDER BY nazwa", [$sid]) as $n)
         $c['n' . $n['id']] = ['nazwa' => $n['nazwa'], 'row' => $n, 'npc' => true, 'zal' => pm_cechy($n['zalety']), 'wad' => pm_cechy($n['wady'])];
@@ -34,13 +52,27 @@ function pm_cele(mysqli $db, int $sid): array {
 function pm_publikuj(mysqli $db, int $sid, int $autor, string $html): void {
     db_zmien($db, "INSERT INTO sesje_posty (sesja_id, autor_id, typ_postu, tresc) VALUES (?, ?, 'Rzut_Koscia', ?)", [$sid, $autor, $html]);
     db_zmien($db, "UPDATE sesje_rpg SET ostatnia_aktywnosc = NOW() WHERE id = ?", [$sid]);
+    // Wydarzenie w Klubie: ten sam rzut na czacie Sali Głównej (typ 'system' — klub.js wstawia HTML).
+    if (pm_klub($db, $sid)) db_zmien($db, "INSERT INTO czat (id_gracza, login, tresc, sala, typ) VALUES (0, 'system', ?, 'sala-glowna', 'system')", [$html]);
+}
+
+/** Zmiany po rzucie: walka (rw_zastosuj) i punkty testów złożonych. */
+function pm_ops(mysqli $db, int $sid, array $ops): void {
+    $walka = [];
+    foreach ($ops as $o) {
+        if ($o[0] !== 'zl') { $walka[] = $o; continue; }
+        db_zmien($db, "UPDATE sesje_test_zlozony SET suma = GREATEST(0, suma + ?) WHERE id = ? AND sesja_id = ? AND status = 'trwa'", [(int)$o[2], (int)$o[1], $sid]);
+        db_zmien($db, "UPDATE sesje_test_zlozony SET status = 'sukces' WHERE id = ? AND status = 'trwa' AND suma >= cel", [(int)$o[1]]);
+    }
+    if ($walka) rw_zastosuj($db, $sid, $walka);
 }
 
 /* ── TESTY ────────────────────────────────────────────────────────── */
-function pm_test(array $cele, array $p, ?string $lock): array {
+function pm_test(array $cele, array $p, ?string $lock, ?mysqli $db = null, int $sid = 0): array {
     global $UM_ATRYBUTY;
     $rodz = (string)($p['rodzaj'] ?? 'prosty');
     $ck = $lock ?? (string)($p['cel'] ?? '');
+    if (!in_array($rodz, ['prosty', 'atr', 'srednia', 'zdol', 'przec', 'zloz', 'praw', 'kosc'], true)) $rodz = 'prosty';
     $bez_celu = in_array($rodz, ['praw', 'kosc'], true);
     if (!$bez_celu && !isset($cele[$ck])) return ['blad' => 'Wybierz postać albo NPC.'];
     $C = $cele[$ck] ?? null;
@@ -54,18 +86,45 @@ function pm_test(array $cele, array $p, ?string $lock): array {
     }
     $m = $ryz + $cm + $mod_mg;
     $sd = trim(mb_substr((string)($p['sd'] ?? ''), 0, 200));
-    $h = ''; $sum = ''; $skrot = '';
+    $h = ''; $sum = ''; $skrot = ''; $ops = [];
 
-    if ($rodz === 'prosty' || $rodz === 'atr') {
+    if (in_array($rodz, ['prosty', 'atr', 'srednia', 'zdol'], true)) {
         if ($rodz === 'prosty') {
             $um = (string)($p['um'] ?? ''); if (!um_definicja($um)) return ['blad' => 'Wybierz Umiejętność.'];
-            $t = um_test($C['row'], $um, ($p['ag'] ?? 'g') === 'd' ? 'd' : 'g', $m); $nz = "$um (poz. {$t['poziom']})"; $lb = 'Test prosty';
-        } else {
+            $t = um_test($C['row'], $um, ($p['ag'] ?? 'g') === 'd' ? 'd' : 'g', $m); $nz = "$um (poz. {$t['poziom']})"; $lb = 'Test Umiejętności'; $opis = um_opis_testu($t);
+        } elseif ($rodz === 'atr') {
             $at = (string)($p['at'] ?? 'Z'); if (!isset($UM_ATRYBUTY[$at])) $at = 'Z';
-            $t = um_test_atrybutu($C['row'], $at, $m); $nz = $UM_ATRYBUTY[$at]['nazwa']; $lb = 'Test Atrybutu';
+            $t = um_test_atrybutu($C['row'], $at, $m); $nz = $UM_ATRYBUTY[$at]['nazwa']; $lb = 'Test Atrybutu'; $opis = um_opis_testu($t);
+        } else {
+            // Test średniej Atrybutów (min. 2) / Test Zdolności („Możliwości”): średnia wybranych Atrybutów, limit PE
+            $ak = array_values(array_unique(array_filter(array_map('strval', (array)($p['ats'] ?? [])), fn($k) => isset($UM_ATRYBUTY[$k]))));
+            if ($rodz === 'srednia' && count($ak) < 2) return ['blad' => 'Test średniej wymaga co najmniej 2 Atrybutów.'];
+            if (!$ak) return ['blad' => 'Wybierz Atrybut do testu Zdolności.'];
+            $sr = intdiv(array_sum(array_map(fn($k) => um_atrybut($C['row'], $k), $ak)), count($ak));
+            $nz = implode(' + ', array_map(fn($k) => $UM_ATRYBUTY[$k]['nazwa'], $ak));
+            $opis = (count($ak) > 1 ? "średnia $sr" : "$nz $sr") . ($m ? ' ' . rw_sgn($m) : '');
+            $lb = $rodz === 'srednia' ? 'Test średniej Atrybutów' : 'Test Zdolności';
+            if ($rodz === 'zdol') {
+                $zd = (string)($p['zd'] ?? '');
+                if ($zd === '' || !in_array($zd, $C['zal'], true)) {
+                    // Bez tej Zdolności rzutu się nie wykonuje — test jest automatycznie nieudany.
+                    $h = "<div class='pmr-row'><div class='pmr-d'><b>—</b><small>brak</small></div><div class='pmr-o'><strong>" . rw_h($zd ?: 'Zdolność') . "</strong><span>postać nie ma tej Zdolności</span></div><span class='pmr-s s-1'>Automatyczna porażka</span></div>";
+                    return ['html' => rw_karta($C['nazwa'], $lb, ($sd ? "<div class='pmr-sd'>" . rw_h($sd) . "</div>" : '') . $h), 'skrot' => "{$C['nazwa']}: brak Zdolności — automatyczna porażka", 'ops' => [], 'tytul' => "$lb · {$C['nazwa']}"];
+                }
+                $nz = "$zd · $nz";
+            }
+            $t = ['szansa' => rw_szansa($sr, $m)];
         }
-        $r = rw_k100(); $w = um_wynik($r, $t['szansa']);
-        $h = rw_wiersz($nz, $r, $t['szansa'], um_opis_testu($t), $w); $ty = $C['nazwa']; $skrot = "{$C['nazwa']} · $nz: $r / {$t['szansa']}% — {$w['nazwa']}";
+        $ty = $C['nazwa'];
+        if (!empty($p['auto']) && !$lock) {
+            // Automatyczny sukces: na prośbę gracza w NC, gdy szansa ≥ 50%. Nie dotyczy walki.
+            if ($t['szansa'] < 50) return ['blad' => "Automatyczny sukces wymaga szansy co najmniej 50% (jest {$t['szansa']}%)."];
+            $h = "<div class='pmr-row'><div class='pmr-d'><b>—</b><small>/ {$t['szansa']}%</small></div><div class='pmr-o'><strong>" . rw_h($nz) . "</strong><span>" . rw_h($opis) . " · bez rzutu</span></div><span class='pmr-s s1'>Automatyczny sukces</span></div>";
+            $skrot = "{$C['nazwa']} · $nz: automatyczny sukces ({$t['szansa']}%)";
+        } else {
+            $r = rw_k100(); $w = um_wynik($r, $t['szansa']);
+            $h = rw_wiersz($nz, $r, $t['szansa'], $opis, $w); $skrot = "{$C['nazwa']} · $nz: $r / {$t['szansa']}% — {$w['nazwa']}";
+        }
     } elseif ($rodz === 'przec') {
         $bk = (string)($p['cel_b'] ?? ''); if (!isset($cele[$bk]) || $bk === $ck) return ['blad' => 'Wybierz drugą stronę testu.'];
         $B = $cele[$bk]; $ua = (string)($p['um'] ?? ''); $ub = (string)($p['um_b'] ?? '');
@@ -78,11 +137,24 @@ function pm_test(array $cele, array $p, ?string $lock): array {
         $sum = $win ? 'Wygrywa <em>' . rw_h($win) . '</em>' : 'Remis'; $ty = "{$C['nazwa']} vs {$B['nazwa']}"; $lb = 'Test przeciwstawny';
         $skrot = "{$C['nazwa']} $ra/{$ta['szansa']}% vs {$B['nazwa']} $rb/{$tb['szansa']}% — " . ($win ?: 'remis');
     } elseif ($rodz === 'zloz') {
-        $lista = array_values(array_unique(array_filter(array_map('strval', (array)($p['z'] ?? [])), fn($n) => (bool)um_definicja($n))));
-        $lista = array_slice($lista, 0, 3); if (count($lista) < 2) return ['blad' => 'Test złożony wymaga co najmniej 2 Umiejętności.'];
-        $ok = 0;
-        foreach ($lista as $n) { $t = um_test($C['row'], $n, 'g', $m); $r = rw_k100(); $w = um_wynik($r, $t['szansa']); if ($w['sukces']) $ok++; $h .= rw_wiersz("$n (poz. {$t['poziom']})", $r, $t['szansa'], um_opis_testu($t), $w); }
-        $sum = "Sukcesy: <em>$ok / " . count($lista) . "</em>"; $ty = $C['nazwa']; $lb = 'Test złożony'; $skrot = "{$C['nazwa']}: $ok/" . count($lista) . ' sukcesów';
+        // Test złożony: seria testów rozłożona na tury, wyniki się sumują.
+        // Krytyczny sukces 3, sukces 2, minimalny 1, porażka 0, krytyczna porażka −1.
+        if (!$db) return ['blad' => 'Brak połączenia z bazą.'];
+        $um = (string)($p['um'] ?? ''); if (!um_definicja($um)) return ['blad' => 'Wybierz Umiejętność.'];
+        $zid = (int)($p['zl_id'] ?? 0);
+        if ($zid) { $Z = db_wiersz($db, "SELECT * FROM sesje_test_zlozony WHERE id = ? AND sesja_id = ? AND status = 'trwa'", [$zid, $sid]); if (!$Z) return ['blad' => 'Ten test złożony już się zakończył.']; }
+        else {
+            $zn = trim(mb_substr((string)($p['zl_nazwa'] ?? ''), 0, 80)); if ($zn === '') return ['blad' => 'Podaj nazwę nowego testu złożonego.'];
+            db_zmien($db, "INSERT INTO sesje_test_zlozony (sesja_id, nazwa, cel, tury) VALUES (?, ?, ?, ?)", [$sid, $zn, max(1, min(50, (int)($p['zl_cel'] ?? 10))), max(1, min(20, (int)($p['zl_tury'] ?? 3)))]);
+            $Z = db_wiersz($db, "SELECT * FROM sesje_test_zlozony WHERE id = ?", [(int)$db->insert_id]);
+        }
+        $t = um_test($C['row'], $um, 'g', $m); $r = rw_k100(); $w = um_wynik($r, $t['szansa']);
+        $pkt = [2 => 3, 1 => 2, 0 => 1, -1 => 0, -2 => -1][$w['poziom']];
+        $nowa = max(0, (int)$Z['suma'] + $pkt);
+        $h = rw_wiersz("$um (poz. {$t['poziom']})", $r, $t['szansa'], um_opis_testu($t), $w);
+        $sum = rw_h($Z['nazwa']) . ': ' . ($pkt > 0 ? "+$pkt" : ($pkt < 0 ? '−' . abs($pkt) : '0')) . " → <em>$nowa / {$Z['cel']}</em> <small>tura {$Z['tura']}/{$Z['tury']}</small>" . ($nowa >= (int)$Z['cel'] ? ' · <em>cel osiągnięty</em>' : '');
+        $ops[] = ['zl', (int)$Z['id'], $pkt];
+        $ty = $C['nazwa']; $lb = 'Test złożony'; $skrot = "{$C['nazwa']} · {$Z['nazwa']}: $r/{$t['szansa']}% ({$w['nazwa']}) → $nowa/{$Z['cel']}";
     } elseif ($rodz === 'praw') {
         $s = max(1, min(99, (int)($p['p'] ?? 50))); $r = rw_k100(); $ok = $r <= $s;
         $h = "<div class='pmr-row'><div class='pmr-d'><b>$r</b><small>/ $s%</small></div><div class='pmr-o'><strong>" . rw_h($sd ?: 'Zdarzenie') . "</strong><span>k100 ≤ $s</span></div><span class='pmr-s " . ($ok ? 's1' : 's-1') . "'>" . ($ok ? 'Tak' : 'Nie') . "</span></div>";
@@ -94,10 +166,11 @@ function pm_test(array $cele, array $p, ?string $lock): array {
         $ty = "{$n}k{$k}" . rw_sgn($b); $lb = 'Dowolna kość'; $skrot = "$ty: " . implode('+', $wy) . " = $s";
     }
     $pre = $sd ? "<div class='pmr-sd'>" . rw_h($sd) . "</div>" : '';
-    $post = ($co && !$bez_celu ? "<div class='pmr-o'><span>Zalety / Wady: " . rw_h(implode(', ', $co)) . "</span></div>" : '')
+    $post = (!empty($p['pasywny']) && !$bez_celu && !$lock ? "<div class='pmr-o'><span>Test pasywny — bez deklaracji gracza, nie zużywa akcji postaci</span></div>" : '')
+          . ($co && !$bez_celu ? "<div class='pmr-o'><span>Zalety / Wady: " . rw_h(implode(', ', $co)) . "</span></div>" : '')
           . ($ryz && !$bez_celu ? "<div class='pmr-o'><span>Ryzyko " . rw_h(PM_RYZYKO[$ryz]) . "</span></div>" : '')
           . ($sum ? "<div class='pmr-sum'>$sum</div>" : '');
-    return ['html' => rw_karta($ty, $lb, $pre . $h . $post), 'skrot' => ($sd ? "$sd — " : '') . $skrot, 'ops' => [], 'tytul' => "$lb · $ty"];
+    return ['html' => rw_karta($ty, $lb, $pre . $h . $post), 'skrot' => ($sd ? "$sd — " : '') . $skrot, 'ops' => $ops, 'tytul' => "$lb · $ty"];
 }
 
 /* ── OBSŁUGA POST ─────────────────────────────────────────────────── */
@@ -120,9 +193,9 @@ function pm_obsluz(mysqli $db, array $sesja, int $gid, bool $czy_mg, bool $zaakc
     // Test gracza na siebie (Swobodne) — od razu do Opowieści
     if ($a === 'test' && $sam && !$prow) {
         $cele = pm_cele($db, $sid);
-        $r = pm_test($cele, $_POST, 'g' . $gid);
+        $r = pm_test($cele, $_POST, 'g' . $gid, $db, $sid);
         if (isset($r['blad'])) return $r['blad'];
-        pm_publikuj($db, $sid, $gid, $r['html']); pm_wroc($sid);
+        pm_publikuj($db, $sid, $gid, $r['html']); if ($r['ops']) pm_ops($db, $sid, $r['ops']); pm_wroc($sid);
     }
 
     if (!$prow) return 'Tylko prowadzący może używać Kulis MG.';
@@ -130,7 +203,7 @@ function pm_obsluz(mysqli $db, array $sesja, int $gid, bool $czy_mg, bool $zaakc
 
     switch ($a) {
         case 'test':
-            $r = pm_test(pm_cele($db, $sid), $_POST, null);
+            $r = pm_test(pm_cele($db, $sid), $_POST, null, $db, $sid);
             if (isset($r['blad'])) return $r['blad'];
             $_SESSION['pm_pv'][$sid] = $r + ['tab' => 'test']; pm_wroc($sid, 'test');
         case 'atak': case 'odp': case 'upadek':
@@ -141,7 +214,16 @@ function pm_obsluz(mysqli $db, array $sesja, int $gid, bool $czy_mg, bool $zaakc
                 $k2 = (string)($_POST['cel'] ?? ''); if (!isset($U[$k2]) || $k2 === $k1) return 'Wybierz cel ataku.';
                 if ((int)$U[$k1]['w']['hp'] <= 0 || rw_ma($U[$k1], 'Ogłuszenie')) return 'Atakujący nie może wykonać akcji (nieprzytomny lub ogłuszony).';
                 $br = (string)($_POST['bron'] ?? $U[$k1]['w']['bron']); if (!isset(RW_BRON[$br])) $br = 'wrecz';
-                $r = rw_atak($U, $k1, $k2, $br, max(-50, min(50, (int)($_POST['mod'] ?? 0))), $P, $P['kryt'] || !empty($_POST['kryt']));
+                // Zalety/Wady z karty: atakujący → Trafienie, cel → Unik (±UM_MOD_CECHA za każdą)
+                $cm = function (string $k, string $pole) use ($U): array {
+                    $zal = pm_cechy($U[$k]['g']['zalety'] ?? ''); $wad = pm_cechy($U[$k]['g']['wady'] ?? ''); $m = 0; $o = [];
+                    foreach ((array)($_POST[$pole][$k] ?? []) as $n) { $n = (string)$n;
+                        if (in_array($n, $zal, true)) { $m += UM_MOD_CECHA; $o[] = "$n +" . UM_MOD_CECHA; } elseif (in_array($n, $wad, true)) { $m -= UM_MOD_CECHA; $o[] = "$n −" . UM_MOD_CECHA; } }
+                    return [$m, $o];
+                };
+                [$ma, $oa] = $cm($k1, 'wc_a'); [$mt, $ot] = $cm($k2, 'wc_t');
+                $opis = implode(' · ', array_filter([$oa ? 'Trafienie: ' . implode(', ', $oa) : '', $ot ? 'Unik: ' . implode(', ', $ot) : '']));
+                $r = rw_atak($U, $k1, $k2, $br, max(-50, min(50, (int)($_POST['mod'] ?? 0))) + $ma, $P, $P['kryt'] || !empty($_POST['kryt']), $mt, $opis);
             } elseif ($a === 'odp') {
                 if (!empty($_POST['atakowany'])) return 'Odpoczynek nie może się udać, gdy postać jest atakowana w tej samej turze.';
                 $r = rw_odpoczynek($U, $k1, $P);
@@ -153,7 +235,7 @@ function pm_obsluz(mysqli $db, array $sesja, int $gid, bool $czy_mg, bool $zaakc
             $pv = $_SESSION['pm_pv'][$sid] ?? null; unset($_SESSION['pm_pv'][$sid]);
             if (!$pv) pm_wroc($sid);
             if ($a !== 'odrz') {
-                if ($pv['ops']) rw_zastosuj($db, $sid, $pv['ops']);
+                if ($pv['ops']) pm_ops($db, $sid, $pv['ops']);
                 if ($a === 'pub') pm_publikuj($db, $sid, $gid, $pv['html']);
                 else db_zmien($db, "INSERT INTO sesje_rzuty_ukryte (sesja_id, mg_id, tytul, tresc) VALUES (?, ?, ?, ?)", [$sid, $gid, mb_substr($pv['tytul'], 0, 160), $pv['html']]);
             }
@@ -205,6 +287,16 @@ function pm_obsluz(mysqli $db, array $sesja, int $gid, bool $czy_mg, bool $zaakc
             db_zmien($db, "INSERT INTO sesje_npc (sesja_id, nazwa, sila, zrecznosc, wytrzymalosc, inteligencja, zmysly, charyzma, umiejetnosci, zalety, wady, hp_max, bron, pancerz) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 array_merge([$sid, $nz], $at, [json_encode($um, JSON_UNESCAPED_UNICODE), $cz($_POST['zalety'] ?? ''), $cz($_POST['wady'] ?? ''), max(1, min(9999, (int)($_POST['hp_max'] ?? 100))), $br, $pa]));
             pm_wroc($sid, 'npc');
+        case 'zl_tura': case 'zl_zamknij':
+            $Z = db_wiersz($db, "SELECT * FROM sesje_test_zlozony WHERE id = ? AND sesja_id = ? AND status = 'trwa'", [(int)($_POST['zid'] ?? 0), $sid]);
+            if ($Z) {
+                if ($a === 'zl_zamknij' || (int)$Z['tura'] >= (int)$Z['tury']) {
+                    $ok = (int)$Z['suma'] >= (int)$Z['cel'];
+                    db_zmien($db, "UPDATE sesje_test_zlozony SET status = ? WHERE id = ?", [$ok ? 'sukces' : 'porazka', (int)$Z['id']]);
+                    pm_publikuj($db, $sid, $gid, rw_karta('Test złożony: ' . $Z['nazwa'], 'wynik', "<div class='pmr-sum'>" . ($ok ? '<em>Sukces</em>' : 'Porażka') . " <small>{$Z['suma']} / {$Z['cel']} sukcesów w {$Z['tura']} z {$Z['tury']} tur</small></div>"));
+                } else db_zmien($db, "UPDATE sesje_test_zlozony SET tura = tura + 1 WHERE id = ?", [(int)$Z['id']]);
+            }
+            pm_wroc($sid, 'test');
         case 'npc_usun':
             $nid = (int)($_POST['nid'] ?? 0);
             db_zmien($db, "DELETE FROM sesje_npc WHERE id = ? AND sesja_id = ?", [$nid, $sid]);
@@ -251,6 +343,17 @@ function pm_css(): void { ?>
 .pm-fx{display:flex;flex-wrap:wrap;gap:3px}
 .pm-fx s{text-decoration:none;font-family:'JetBrains Mono',monospace;font-size:.66em;padding:0 5px;border:1px solid #ffd23d;color:#ffd23d}
 .pm-fx s.u{border-color:#ff3d5e;color:#ff3d5e}
+.msg.sys .sys-line:has(.pmr){display:block;background:none;border:0;padding:0;text-align:left;font-size:1em;color:inherit}
+.msg.sys .sys-line .pmr{margin:4px 0}
+.ko-live{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;padding:10px 14px;margin-bottom:10px;background:rgba(0,0,0,.55);border:1px solid var(--lc);box-shadow:0 0 14px rgba(0,0,0,.4);color:#f1ebf2}
+.ko-dot{width:10px;height:10px;border-radius:50%;background:var(--lc);box-shadow:0 0 8px var(--lc);animation:koP 1.2s infinite}
+@keyframes koP{50%{opacity:.3}}
+.ko-t{display:flex;flex-direction:column;gap:1px;flex:1;min-width:180px}
+.ko-t b{font-family:'Oswald',sans-serif;font-weight:500;letter-spacing:1px;color:#fff;font-size:1.05em}
+.ko-t small{color:#cfc6d2}
+.ko-lbl{font-family:'JetBrains Mono',monospace;font-size:.7em;letter-spacing:1.6px;text-transform:uppercase;color:var(--lc)}
+.ko-a{padding:6px 12px;border:1px solid var(--lc);color:#fff !important;text-decoration:none;font-family:'Oswald',sans-serif;letter-spacing:1.5px;text-transform:uppercase;font-size:.8em}
+.ko-a.ghost{border-color:rgba(255,255,255,.2);color:#cfc6d2 !important;text-transform:none;letter-spacing:.5px}
 .pm-zgl{margin-top:8px}
 .pm-zgl summary{cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:.74em;color:#ffd23d;letter-spacing:1px;list-style:none}
 .pm-zgl form{display:flex;gap:6px;margin-top:6px}

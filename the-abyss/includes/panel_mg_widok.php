@@ -25,8 +25,9 @@ $js = [];
 foreach ($cele as $k => $c) {
     $um = !empty($c['row']['umiejetnosci']) ? (json_decode($c['row']['umiejetnosci'], true) ?: []) : [];
     $at = []; foreach ($UM_ATRYBUTY as $ak => $ad) $at[$ak] = um_atrybut($c['row'], $ak);
-    $js[$k] = ['n' => $c['nazwa'], 'um' => $um, 'at' => $at];
+    $js[$k] = ['n' => $c['nazwa'], 'um' => $um, 'at' => $at, 'zal' => $c['zal']];
 }
+$zlozone = db_wiersze($db, "SELECT * FROM sesje_test_zlozony WHERE sesja_id = ? AND status = 'trwa' ORDER BY id", [$sid]);
 $um_def = []; foreach (um_lista() as $u) $um_def[$u['n']] = [$u['g'] ?? 'I', $u['d'] ?? null];
 $teraz = $Ul[(int)$s['walka_tura']]['k'] ?? ($Ul[0]['k'] ?? '');
 $h = 'rw_h';
@@ -158,6 +159,15 @@ body.pmk-on .pmk{transform:none}
           <div class="f2"><div class="f"><span class="lbl" data-a-lbl>Kto</span><select name="kto" id="pmkKto"><?php foreach ($Ul as $u) echo "<option value='" . $h($u['k']) . "' data-bron='" . $h($u['w']['bron']) . "'" . ($u['k'] === $teraz ? ' selected' : '') . ">" . $h($u['nazwa']) . "</option>"; ?></select></div>
             <div class="f" data-a="atak"><span class="lbl">Cel</span><select name="cel"><?php foreach ($Ul as $u) if ($u['k'] !== $teraz) echo "<option value='" . $h($u['k']) . "'>" . $h($u['nazwa']) . "</option>"; ?></select></div></div>
           <div class="f2" data-a="atak"><div class="f"><span class="lbl">Broń</span><select name="bron" id="pmkBron"><?php echo $bron_opt($U[$teraz]['w']['bron'] ?? 'wrecz'); ?></select></div><div class="f"><span class="lbl">Mod MG (Trafienie)</span><input type="number" name="mod" value="0" step="5"></div></div>
+          <?php foreach (['wc_a' => ['Zalety i Wady atakującego (±' . UM_MOD_CECHA . ' do Trafienia)', 'data-wa'], 'wc_t' => ['Zalety i Wady celu (±' . UM_MOD_CECHA . ' do Uniku)', 'data-wt']] as $pole => [$tyt, $attr]): ?>
+          <div class="f" data-a="atak"><span class="lbl"><?php echo $tyt; ?></span>
+            <?php foreach ($Ul as $u): $zl = pm_cechy($u['g']['zalety'] ?? ''); $wd = pm_cechy($u['g']['wady'] ?? ''); ?><div class="cech" <?php echo $attr; ?>="<?php echo $h($u['k']); ?>">
+              <?php foreach ($zl as $n): ?><label style="--c:#3dff9a"><input type="checkbox" name="<?php echo $pole; ?>[<?php echo $h($u['k']); ?>][]" value="<?php echo $h($n); ?>"><?php echo $h($n); ?><b>+<?php echo UM_MOD_CECHA; ?></b></label><?php endforeach; ?>
+              <?php foreach ($wd as $n): ?><label style="--c:#ff3d5e"><input type="checkbox" name="<?php echo $pole; ?>[<?php echo $h($u['k']); ?>][]" value="<?php echo $h($n); ?>"><?php echo $h($n); ?><b>−<?php echo UM_MOD_CECHA; ?></b></label><?php endforeach; ?>
+              <?php if (!$zl && !$wd): ?><span class="none">Brak Zalet i Wad na karcie.</span><?php endif; ?>
+            </div><?php endforeach; ?>
+          </div>
+          <?php endforeach; ?>
           <?php if (!$P['kryt']): ?><label class="hint" data-a="atak" style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="kryt" value="1"> Rozpatruj efekty krytyczne (opcjonalne na tym poziomie)</label><?php endif; ?>
           <label class="hint" data-a="odp" style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="atakowany" value="1"> Postać była atakowana w tej turze</label>
           <div class="f2" data-a="upadek"><div class="f"><span class="lbl">Wysokość</span><select name="wys"><?php echo pm_opcje(array_map(fn($x) => $x[0] . ' (' . ($x[1] > 0 ? '+' : '') . $x[1] . ')', RW_WYS), '4'); ?></select></div><div class="f"><span class="lbl">Podłoże</span><select name="pod"><option value="-10">Miękkie −10</option><option value="0" selected>Zwykłe 0</option><option value="10">Twarde +10</option></select></div></div>
@@ -171,33 +181,45 @@ body.pmk-on .pmk{transform:none}
 
     <!-- ═══ TESTY ═══ -->
     <section class="pmk-pane" id="pmk-test">
+      <?php if ($prow && $zlozone): ?><div class="f"><span class="lbl">Trwające testy złożone</span>
+        <?php foreach ($zlozone as $z): $pr = min(100, round((int)$z['suma'] / max(1, (int)$z['cel']) * 100)); ?>
+        <div class="npc"><div style="display:flex;justify-content:space-between;gap:8px"><b><?php echo $h($z['nazwa']); ?></b><span class="lbl">tura <?php echo (int)$z['tura']; ?> / <?php echo (int)$z['tury']; ?></span></div>
+          <div class="pm-hp"><i style="width:<?php echo $pr; ?>%"></i></div><span class="hint"><?php echo (int)$z['suma']; ?> / <?php echo (int)$z['cel']; ?> sukcesów</span>
+          <div class="acts"><form method="POST"><input type="hidden" name="pm_akcja" value="zl_tura"><input type="hidden" name="zid" value="<?php echo (int)$z['id']; ?>"><button class="pmk-btn sm ghost" type="submit"><?php echo (int)$z['tura'] >= (int)$z['tury'] ? 'Rozstrzygnij' : 'Następna tura'; ?></button></form>
+          <form method="POST"><input type="hidden" name="pm_akcja" value="zl_zamknij"><input type="hidden" name="zid" value="<?php echo (int)$z['id']; ?>"><button class="pmk-btn sm ghost" type="submit">Zakończ teraz</button></form></div></div>
+        <?php endforeach; ?></div><?php endif; ?>
       <form method="POST" id="pmkTest">
         <input type="hidden" name="pm_akcja" value="test">
-        <div class="f"><span class="lbl">Sytuacja</span><div class="seg" id="pmkSyt"><button type="button" data-s="zamek">Zamek</button><button type="button" data-s="kon">Galop</button><button type="button" data-s="bal">Taniec na balu</button><button type="button" data-s="wsp">Wspinaczka</button><button type="button" data-s="auto">Pościg autem</button></div></div>
+        <div class="f"><span class="lbl">Sytuacja</span><div class="seg" id="pmkSyt"><button type="button" data-s="wiedza">Wiedza</button><button type="button" data-s="obs">Obserwacja</button><button type="button" data-s="obrona">Obrona przed wpływem</button><button type="button" data-s="zamek">Zamek</button><button type="button" data-s="kon">Galop</button><button type="button" data-s="bal">Taniec na balu</button><button type="button" data-s="wsp">Wspinaczka</button><button type="button" data-s="auto">Pościg autem</button></div></div>
         <div class="f"><span class="lbl">Co się dzieje (trafi do posta)</span><input type="text" name="sd" id="pmkSd" maxlength="200" placeholder="np. Iris próbuje otworzyć zamek szafki w szatni"></div>
-        <div class="f2"><div class="f"><span class="lbl">Rodzaj testu</span><select name="rodzaj" id="pmkRodz"><option value="prosty">Test prosty (Umiejętność)</option><option value="atr">Test Atrybutu</option><option value="przec">Test przeciwstawny</option><option value="zloz">Test złożony</option><option value="praw">Prawdopodobieństwo</option><option value="kosc">Dowolna kość</option></select></div>
-          <div class="f" data-r="prosty atr przec zloz"><span class="lbl" data-r-lbl>Postać / NPC</span><?php if ($sam): ?><input type="text" value="<?php echo $h($cele['g' . $gid]['nazwa'] ?? ''); ?>" disabled><input type="hidden" name="cel" id="pmkCel" value="g<?php echo $gid; ?>"><?php else: ?><select name="cel" id="pmkCel"><?php echo $cel_opt; ?></select><?php endif; ?></div></div>
-        <div class="f" data-r="prosty przec"><span class="lbl">Umiejętność</span><select name="um" id="pmkUm"><?php echo $um_opt; ?></select></div>
+        <div class="f2"><div class="f"><span class="lbl">Rodzaj testu</span><select name="rodzaj" id="pmkRodz"><option value="prosty">Test Umiejętności</option><option value="atr">Test Atrybutu</option><option value="srednia">Test średniej Atrybutów</option><option value="zdol">Test Zdolności</option><option value="przec">Test przeciwstawny</option><option value="zloz">Test złożony (na kilka tur)</option><option value="praw">Test prawdopodobieństwa</option><option value="kosc">Dowolna kość</option></select></div>
+          <div class="f" data-r="prosty atr srednia zdol przec zloz"><span class="lbl" data-r-lbl>Postać / NPC</span><?php if ($sam): ?><input type="text" value="<?php echo $h($cele['g' . $gid]['nazwa'] ?? ''); ?>" disabled><input type="hidden" name="cel" id="pmkCel" value="g<?php echo $gid; ?>"><?php else: ?><select name="cel" id="pmkCel"><?php echo $cel_opt; ?></select><?php endif; ?></div></div>
+        <div class="f" data-r="prosty przec zloz"><span class="lbl">Umiejętność</span><select name="um" id="pmkUm"><?php echo $um_opt; ?></select></div>
         <div class="f" data-r="prosty"><span class="lbl">Atrybut</span><select name="ag"><option value="g">Główny</option><option value="d">Dodatkowy (gdy uzasadnia to sytuacja)</option></select></div>
         <div class="f" data-r="atr"><span class="lbl">Atrybut</span><select name="at"><?php echo $atr_opt; ?></select></div>
+        <div class="f" data-r="srednia zdol"><span class="lbl">Atrybuty (test średniej: co najmniej 2)</span><div class="cech" style="display:flex"><?php foreach ($UM_ATRYBUTY as $ak => $ad): ?><label style="--c:#4ad6ff"><input type="checkbox" name="ats[]" value="<?php echo $ak; ?>"><?php echo $h($ad['nazwa']); ?></label><?php endforeach; ?></div></div>
+        <div class="f" data-r="zdol"><span class="lbl">Zdolność („Możliwość”) z karty</span><select name="zd" id="pmkZd"></select><p class="hint">Bez tej Zdolności rzutu się nie wykonuje — test jest automatycznie nieudany. Działa jak test Atrybutu albo średniej wybranych Atrybutów.</p></div>
         <?php if (!$sam): ?><div class="f2" data-r="przec"><div class="f"><span class="lbl">Strona B</span><select name="cel_b"><?php echo $cel_opt; ?></select></div><div class="f"><span class="lbl">Umiejętność B</span><select name="um_b"><?php echo $um_opt; ?></select></div></div><?php endif; ?>
-        <?php for ($i = 0; $i < 3; $i++): ?><div class="f" data-r="zloz"><span class="lbl">Umiejętność <?php echo $i + 1; ?><?php echo $i === 2 ? ' (opcjonalnie)' : ''; ?></span><select name="z[]"><?php echo $i === 2 ? '<option value="">—</option>' : ''; ?><?php echo $um_opt; ?></select></div><?php endfor; ?>
-        <p class="hint" data-r="zloz">Każda Umiejętność to osobny rzut. System podaje liczbę sukcesów, o wyniku akcji decyduje MG.</p>
+        <div class="f" data-r="zloz"><span class="lbl">Test złożony</span><select name="zl_id" id="pmkZl"><option value="0">+ Nowy test złożony</option><?php foreach ($zlozone as $z) echo "<option value='" . (int)$z['id'] . "'>" . $h($z['nazwa']) . " · " . (int)$z['suma'] . "/" . (int)$z['cel'] . " · tura " . (int)$z['tura'] . "/" . (int)$z['tury'] . "</option>"; ?></select></div>
+        <div class="f" data-r="zloz" data-zl-nowy><span class="lbl">Nazwa, wymagane sukcesy i liczba tur</span><div class="f2"><input type="text" name="zl_nazwa" maxlength="80" placeholder="np. Budowa barykady"><div class="f2"><input type="number" name="zl_cel" value="10" min="1" max="50" title="Wymagane sukcesy"><input type="number" name="zl_tury" value="3" min="1" max="20" title="Liczba tur"></div></div></div>
+        <p class="hint" data-r="zloz">Seria rzutów rozłożona na tury — każda postać może rzucać co turę, wyniki się sumują. Krytyczny sukces 3, sukces 2, minimalny 1, porażka 0, krytyczna porażka −1.</p>
         <p class="hint" data-r="przec">Mody działają na pierwszą stronę. Wygrywa wyższy poziom powodzenia, przy remisie większy zapas pod progiem.</p>
         <div class="f2" data-r="praw"><div class="f"><span class="lbl">Szansa %</span><input type="number" name="p" value="50" min="1" max="99"></div><div class="f"><span class="lbl">Czego dotyczy</span><span class="hint">opis z pola „Co się dzieje”</span></div></div>
         <div class="f2" data-r="kosc"><div class="f"><span class="lbl">Ile kości</span><input type="number" name="kn" value="2" min="1" max="20"></div><div class="f"><span class="lbl">Ścianki</span><select name="ks"><?php echo pm_opcje(array_combine(PM_KOSCI, array_map(fn($k) => "k$k", PM_KOSCI)), 6); ?></select></div></div>
         <div class="f" data-r="kosc"><span class="lbl">Premia do sumy</span><input type="number" name="kb" value="0"></div>
-        <div class="f" data-r="prosty atr przec zloz"><span class="lbl">Ryzyko akcji</span><div class="seg" id="pmkRyz"><?php foreach (PM_RYZYKO as $v => $n): ?><label style="--c:<?php echo [10 => '#3dff9a', 0 => '#ffd23d', -10 => '#ff7a3d', -20 => '#ff1744'][$v]; ?>"><input type="radio" name="ryz" value="<?php echo $v; ?>"<?php echo $v === 0 ? ' checked' : ''; ?>><?php echo $n; ?></label><?php endforeach; ?></div></div>
-        <div class="f" data-r="prosty atr przec zloz"><span class="lbl">Zalety i Wady z karty (±<?php echo UM_MOD_CECHA; ?>)</span>
+        <div class="f" data-r="prosty atr srednia zdol przec zloz"><span class="lbl">Ryzyko akcji</span><div class="seg" id="pmkRyz"><?php foreach (PM_RYZYKO as $v => $n): ?><label style="--c:<?php echo [10 => '#3dff9a', 0 => '#ffd23d', -10 => '#ff7a3d', -20 => '#ff1744'][$v]; ?>"><input type="radio" name="ryz" value="<?php echo $v; ?>"<?php echo $v === 0 ? ' checked' : ''; ?>><?php echo $n; ?></label><?php endforeach; ?></div></div>
+        <div class="f" data-r="prosty atr srednia zdol przec zloz"><span class="lbl">Zalety i Wady z karty (±<?php echo UM_MOD_CECHA; ?>)</span>
           <?php foreach ($cele as $k => $c): ?><div class="cech" data-cel="<?php echo $h($k); ?>">
             <?php foreach ($c['zal'] as $n): ?><label style="--c:#3dff9a"><input type="checkbox" name="cechy[<?php echo $h($k); ?>][]" value="<?php echo $h($n); ?>"><?php echo $h($n); ?><b>+<?php echo UM_MOD_CECHA; ?></b></label><?php endforeach; ?>
             <?php foreach ($c['wad'] as $n): ?><label style="--c:#ff3d5e"><input type="checkbox" name="cechy[<?php echo $h($k); ?>][]" value="<?php echo $h($n); ?>"><?php echo $h($n); ?><b>−<?php echo UM_MOD_CECHA; ?></b></label><?php endforeach; ?>
             <?php if (!$c['zal'] && !$c['wad']): ?><span class="none">Brak Zalet i Wad na karcie.</span><?php endif; ?>
           </div><?php endforeach; ?>
         </div>
-        <?php if (!$sam): ?><div class="f" data-r="prosty atr przec zloz"><span class="lbl">Mod MG</span><input type="number" name="mod" value="0" step="5" min="-50" max="50"></div><?php endif; ?>
+        <?php if (!$sam): ?><div class="f" data-r="prosty atr srednia zdol przec zloz"><span class="lbl">Mod MG</span><input type="number" name="mod" value="0" step="5" min="-50" max="50"></div><?php endif; ?>
+        <?php if (!$sam): ?><label class="hint" data-r="prosty atr srednia zdol przec" style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="pasywny" value="1" id="pmkPas"> Test pasywny (wiedza, obserwacja, obrona — bez deklaracji gracza, nie zużywa akcji)</label><?php endif; ?>
         <div class="info" id="pmkInfo" style="display:none"></div>
-        <button class="pmk-btn" type="submit"><?php echo $sam ? 'Rzuć — od razu do Opowieści' : 'Rzuć — podgląd'; ?></button>
+        <div class="acts"><button class="pmk-btn" type="submit"><?php echo $sam ? 'Rzuć — od razu do Opowieści' : 'Rzuć — podgląd'; ?></button><?php if (!$sam): ?><button class="pmk-btn ghost" type="submit" name="auto" value="1" data-r="prosty atr srednia zdol">Automatyczny sukces</button><?php endif; ?></div>
+        <?php if (!$sam): ?><p class="hint" data-r="prosty atr srednia zdol">Automatyczny sukces bez rzutu: gdy gracz poprosi o niego w NC, a szansa wynosi co najmniej 50%. Nie dotyczy walki.</p><?php endif; ?>
         <?php if ($sam): ?><p class="hint">W Opowieści Swobodnej rzucasz sam na swoją postać, a wynik od razu trafia do Opowieści.</p><?php endif; ?>
       </form>
       <?php if ($pv && ($pv['tab'] ?? '') === 'test') pm_pv_html($pv); ?>
@@ -249,23 +271,29 @@ $('#pmkTabs').onclick=e=>{const b=e.target.closest('button');if(b)tab(b.dataset.
 /* testy */
 const R=$('#pmkRodz'),cel=$('#pmkCel'),um=$('#pmkUm'),inf=$('#pmkInfo');
 function testy(){const r=R.value;document.querySelectorAll('#pmkTest [data-r]').forEach(el=>el.style.display=el.dataset.r.split(' ').includes(r)?'':'none');
- const k=cel.value;document.querySelectorAll('#pmkTest .cech').forEach(g=>g.style.display=g.dataset.cel===k?'':'none');
+ const k=cel.value;document.querySelectorAll('#pmkTest .cech[data-cel]').forEach(g=>g.style.display=g.dataset.cel===k?'':'none');
+ const zd=$('#pmkZd');if(zd&&zd.dataset.k!==k){zd.dataset.k=k;const z=(C[k]||{}).zal||[],e=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));zd.innerHTML=z.length?z.map(n=>'<option value="'+e(n)+'">'+e(n)+'</option>').join(''):'<option value="">— brak Zdolności na karcie —</option>'}
+ const zl=$('#pmkZl');if(r==='zloz')document.querySelectorAll('#pmkTest [data-zl-nowy]').forEach(e=>e.style.display=zl&&zl.value==='0'?'':'none');
  const c=C[k],n=um.value;if(r==='prosty'&&c&&!(c.um[n]>0)){const d=UD[n]||['I'];const ag=document.querySelector('#pmkTest [name=ag]').value;const a=ag==='d'&&d[1]?d[1]:d[0];
   inf.innerHTML='<b>'+c.n+'</b> nie ma Umiejętności „'+n+'” — rzut idzie na sam Atrybut ('+AN[a]+' '+c.at[a]+'). Podstawowe kompetencje (np. prosta jazda konno, podstawowe kroki tańca) w typowych warunkach udają się automatycznie; rzucaj, gdy sytuacja wykracza poza typową.';inf.style.display=''}
  else inf.style.display='none'}
 $('#pmkTest').addEventListener('change',testy);testy();
-const SYT={zamek:[/zamk|włam|wytrych/i,0,'otwiera zamek',/zręczn|złota rączka|niezdarn/i],
+const SYT={wiedza:[/histor|wiedz|nauk|antykw|teolog/i,0,'— test wiedzy: czy rozpoznaje, co ma przed sobą',/wykszta|erudyt|oczytan/i,1],
+ obs:[/spostrz|obserw|percep|czujn/i,0,'— test obserwacji: czy zauważa istotny szczegół',/sokol|czujn|krótkow|ślep|nocny/i,1],
+ obrona:[/psycholog|empat|opanow|woli|perswaz/i,0,'— test obronny przed wywieraniem wpływu',/uparty|naiwn|odporn|żelazn/i,1],
+ zamek:[/zamk|włam|wytrych/i,0,'otwiera zamek',/zręczn|złota rączka|niezdarn/i],
  kon:[/jeźdz|jazd|konn/i,-10,'utrzymuje się w siodle w galopie',/nog|proteza|jeźdź|jeździec/i],
  bal:[/taniec|tańc/i,0,'tańczy na balu — czy się nie potknie i nikomu nie nadepnie na stopę',/niezdarn|nog|proteza|gracj|refleks/i],
  wsp:[/wspin/i,-10,'wspina się po ścianie',/wysok|nog|proteza|refleks/i],
  auto:[/pojazd|prowadz|kierow/i,-10,'ucieka autem przez Manhattan',/refleks|nocny|nałóg/i]};
 $('#pmkSyt').onclick=e=>{const b=e.target.closest('button');if(!b)return;const S=SYT[b.dataset.s];document.querySelectorAll('#pmkSyt button').forEach(x=>x.classList.toggle('on',x===b));
  R.value='prosty';const o=[...um.options].find(o=>S[0].test(o.value));if(o)um.value=o.value;
- document.querySelectorAll('#pmkRyz input').forEach(i=>i.checked=+i.value===S[1]);
+ document.querySelectorAll('#pmkRyz input').forEach(i=>i.checked=+i.value===S[1]);const pas=$('#pmkPas');if(pas)pas.checked=!!S[4];
  const g=document.querySelector('#pmkTest .cech[data-cel="'+cel.value+'"]');if(g)g.querySelectorAll('input').forEach(i=>i.checked=S[3].test(i.value));
  $('#pmkSd').value=((C[cel.value]||{}).n||'')+' '+S[2];testy()};
 /* walka */
-const W=$('#pmkWalka');if(W){const akc=()=>{const a=W.querySelector('[name=pm_akcja]:checked').value;W.querySelectorAll('[data-a]').forEach(el=>el.style.display=el.dataset.a===a?'':'none');W.querySelector('[data-a-lbl]').textContent=a==='atak'?'Atakujący':a==='odp'?'Kto odpoczywa':'Kto spada'};
- W.addEventListener('change',e=>{if(e.target.name==='pm_akcja')akc();if(e.target.id==='pmkKto'){const o=e.target.selectedOptions[0];$('#pmkBron').value=o.dataset.bron;const c=W.querySelector('[name=cel]');[...c.options].forEach(x=>x.hidden=x.value===o.value);if(c.value===o.value){const f=[...c.options].find(x=>!x.hidden);if(f)c.value=f.value}}});akc()}
+const W=$('#pmkWalka');if(W){const wc=()=>{const a=W.querySelector('[name=kto]').value,t=W.querySelector('[name=cel]').value;W.querySelectorAll('[data-wa]').forEach(g=>g.style.display=g.dataset.wa===a?'':'none');W.querySelectorAll('[data-wt]').forEach(g=>g.style.display=g.dataset.wt===t?'':'none')};
+ const akc=()=>{wc();const a=W.querySelector('[name=pm_akcja]:checked').value;W.querySelectorAll('[data-a]').forEach(el=>el.style.display=el.dataset.a===a?'':'none');W.querySelector('[data-a-lbl]').textContent=a==='atak'?'Atakujący':a==='odp'?'Kto odpoczywa':'Kto spada'};
+ W.addEventListener('change',e=>{if(e.target.name==='pm_akcja')akc();if(e.target.id==='pmkKto'){const o=e.target.selectedOptions[0];$('#pmkBron').value=o.dataset.bron;const c=W.querySelector('[name=cel]');[...c.options].forEach(x=>x.hidden=x.value===o.value);if(c.value===o.value){const f=[...c.options].find(x=>!x.hidden);if(f)c.value=f.value}}wc()});akc()}
 })();
 </script>

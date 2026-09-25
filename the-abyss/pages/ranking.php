@@ -13,7 +13,8 @@ $kolumny = [
     'uniki' => ['db' => 'uniki', 'nazwa' => '💨 Zdolność Uniku', 'format' => 'pkt'],
     'gotowka' => ['db' => 'gotowka', 'nazwa' => '💵 Bogacze (Gotówka)', 'format' => '$'],
     'bank' => ['db' => 'bank', 'nazwa' => '🏦 Oszczędności (Bank)', 'format' => '$'],
-    'wyswietlenia' => ['db' => 'wyswietlenia_profilu', 'nazwa' => '⭐ Sława (Wyświetlenia)', 'format' => 'widzów']
+    'wyswietlenia' => ['db' => 'wyswietlenia_profilu', 'nazwa' => '⭐ Sława (Wyświetlenia)', 'format' => 'widzów'],
+    'pw' => ['db' => 'pw', 'nazwa' => '📜 Punkty Wydarzeń (Opowieści)', 'format' => 'PW']
 ];
 
 $kategoria = isset($_GET['kat']) && array_key_exists($_GET['kat'], $kolumny) ? $_GET['kat'] : 'poziom';

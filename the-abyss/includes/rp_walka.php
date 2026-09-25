@@ -91,12 +91,12 @@ function rw_karta(string $tytul, string $etykieta, string $wnetrze): string {
 }
 
 /* ── AKCJE (zwracają ['html','skrot','ops']) ──────────────────────── */
-function rw_atak(array $U, string $a, string $t, string $bron, int $mod_mg, array $P, bool $kryt): array {
+function rw_atak(array $U, string $a, string $t, string $bron, int $mod_mg, array $P, bool $kryt, int $mod_unik = 0, string $cechy_opis = ''): array {
     $A = $U[$a]; $T = $U[$t]; $B = RW_BRON[$bron] ?? RW_BRON['wrecz']; [$ha, $da] = RW_TYP[$B['t']];
     global $UM_ATRYBUTY;
     $pa = RW_PANC[$T['w']['pancerz']] ?? RW_PANC['brak']; $tar = (int)$T['w']['tarcza'];
     $hit   = rw_szansa(rw_atr($A, $ha), $B['hm'] + rw_fx($A, 'hit') + $mod_mg);
-    $u_mod = $pa['u'] + ($tar ? RW_TARCZA['u'] : 0) - min(50, 2 * $P['oop']) + rw_fx($T, 'unik');
+    $u_mod = $pa['u'] + ($tar ? RW_TARCZA['u'] : 0) - min(50, 2 * $P['oop']) + rw_fx($T, 'unik') + $mod_unik;
     $unik  = (rw_ma($T, 'Ogłuszenie') || (int)$T['w']['hp'] <= 0) ? 0 : rw_szansa(rw_atr($T, 'Z'), $u_mod);
     $dmg_s = rw_szansa(rw_atr($A, $da), $B['dm'] + rw_fx($A, 'dmg'));
     $red   = min(60, $pa['r'] + ($tar ? RW_TARCZA['r'] : 0));
@@ -138,6 +138,7 @@ function rw_atak(array $U, string $a, string $t, string $bron, int $mod_mg, arra
             if ($pada) $sum .= ' · ' . rw_h($tn) . ' pada (0 PŻ, Uraz za ostatni cios)';
         }
     }
+    if ($cechy_opis !== '') $h .= "<div class='pmr-o'><span>Zalety / Wady: " . rw_h($cechy_opis) . "</span></div>";
     $h .= "<div class='pmr-sum'>$sum</div>";
     return ['html' => rw_karta("$an → $tn", $B['n'], $h), 'skrot' => strip_tags($sum), 'ops' => $ops, 'tytul' => "Atak: $an → $tn"];
 }
@@ -183,16 +184,23 @@ function rw_zastosuj(mysqli $db, int $sid, array $ops): void {
 function rw_dodaj(mysqli $db, int $sid, string $k): bool {
     $g = rw_postac($db, $sid, $k);
     if (!$g) return false;
-    $hp = max(1, (int)($g['hp_max'] ?? 100));
-    $ini = rw_k100() + intdiv(um_atrybut($g, 'Z'), 5);
-    return db_zmien($db, "INSERT IGNORE INTO sesje_walka (sesja_id, klucz, ini, hp, hp_max, efekty, bron, pancerz, nc_ok) VALUES (?, ?, ?, ?, ?, '[]', ?, ?, ?)",
-        [$sid, $k, $ini, $hp, $hp, $k[0] === 'n' ? ($g['bron'] ?? 'wrecz') : 'wrecz', $k[0] === 'n' ? ($g['pancerz'] ?? 'brak') : 'brak', $k[0] === 'n' ? 1 : 0]) === 1;
+    $hpm = max(1, (int)($g['hp_max'] ?? 100));
+    // Rekonwalescencja (po Urazie ciężkim, 30 dni): w Opowieściach postać ma Uraz lekki — max PŻ −20% i −20% losowego Atrybutu.
+    $rek = $k[0] === 'g' && !empty($g['rekonwalescencja_do']) && strtotime($g['rekonwalescencja_do']) > time();
+    $uraz = $rek ? 1 : 0; $ua = $rek ? RW_ATR_KL[random_int(0, 5)] : '';
+    $hp = $rek ? (int)round($hpm * 0.8) : $hpm;
+    $ini = rw_k100() + intdiv((int)round(um_atrybut($g, 'Z') * ($ua === 'Z' ? 0.8 : 1)), 5);
+    $ok = db_zmien($db, "INSERT IGNORE INTO sesje_walka (sesja_id, klucz, ini, hp, hp_max, uraz, urazy_atr, efekty, bron, pancerz, nc_ok) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [$sid, $k, $ini, $hp, $hpm, $uraz, $ua, $rek ? json_encode([['n' => 'Rekonwalescencja']], JSON_UNESCAPED_UNICODE) : '[]', $k[0] === 'n' ? ($g['bron'] ?? 'wrecz') : 'wrecz', $k[0] === 'n' ? ($g['pancerz'] ?? 'brak') : 'brak', $k[0] === 'n' ? 1 : 0]) === 1;
+    return $ok;
 }
 
 /** Start walki: wszyscy zaakceptowani gracze + NPC Opowieści. Zwraca HTML Inicjatywy. */
 function rw_start(mysqli $db, int $sid): string {
     db_zmien($db, "DELETE FROM sesje_walka WHERE sesja_id = ?", [$sid]);
-    foreach (db_wiersze($db, "SELECT gracz_id FROM sesje_uczestnicy WHERE sesja_id = ? AND rola = 'Gracz' AND status_akceptacji = 'Zaakceptowany'", [$sid]) as $u) rw_dodaj($db, $sid, 'g' . $u['gracz_id']);
+    $gracze = function_exists('pm_gracze') ? array_keys(pm_gracze($db, $sid))
+            : array_map(fn($u) => (int)$u['gracz_id'], db_wiersze($db, "SELECT gracz_id FROM sesje_uczestnicy WHERE sesja_id = ? AND rola = 'Gracz' AND status_akceptacji = 'Zaakceptowany'", [$sid]));
+    foreach ($gracze as $g) rw_dodaj($db, $sid, 'g' . $g);
     foreach (db_wiersze($db, "SELECT id FROM sesje_npc WHERE sesja_id = ?", [$sid]) as $n) rw_dodaj($db, $sid, 'n' . $n['id']);
     db_zmien($db, "UPDATE sesje_rpg SET walka_aktywna = 1, walka_runda = 1, walka_tura = 0 WHERE id = ?", [$sid]);
     return rw_inicjatywa_html($db, $sid, 'Walka! Inicjatywa');

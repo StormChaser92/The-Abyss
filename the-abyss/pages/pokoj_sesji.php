@@ -4,6 +4,7 @@ require_once __DIR__ . '/../config/pochodzenia.php';
 require_once __DIR__ . '/../config/zawody.php';
 require_once __DIR__ . '/../config/rp_helpers.php';
 require_once __DIR__ . '/../includes/panel_mg.php';
+require_once __DIR__ . '/../includes/podsumowanie.php';
 
 $id_gracza = $_SESSION['id_gracza'];
 
@@ -65,7 +66,9 @@ $czy_mg = ($czy_zaakceptowany && ($uczestnik['rola'] == 'Mistrz Gry' || $czy_wla
 
 // ── KULISY MG / RZUTY W SWOBODNEJ (includes/panel_mg.php) ─────
 $pm_blad = pm_obsluz($polaczenie, $sesja, (int)$id_gracza, $czy_mg, $czy_zaakceptowany);
-unset($_POST['wykonaj_rzut']);   // stary generator gracza wyłączony — rzuty idą przez panel
+unset($_POST['wykonaj_rzut']);
+$pd_blad = pd_obsluz($polaczenie, $sesja, (int)$id_gracza, $czy_mg);   // nowe Zakończenie (includes/podsumowanie.php)
+unset($_POST['zakoncz_sesje']);                                      // stary formularz wyłączony   // stary generator gracza wyłączony — rzuty idą przez panel
 
 // ── LICZNIK POSTÓW FABUŁY (dla paginacji) ─────────────────────
 $row_cnt = $polaczenie->query("SELECT COUNT(*) c FROM sesje_posty WHERE sesja_id=$sesja_id AND typ_postu != 'OffTop'")->fetch_assoc();
@@ -1181,106 +1184,13 @@ $akcent_kat = $KAT_KOLORY[$sesja['kategoria']] ?? 'var(--neon-red)';
 </div>
 <?php endif; ?>
 
-<!-- ══ ZAKŁADKA: ZAKOŃCZ SESJĘ (PODSUMOWANIE MG) ══════════════════ -->
-<?php if ($czy_mg && !$czy_zakonczona):
-    $WADY_LISTA = [
-        // ─ Fizyczne: urazy, okaleczenia, upośledzenia zmysłów
-        "Brak Kończyny","Jednooki","Głuchy","Całkowita Ślepota","Oszpecony","Utykający","Hemofiliak",
-        "Astma","Krótkowidz","Daltonizm","Niedosłuch","Wolne Gojenie","Jąkanie","Migreny","Bezsenność",
-        // ─ Psychiczne: traumy, fobie, zaburzenia pourazowe
-        "Trauma Pourazowa","Depresja","Lęki Napadowe","Klaustrofobia","Lęk Wysokości","Lęk Tłumu",
-        "Paranoik","Tchórz","Furiat","Odludek","Naiwny","Mizantrop","Brak Empatii",
-        // ─ Nałogi i zaburzenia charakteru po przeżyciu
-        "Nałogowiec","Hazardzista","Kleptomania",
-        // ─ Społeczne
-        "Zła Reputacja","Gadatliwy",
-        // ─ Umysł (po urazach głowy, traumach)
-        "Ociężały Umysł",
-        // ─ Specyficzne
-        "Pechowiec","Leniwy","Słabeusz"
-    ];
-    $GRUPY_REP = [
-        'elita' => 'Elita',
-        'ulica' => 'Ulica',
-        'syndykat' => 'Syndykat',
-        'wladze' => 'Władze',
-        'spoleczenstwo' => 'Społecz.',
-    ];
-?>
-<div id="tab-zakoncz" class="zakladka-tresc <?php if($domyslna_zakladka=='zakoncz') echo 'aktywna'; ?>">
-    <div class="zakoncz-panel">
-        <h3>🏁 Zakończenie Sesji — Podsumowanie MG</h3>
-        <div class="zp-opis">
-            Przyznaj każdemu graczowi punkty reputacji w 5 grupach (od −3 do +3). Dodaj notatkę podsumowującą jego udział. Jeśli w sesji doszło do trwałej konsekwencji (np. utrata kończyny) — wybierz odpowiednią wadę z listy, zostanie automatycznie dopisana do karty postaci.
-            <br><br>
-            <span style="color:var(--neon-red-hot);font-family:'JetBrains Mono',monospace;font-size:.88em">⚠ Operacja jest NIEODWRACALNA. Sesja zostanie zamknięta, a reputacja zapisana trwale.</span>
-        </div>
-
-        <form method="POST" onsubmit="return confirm('Czy na pewno chcesz zakończyć sesję? Tej operacji nie można cofnąć.')">
-
-            <label class="mg-label" style="color:var(--neon-gold)">Podsumowanie fabularne sesji (dla wszystkich graczy)</label>
-            <textarea name="podsumowanie_mg" class="gp-textarea" style="min-height:100px;margin-bottom:20px" placeholder="Jak skończyła się opowieść? Co udało się osiągnąć? Jakie konsekwencje czekają ocalałych?"></textarea>
-
-            <?php
-            // Tylko gracze zaakceptowani, nie MG
-            $gracze_do_pods = array_filter($uczestnicy_tablica, function($u) use ($wlasciciel_id) {
-                return $u['status_akceptacji']=='Zaakceptowany' && $u['rola']!='Mistrz Gry' && $u['id']!=$wlasciciel_id;
-            });
-            if (empty($gracze_do_pods)): ?>
-                <div style="padding:20px;text-align:center;color:var(--txt-mute);font-style:italic">// Brak zaakceptowanych graczy do podsumowania</div>
-            <?php else:
-                foreach ($gracze_do_pods as $u):
-                    $av = !empty($u['avatar']) ? $u['avatar'] : 'https://via.placeholder.com/40/0a0a0a/333?text=?';
-            ?>
-            <div class="gracz-podsumowanie">
-                <div class="gp-naglowek">
-                    <div class="gp-av" style="background-image:url('<?php echo htmlspecialchars($av); ?>')"></div>
-                    <div class="gp-nick"><?php echo htmlspecialchars($u['login']); ?></div>
-                </div>
-
-                <label class="mg-label">Zmiana reputacji (−3 ... +3)</label>
-                <div class="rep-siatka">
-                    <?php foreach ($GRUPY_REP as $klucz => $nazwa): ?>
-                    <div class="rep-item">
-                        <div class="rep-lbl"><?php echo $nazwa; ?></div>
-                        <input type="number" name="rep[<?php echo $u['id']; ?>][<?php echo $klucz; ?>]" value="0" min="-3" max="3" step="1">
-                        <span class="rep-range">−3 ... +3</span>
-                    </div>
-                    <?php endforeach; ?>
-                </div>
-
-                <div class="gp-row">
-                    <div>
-                        <label class="mg-label">Trwała konsekwencja (wada)</label>
-                        <select name="kons_wada[<?php echo $u['id']; ?>]" class="gp-sel">
-                            <option value="">— brak —</option>
-                            <?php foreach ($WADY_LISTA as $w): ?>
-                            <option value="<?php echo $w; ?>"><?php echo $w; ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="mg-label">Opis konsekwencji (skąd się wzięła)</label>
-                        <input type="text" name="kons_opis[<?php echo $u['id']; ?>]" class="akcja-input" placeholder="np. odgryziona przez psa w zaułku" style="margin-bottom:0">
-                    </div>
-                </div>
-
-                <label class="mg-label" style="margin-top:10px">Notatka MG (widzi ją gracz)</label>
-                <textarea name="notatka[<?php echo $u['id']; ?>]" class="gp-textarea" placeholder="Jak postać sprawowała się w sesji?"></textarea>
-            </div>
-            <?php endforeach; endif; ?>
-
-            <div style="text-align:right;padding-top:14px;border-top:1px dashed rgba(255,215,0,0.2)">
-                <button type="submit" name="zakoncz_sesje" class="btn-wyslij gold">🏁 Zakończ sesję i zapisz podsumowanie</button>
-            </div>
-        </form>
-    </div>
-</div>
-<?php endif; ?>
+<!-- ══ ZAKŁADKA: ZAKOŃCZ SESJĘ — includes/podsumowanie.php ══════════ -->
+<?php if ($czy_mg && !$czy_zakonczona) pd_formularz($polaczenie, $sesja, $domyslna_zakladka, $pd_blad); ?>
 
 <!-- ══ ZAKŁADKA: PODSUMOWANIE (PO ZAKOŃCZENIU) ══════════════════ -->
 <?php if ($czy_zakonczona): ?>
 <div id="tab-podsumowanie" class="zakladka-tresc <?php if($domyslna_zakladka=='podsumowanie') echo 'aktywna'; ?>">
+    <?php pd_widok($polaczenie, $sesja); ?>
     <div class="pods-widok">
         <div class="pods-naglowek" style="padding-bottom:12px">
             <div style="font-family:'Oswald',sans-serif;color:var(--neon-gold);font-size:1.3em;text-transform:uppercase;letter-spacing:2px;text-shadow:0 0 10px rgba(255,215,0,0.5)">🏆 Podsumowanie Sesji</div>
