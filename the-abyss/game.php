@@ -51,11 +51,10 @@ if ($wynik_r) {
         $diff = $lvl - $gracz_r['poziom'];
         $polaczenie->query("UPDATE gracze SET poziom=$lvl, exp=$exp,
             punkty_atrybutow=punkty_atrybutow+".($diff*5).",
-            punkty_umiejetnosci=punkty_umiejetnosci+".($diff*5).",
             hp_max=hp_max+".($diff*10).", hp_aktualne=hp_max+".($diff*10).",
             energia_max=energia_max+".($diff*5).", energia_aktualna=energia_max+".($diff*5)."
             WHERE id=$id_gracza");
-        $_SESSION['powiadomienie_awans'] = "Awans! Osiągnąłeś poziom $lvl! Zyskujesz +5 AP i +5 PU.";
+        $_SESSION['powiadomienie_awans'] = "Awans! Osiągnąłeś poziom $lvl! Zyskujesz +5 AP" . (intdiv($lvl, 2) > intdiv($gracz_r['poziom'], 2) ? " i nowe Punkty Umiejętności." : ".");
         $gracz_r['poziom']=$lvl; $gracz_r['exp']=$exp;
     }
     $avatar_url = htmlspecialchars(avatar_url($gracz_r['avatar'] ?? ''), ENT_QUOTES);

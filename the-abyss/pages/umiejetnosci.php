@@ -1,498 +1,301 @@
 <?php
 require_once "db.php";
-$id_gracza = $_SESSION['id_gracza'];
+require_once __DIR__ . '/../config/umiejetnosci.php';
+$id_gracza = (int)$_SESSION['id_gracza'];
 
-// ── DANE GRACZA ──────────────────────────────────────────────────
-$wynik = $polaczenie->query("SELECT umiejetnosci, punkty_umiejetnosci FROM gracze WHERE id=$id_gracza");
-$gracz_dane = $wynik->fetch_assoc();
-$dostepne_pu = (int)$gracz_dane['punkty_umiejetnosci'];
-$posiadane_um = !empty($gracz_dane['umiejetnosci']) ? json_decode($gracz_dane['umiejetnosci'], true) : [];
+/* ═══════════════════════════════════════════════════════════════════════
+   UMIEJĘTNOŚCI FABULARNE
+   Pula PU liczona z postaci (config/umiejetnosci.php), nie przechowywana.
+   Poziomy 1–4 po 1 PU, poziom 5 za 2 PU. Jeden darmowy reset.
+   ═══════════════════════════════════════════════════════════════════════ */
 
-// ═══════════════════════════════════════════════════════════════════
-// KATALOG UMIEJĘTNOŚCI (92 pozycje w 8 kategoriach)
-// ═══════════════════════════════════════════════════════════════════
-$KATEGORIE = [
-    'krzepa' => [
-        'ikona' => '💪',
-        'nazwa' => 'Przemoc i Przetrwanie',
-        'akcent' => 'var(--neon-red)',
-        'umiejetnosci' => [
-            'Walka Bronią Palną'            => 'Biegłość w posługiwaniu się pistoletami, pistoletami maszynowymi i strzelbami.',
-            'Celność Snajperska'            => 'Oddawanie precyzyjnych strzałów z dużej odległości. Praca z optyką, poprawki na wiatr i grawitację.',
-            'Walka na Noże'                 => 'Zabójcza precyzja w używaniu noży bojowych i sprężynowych.',
-            'Broń Biała (Miecze, Katany)'   => 'Władanie bronią sieczną: szabla, katana, rapier, miecz dwuręczny. Stary styl zabijania — cichy i bezlitosny.',
-            'Łucznictwo i Broń Cicha'       => 'Obsługa łuków, kusz, proc i innej bezgłośnej broni miotającej. Idealne do cichych eliminacji.',
-            'Boks Uliczny'                  => 'Klasyczna walka na pięści z naciskiem na siłę i łamanie nosów.',
-            'Krav Maga'                     => 'Brutalny system walki skupiony na błyskawicznym obezwładnianiu i łamaniu kości.',
-            'Sztuki Walki Wschodnie'        => 'Karate, taekwondo, judo, aikido, jujitsu. Precyzyjne chwyty, rzuty, kontrole stawów i filozofia walki.',
-            'Obsługa Materiałów Wybuchowych'=> 'Konstruowanie i rozbrajanie improwizowanych ładunków wybuchowych.',
-            'Taktyka Wojskowa'              => 'Dowodzenie drużyną w walce, znajomość doktryn, planowanie operacji militarnych i kontrwywiadu.',
-            'Kondycja i Wytrzymałość'       => 'Zdolność organizmu do długotrwałego wysiłku, biegania i znoszenia bólu.',
-            'Pływanie i Nurkowanie'         => 'Wytrzymałe pływanie w trudnych warunkach, nurkowanie z butlą, operacje podwodne.',
-            'Wspinaczka Wysokogórska'       => 'Wchodzenie po skałach, dachach, wieżowcach z użyciem lin i uprzęży. Chłodna głowa na krawędzi.',
-        ],
-    ],
-    'ulica' => [
-        'ikona' => '🏙️',
-        'nazwa' => 'Ulica i Złodziejstwo',
-        'akcent' => 'var(--neon-ember)',
-        'umiejetnosci' => [
-            'Włamywanie Elektroniczne'      => 'Klonowanie kart dostępu i łamanie zamków magnetycznych w strzeżonych wieżowcach.',
-            'Otwieranie Zamków (Wytrychy)'  => 'Klasyczna sztuka cichego operowania wytrychami.',
-            'Kieszonkostwo'                 => 'Zwinne palce, pozwalające niepostrzeżenie okradać ofiary w tłumie.',
-            'Skradanie'                     => 'Sztuka bezszelestnego poruszania się w cieniach i omijania kamer.',
-            'Parkour i Freerunning'         => 'Akrobatyczne poruszanie się po miejskich dachach, ogrodzeniach i zaułkach. Skoki, wspinaczka, płynny ruch.',
-            'Prowadzenie Pojazdów'          => 'Brawurowa jazda i gubienie pościgów w wąskich uliczkach.',
-            'Pilotaż'                       => 'Sterowanie awionetkami, śmigłowcami, dronami bojowymi i myśliwcami. Odczyt przyrządów i nawigacja w chmurach.',
-            'Topografia i Nawigacja'        => 'Doskonała znajomość planu miasta, ślepych zaułków i bezpiecznych tras transportowych.',
-            'Szpiegostwo i Inwigilacja'     => 'Stawianie ogona na celu, obsługa mikrofonów kierunkowych, zakładanie ukrytych kamer, prowadzenie nadzoru.',
-            'Demolka i Siłowe Wejścia'      => 'Brutalne rozbijanie drzwi, ścian, sejfów. Wyważanie barykad, łamanie okuć i krat.',
-            'Zacieranie Śladów'             => 'Czyszczenie miejsca zbrodni, usuwanie logów serwerowych i mylenie psów tropiących.',
-        ],
-    ],
-    'intelekt' => [
-        'ikona' => '💻',
-        'nazwa' => 'Intelekt i Technika',
-        'akcent' => 'var(--neon-cyan)',
-        'umiejetnosci' => [
-            'Hakowanie Terminali'           => 'Włamywanie się do baz danych korporacji, policji i systemów bankowych.',
-            'Programowanie'                 => 'Pisanie własnego kodu: aplikacji, narzędzi, exploitów, wirusów. Biegłość w językach programowania.',
-            'Elektronika'                   => 'Lutowanie, projektowanie obwodów, mikrokontrolery, budowa gadżetów szpiegowskich, bugowanie urządzeń.',
-            'Cybernetyka i Implanty'        => 'Projektowanie, instalacja i hakowanie cybernetycznych wszczepów. Interfejsy neuronowe, protezy bojowe, rozszerzenia zmysłów.',
-            'Robotyka i Mechatronika'       => 'Budowa, programowanie i naprawa robotów autonomicznych oraz dronów. Od drona-zabawki po mecha bojowego.',
-            'Inżynieria Złomu'              => 'Tworzenie sprzętu i prowizorycznej broni z części znalezionych na śmietniku.',
-            'Mechanika i Naprawa'           => 'Naprawa pojazdów, rur, zamków i ciężkiego sprzętu maszynowego.',
-            'Architektura i Konstrukcje'    => 'Projektowanie budynków, znajomość materiałów budowlanych i fizyki budowli.',
-            'Biologia i Botanika'           => 'Hodowla roślin, inżynieria flory i zaawansowana wiedza o ekosystemach.',
-            'Medycyna Uliczna'              => 'Nielegalne łatanie ran postrzałowych w brudnych piwnicach.',
-            'Medycyna Akademicka'           => 'Oficjalna, uniwersytecka wiedza o anatomii i chorobach. Prawo do wykonywania zawodu.',
-            'Psychiatria'                   => 'Diagnostyka zaburzeń psychicznych, psychoterapia, przepisywanie leków psychotropowych. Głębokie rozumienie umysłu.',
-            'Chemia i Farmakologia'         => 'Produkcja narkotyków, leków i synteza własnych dopalaczy.',
-            'Prawo i Administracja'         => 'Znajomość kruczków prawnych, kodeksów karnych i biurokracji miejskiej.',
-            'Wiedza Ogólna i Pedagogika'    => 'Szeroka wiedza teoretyczna oraz umiejętność przekazywania jej innym.',
-            'Historia i Antykwariat'        => 'Wiedza o epokach, artefaktach, kulturach. Rozpoznawanie autentyków od falsyfikatów. Wycena antyków.',
-            'Filozofia i Religioznawstwo'   => 'Systemy myśli, etyka, światowe religie i kulty. Rozumienie światopoglądów ludzi z różnych kultur.',
-            'Języki Obce'                   => 'Biegłość w językach: angielskim, chińskim, rosyjskim, japońskim, hiszpańskim i innych — zależnie od osobistej specjalizacji.',
-            'Analiza Danych i Dedukcja'     => 'Łączenie faktów, praca z dokumentami i rozwiązywanie zagadek logicznych.',
-            'Matematyka i Rachunkowość'     => 'Skrupulatne obliczenia, księgowość, pranie brudnych pieniędzy i inwestycje.',
-            'Kryptografia i Szyfry'         => 'Tworzenie i łamanie szyfrów, steganografia, zabezpieczanie komunikacji. Ukrywanie tajemnic przed każdym okiem.',
-            'Balistyka i Kryminalistyka'    => 'Analiza śladów postrzałowych, odcisków palców, śladów DNA. Rekonstrukcja przebiegu zbrodni na podstawie miejsca zdarzenia.',
-        ],
-    ],
-    'spoleczne' => [
-        'ikona' => '🗣️',
-        'nazwa' => 'Relacje i Manipulacja',
-        'akcent' => 'var(--neon-gold)',
-        'umiejetnosci' => [
-            'Zarządzanie i Przywództwo'     => 'Kierowanie zespołem ludzi, motywowanie ich do pracy i organizacja firm lub gangów.',
-            'Kadry i Rekrutacja'            => 'Przesłuchiwanie kandydatów, ocena kompetencji, budowanie zespołów, tworzenie umów. Wiedza o prawie pracy.',
-            'Zastraszanie'                  => 'Operowanie mową ciała i groźbami, by złamać rozmówcę.',
-            'Perswazja i Negocjacje'        => 'Złotousty gaduła. Przekonywanie innych i negocjowanie cen.',
-            'Wystąpienia Publiczne'         => 'Przemówienia polityczne, kazania, wykłady. Porywanie tłumu, panowanie nad sceną, kontrola emocji publiczności.',
-            'Marketing i Reklama'           => 'Projektowanie kampanii, budowanie marki, analiza grupy docelowej. Sprzedawanie wszystkiego — od pasty do mordercy jako bohatera.',
-            'Mediacja i Rozwiązywanie Konfliktów' => 'Łagodzenie sporów między stronami, negocjacje pokojowe, rozstrzyganie konfliktów sąsiedzkich lub korporacyjnych.',
-            'Hipnoza i Sugestia'            => 'Wprowadzanie w trans, terapia hipnotyczna, pozyskiwanie informacji drogą sugestii. Techniki perswazji głębokiej.',
-            'Handel i Wycena'               => 'Błyskawiczne ocenianie wartości towarów i profesjonalna obsługa klienta.',
-            'Obsługa Klienta'               => 'Cierpliwość w obsłudze trudnych klientów, rozwiązywanie reklamacji, utrzymywanie kontaktu. Twarz instytucji.',
-            'Sztuka Uwodzenia'              => 'Wabienie, flirt, uwodzenie i wykorzystywanie wdzięków do osiągania celów.',
-            'Znajomość Półświatka'          => 'Znasz odpowiednich ludzi. Wiesz, kogo przekupić i jak działają gangi.',
-            'Fałszerstwo Dokumentów'        => 'Produkcja lewych dowodów, paszportów i przepustek.',
-            'Psychologia i Empatia'         => 'Czytanie emocji innych, manipulacja uczuciami i doradztwo.',
-            'Śledzenie Finansowe'           => 'Wykrywanie prania pieniędzy, audyt, analiza przepływów finansowych i identyfikacja fałszywych transakcji.',
-            'Etykieta i Dobre Manery'       => 'Zasady zachowania na elitarnych salonach. Wiedza jak rozmawiać z bogaczami.',
-        ],
-    ],
-    'scena' => [
-        'ikona' => '🎭',
-        'nazwa' => 'Scena, Sztuka i Rozrywka',
-        'akcent' => 'var(--neon-red-hot)',
-        'umiejetnosci' => [
-            'Sztuka Kulinarna i Gastronomia'=> 'Mistrzowskie gotowanie, pieczenie i serwowanie wykwintnych dań oraz drinków.',
-            'Literatura i Twórcze Pisanie'  => 'Lekkie pióro. Pisanie porywających powieści, scenariuszy i artykułów prasowych.',
-            'Aktorstwo i Charakteryzacja'   => 'Odgrywanie ról, wcielanie się w inne postacie i mistrzowski kamuflaż.',
-            'Reżyseria i Produkcja Filmowa' => 'Prowadzenie ekipy filmowej, inscenizacja ujęć, montaż, praca z aktorami. Od reklamy po kino.',
-            'Wokal i Śpiew'                 => 'Twój głos hipnotyzuje. Śpiewasz czysto i z emocją.',
-            'DJing i Instrumenty'           => 'Gra na instrumentach oraz profesjonalne miksowanie muzyki elektronicznej.',
-            'Realizacja Dźwięku'            => 'Nagrania studyjne, miksowanie, mastering, akustyka koncertowa. Budowanie brzmienia na koncertach i w filmach.',
-            'Akrobatyka i Taniec'           => 'Elastyczność, rozciągnięcie, skoki oraz profesjonalne poczucie rytmu na parkiecie.',
-            'Sztuki Plastyczne i Rzemiosło' => 'Talent manualny. Malowanie, rzeźbienie i tworzenie sztuki wizualnej.',
-            'Fotografia'                    => 'Kompozycja kadru, obsługa profesjonalnego sprzętu, praca ze światłem. Paparazzi, fotoreportaż, fotografia artystyczna.',
-            'Krawiectwo i Stylizacja'       => 'Szycie ubrań na miarę, naprawa pancerzy oraz tworzenie modowych trendów.',
-            'Stand-up i Cięta Riposta'      => 'Zjednywanie publiki żartem i gaszenie oponentów słowem.',
-            'Sztuka Iluzji (Kuglarstwo)'    => 'Sztuczki magiczne, manipulacja kartami i odwracanie uwagi tłumu.',
-            'Moda i Wizerunek'              => 'Dobieranie kreacji, dbanie o wygląd zewnętrzny i budowanie własnej marki osobistej.',
-            'Streaming i Influencing'       => 'Budowanie publiczności w sieci, transmisje na żywo, social media, monetyzacja wizerunku online.',
-        ],
-    ],
-    'outdoor' => [
-        'ikona' => '🌲',
-        'nazwa' => 'Outdoor i Przyroda',
-        'akcent' => 'var(--neon-green)',
-        'umiejetnosci' => [
-            'Myślistwo i Polowanie'         => 'Śledzenie zwierzyny, zakładanie pułapek, strzelanie do ruchomego celu w terenie. Skórowanie i obróbka zdobyczy.',
-            'Tropienie'                     => 'Czytanie śladów na ziemi, ustalanie kierunku poruszania się zwierzęcia lub człowieka, lokalizowanie obozowisk.',
-            'Przetrwanie w Dziczy'          => 'Rozpalanie ognia bez zapałek, rozpoznawanie jadalnych i trujących roślin, budowa szałasów, picie wody z dziczy.',
-            'Jazda Konna'                   => 'Jazda wierzchem, opieka nad koniem, siodłanie, jazda w trudnym terenie.',
-            'Rybołówstwo i Żegluga'         => 'Prowadzenie jednostek pływających od kutra po jacht, nawigacja morska, łowienie ryb, praca na otwartej wodzie.',
-            'Spadochroniarstwo'             => 'Skoki z wysokości, sterowanie spadochronem, lądowanie w terenie, skoki BASE z wież miasta.',
-        ],
-    ],
-    'opieka' => [
-        'ikona' => '🏥',
-        'nazwa' => 'Opieka Medyczna',
-        'akcent' => 'var(--neon-cyan)',
-        'umiejetnosci' => [
-            'Pielęgniarstwo'                => 'Podawanie leków, zakładanie wkłuć, opatrunki, opieka nad pacjentami, pierwsza pomoc. Codzienna praktyka oddziałowa.',
-            'Chirurgia'                     => 'Zaawansowane operacje: cięcie, szycie, transplantacje. Wymaga opanowania, twardej ręki i wiedzy anatomicznej.',
-            'Fizjoterapia i Rehabilitacja'  => 'Rehabilitacja po urazach, masaż leczniczy, ćwiczenia przywracające sprawność, trening cyber-protez.',
-            'Weterynaria'                   => 'Leczenie zwierząt: psów bojowych, koni, cyber-wszczepianych zwierząt syndykatu. Diagnostyka weterynaryjna i zabiegi chirurgiczne.',
-            'Opieka nad Dziećmi i Starszymi'=> 'Opieka nad niemowlętami, wychowanie przedszkolne, opieka geriatryczna. Cierpliwość, empatia i spryt przy codziennych wyzwaniach.',
-        ],
-    ],
-    'rzemioslo' => [
-        'ikona' => '🔨',
-        'nazwa' => 'Rzemiosło Tradycyjne',
-        'akcent' => 'var(--neon-ember)',
-        'umiejetnosci' => [
-            'Kowalstwo i Obróbka Metali'    => 'Kucie, hartowanie, spawanie. Tworzenie mieczy, zbroi, krat. Tradycyjne rzemiosło w epoce drukarek 3D wciąż ma swoją cenę.',
-            'Stolarstwo i Obróbka Drewna'   => 'Praca piłą, dłutem, heblem. Meble, trumny, ściany, podłogi. Stolarz-cieśla wciąż potrzebny w każdej epoce.',
-            'Jubilerstwo i Zegarmistrzostwo'=> 'Tworzenie biżuterii, osadzanie kamieni szlachetnych, naprawa zegarków mechanicznych. Precyzja i oko do detalu.',
-            'Introligatorstwo i Oprawa'     => 'Oprawa książek, konserwacja starych tomów, tworzenie luksusowych wydań kolekcjonerskich. Ginący zawód.',
-        ],
-    ],
-];
+$KOLUMNY = "umiejetnosci, poziom, pochodzenie, zalety, profesja_fabularna, profesja_etap, profesja2, profesja2_etap,
+            um_reset_uzyty, sila, zrecznosc, wytrzymalosc, inteligencja, zmysly, charyzma";
+$g = db_wiersz($polaczenie, "SELECT $KOLUMNY FROM gracze WHERE id = ?", [$id_gracza]);
+$um_raw = $g['umiejetnosci'];
+$um = $um_raw ? (json_decode($um_raw, true) ?: []) : [];
+$LISTA = um_lista();
 
-// ── ZAPIS UMIEJĘTNOŚCI ───────────────────────────────────────────
+// Poziomy powyżej 5 ze starego systemu przycinamy raz — nadwyżka PU wraca do puli sama.
+$przyciete = false;
+foreach ($um as $n => $l) if ((int)$l > UM_MAX_POZIOM) { $um[$n] = UM_MAX_POZIOM; $przyciete = true; }
+if ($przyciete) {
+    $nowy = json_encode($um, JSON_UNESCAPED_UNICODE);
+    db_zmien($polaczenie, "UPDATE gracze SET umiejetnosci = ? WHERE id = ? AND umiejetnosci <=> ?", [$nowy, $id_gracza, $um_raw]);
+    $um_raw = $nowy;
+}
+
+$pula   = um_pula($g);
+$wydane = um_wydane($um);
+$wolne  = $pula - $wydane;
 $blad = "";
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['zapisz_umiejetnosci'])) {
 
-    $wydane_punkty = 0;
-    $nowe_umiejetnosci = $posiadane_um;
-
-    if (isset($_POST['um'])) {
-        // Tylko umiejętności z katalogu — nazwy spoza listy były zapisywane do profilu.
-        $znane_um = [];
-        foreach ($KATEGORIE as $kat_um) foreach ($kat_um['umiejetnosci'] as $n_um => $_o) $znane_um[$n_um] = true;
-        foreach ((array)$_POST['um'] as $nazwa_um => $nowy_poziom) {
-            if (!isset($znane_um[$nazwa_um])) continue;
-            $nowy_poziom = (int)$nowy_poziom;
-            $stary_poziom = isset($posiadane_um[$nazwa_um]) ? (int)$posiadane_um[$nazwa_um] : 0;
-
-            if ($nowy_poziom > $stary_poziom) {
-                $roznica = $nowy_poziom - $stary_poziom;
-                $wydane_punkty += $roznica;
-                $nowe_umiejetnosci[$nazwa_um] = $nowy_poziom;
-            }
-        }
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['zapisz_umiejetnosci'])) {
+    $nowe = $um; $koszt = 0; $zmian = 0;
+    foreach ((array)($_POST['um'] ?? []) as $idx => $cel) {
+        $idx = (int)$idx; $cel = (int)$cel;
+        if (!isset($LISTA[$idx])) continue;
+        $n = $LISTA[$idx]['n']; $teraz = (int)($um[$n] ?? 0);
+        if ($cel <= $teraz) continue;
+        if ($cel > UM_MAX_POZIOM) { $blad = "Maksymalny poziom Umiejętności to " . UM_MAX_POZIOM . "."; break; }
+        $koszt += um_koszt_do($cel) - um_koszt_do($teraz);
+        $nowe[$n] = $cel; $zmian++;
     }
-
-    if ($wydane_punkty <= $dostepne_pu && $wydane_punkty > 0) {
-        $nowe_pu = $dostepne_pu - $wydane_punkty;
-        $pakiet_json = json_encode($nowe_umiejetnosci, JSON_UNESCAPED_UNICODE);
-        // Warunek na stan PU, który widzieliśmy — dwa zapisy naraz nie wydadzą tych samych punktów dwa razy.
-        db_zmien($polaczenie, "UPDATE gracze SET umiejetnosci = ?, punkty_umiejetnosci = ? WHERE id = ? AND punkty_umiejetnosci = ?",
-                 [$pakiet_json, $nowe_pu, (int)$id_gracza, $dostepne_pu]);
-
-        echo "<script>window.location.href='game.php?page=umiejetnosci';</script>";
-        exit;
-    } else {
-        $blad = "Wydano nieprawidłową ilość punktów!";
+    if (!$blad && $zmian === 0) $blad = "Nie wybrano żadnych zmian.";
+    if (!$blad && $koszt > $wolne) $blad = "Za mało Punktów Umiejętności.";
+    if (!$blad) {
+        // Warunek na stary stan JSON — dwa zapisy naraz nie wydadzą tych samych PU.
+        $ok = db_zmien($polaczenie, "UPDATE gracze SET umiejetnosci = ? WHERE id = ? AND umiejetnosci <=> ?",
+                       [json_encode($nowe, JSON_UNESCAPED_UNICODE), $id_gracza, $um_raw]);
+        if ($ok) { echo "<script>location.href='game.php?page=umiejetnosci&ok=" . $zmian . "';</script>"; exit; }
+        $blad = "Karta zmieniła się w międzyczasie. Odśwież stronę i spróbuj ponownie.";
     }
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reset_umiejetnosci'])) {
+    $ok = db_zmien($polaczenie, "UPDATE gracze SET umiejetnosci = '{}', um_reset_uzyty = 1 WHERE id = ? AND um_reset_uzyty = 0", [$id_gracza]);
+    if ($ok) { echo "<script>location.href='game.php?page=umiejetnosci&reset=1';</script>"; exit; }
+    $blad = "Darmowy reset został już wykorzystany.";
+}
+
+$atr = [];
+foreach ($UM_ATRYBUTY as $k => $a) $atr[$k] = (int)($g[$a['kolumna']] ?? 0);
+$dane_js = [
+    'pe' => UM_PE, 'max' => UM_MAX_POZIOM, 'pula' => $pula, 'wydane' => $wydane,
+    'reset' => (bool)$g['um_reset_uzyty'],
+    'atrNazwy' => array_map(fn($a) => $a['nazwa'], $UM_ATRYBUTY), 'atr' => $atr,
+    'kat' => array_map(fn($k) => ['nazwa' => $k['nazwa'], 'kolor' => $k['kolor']], $UM_KATEGORIE),
+    'um' => array_map(fn($u) => [$u['kat'], $u['n'], $u['g'], $u['d'], $u['o'], min(UM_MAX_POZIOM, (int)($um[$u['n']] ?? 0))], $LISTA),
+];
+$zrodla = um_zrodla($g);
+$komunikat = isset($_GET['ok']) ? "Zapisano rozwój — zmian: " . (int)$_GET['ok'] . "." : (isset($_GET['reset']) ? "Reset wykonany. PU wróciły do puli." : "");
 ?>
-
 <style>
-/* ═══════════════════════════════════════════════════════════════════
-   UMIEJETNOSCI.PHP — CYBERPUNK NYC (layout zsynchronizowany z karta.php)
-═══════════════════════════════════════════════════════════════════ */
-
-.um-head { text-align: center; margin-bottom: 30px; }
-.um-head h1 {
-    font-family: 'Oswald', sans-serif; color: #fff; font-size: 2.8em; margin: 0;
-    text-transform: uppercase; letter-spacing: 4px; font-weight: 500; line-height: 1;
-    text-shadow: 0 0 20px rgba(255,23,68,0.3);
-}
-.um-head p {
-    color: var(--neon-red); font-size: .75em; margin-top: 8px;
-    font-family: 'JetBrains Mono', monospace; letter-spacing: 4px; text-transform: uppercase;
-    text-shadow: 0 0 6px rgba(255,23,68,0.5);
-}
-
-.um-pu-panel {
-    background: rgba(255,23,68,0.05);
-    border: 1px solid var(--border-mid); border-radius: 2px;
-    padding: 22px 26px; margin-bottom: 22px;
-    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;
-    box-shadow: 0 0 30px rgba(255,23,68,0.08);
-    position: relative; overflow: hidden;
-}
-.um-pu-panel::before {
-    content: ''; position: absolute; top: 0; left: 0; bottom: 0; width: 3px;
-    background: var(--neon-red); box-shadow: 0 0 12px var(--neon-red);
-}
-.um-pu-label {
-    font-family: 'Oswald', sans-serif; color: var(--neon-red-hot);
-    text-transform: uppercase; letter-spacing: 3px; font-size: 1em;
-    text-shadow: 0 0 8px rgba(255,23,68,0.5);
-}
-.um-pu-value {
-    font-family: 'Oswald', sans-serif; font-weight: 700; font-size: 2.5em;
-    color: #fff; letter-spacing: 2px; line-height: 1;
-    text-shadow: 0 0 12px rgba(255,23,68,0.7);
-}
-.um-pu-subtext {
-    color: var(--txt-mute); font-family: 'JetBrains Mono', monospace;
-    font-size: .75em; letter-spacing: 1.5px; text-transform: uppercase;
-    margin-top: 4px;
-}
-
-.um-info {
-    color: var(--txt-main); font-size: .92em; line-height: 1.55;
-    padding: 14px 18px; margin-bottom: 22px;
-    background: rgba(74,214,255,0.05);
-    border: 1px solid rgba(74,214,255,0.2); border-radius: 2px;
-    position: relative;
-}
-.um-info::before {
-    content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 2px;
-    background: var(--neon-cyan); box-shadow: 0 0 8px var(--neon-cyan);
-}
-
-.blok {
-    background: rgba(10,6,12,0.6); backdrop-filter: blur(8px);
-    border: 1px solid var(--border-soft); border-radius: 2px;
-    padding: 24px; margin-bottom: 20px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.6);
-    position: relative;
-}
-.blok::before {
-    content: ''; position: absolute; top: 0; left: 0; width: 32px; height: 1px;
-    background: var(--akcent, var(--neon-red));
-    box-shadow: 0 0 6px var(--akcent, var(--neon-red));
-}
-.blok-tytul {
-    font-family: 'Oswald', sans-serif; text-transform: uppercase; letter-spacing: 2.5px;
-    font-size: 1.05em; color: #fff; margin: 0 0 18px; font-weight: 500;
-    padding-bottom: 12px; border-bottom: 1px solid var(--border-soft);
-    display: flex; align-items: center; gap: 10px;
-}
-.blok-tytul .licznik-um {
-    color: var(--txt-mute); font-size: .72em; font-weight: 400;
-    text-transform: none; margin-left: auto; letter-spacing: .5px;
-    font-family: 'JetBrains Mono', monospace;
-}
-
-.um-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 10px;
-}
-.um-karta {
-    background: rgba(0,0,0,0.5); border: 1px solid rgba(255,23,68,0.08);
-    border-radius: 2px; padding: 12px 14px;
-    display: flex; justify-content: space-between; align-items: center; gap: 12px;
-    transition: .2s;
-}
-.um-karta:hover {
-    background: rgba(255,23,68,0.04);
-    border-color: var(--border-mid);
-}
-.um-nazwa-box {
-    flex: 1; min-width: 0;
-    font-family: 'Oswald', sans-serif; letter-spacing: .5px;
-    color: var(--txt-main); font-size: .95em;
-    cursor: help; position: relative;
-    border-bottom: 1px dotted rgba(255,23,68,0.2);
-    padding-bottom: 1px;
-}
-.um-nazwa-box:hover { color: #fff; border-bottom-color: var(--neon-cyan); }
-.um-nazwa-box:hover::after {
-    content: attr(data-opis);
-    position: absolute; z-index: 100;
-    bottom: calc(100% + 8px); left: 0;
-    width: 280px; padding: 12px 14px;
-    background: rgba(5,3,7,0.97); backdrop-filter: blur(12px);
-    border: 1px solid var(--neon-red); border-radius: 2px;
-    color: var(--txt-main); font-family: 'Open Sans', sans-serif;
-    font-size: .82em; line-height: 1.5; letter-spacing: 0;
-    text-transform: none; font-weight: normal;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.95), 0 0 20px rgba(255,23,68,0.25);
-    pointer-events: none; text-align: left; white-space: normal;
-}
-
-.um-ctrl { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-.btn-um {
-    background: rgba(0,0,0,0.8); color: var(--txt-main);
-    border: 1px solid var(--border-soft);
-    width: 26px; height: 26px; border-radius: 2px; font-weight: 700; cursor: pointer;
-    transition: .2s; font-size: 1em;
-    display: inline-flex; align-items: center; justify-content: center;
-    font-family: 'JetBrains Mono', monospace;
-}
-.btn-um:hover {
-    background: var(--neon-cyan); color: #000; border-color: var(--neon-cyan);
-    box-shadow: 0 0 10px rgba(74,214,255,0.6);
-}
-.btn-um-minus:hover {
-    background: var(--neon-red-hot); color: #fff; border-color: var(--neon-red);
-    box-shadow: 0 0 10px rgba(255,23,68,0.6);
-}
-.um-poziom {
-    color: var(--neon-cyan); min-width: 28px; text-align: center;
-    font-weight: 700; font-family: 'JetBrains Mono', monospace;
-    font-size: 1.05em; text-shadow: 0 0 6px rgba(74,214,255,0.5);
-}
-.um-poziom.zero { color: var(--txt-mute); text-shadow: none; }
-.um-poziom.wysoki { color: var(--neon-green); text-shadow: 0 0 6px rgba(90,255,154,0.5); }
-
-.blad {
-    background: rgba(255,23,68,0.1); border: 1px solid var(--border-mid);
-    color: var(--neon-red-hot); padding: 13px 16px; border-radius: 2px;
-    margin-bottom: 18px; font-weight: 500; text-align: center;
-    font-family: 'Oswald', sans-serif; letter-spacing: 1.5px;
-    box-shadow: 0 0 20px rgba(255,23,68,0.15);
-}
-
-.um-sticky-zapisz {
-    position: sticky; bottom: 20px; margin-top: 20px;
-    background: rgba(5,3,7,0.95); backdrop-filter: blur(12px);
-    border: 1px solid var(--border-mid); border-radius: 2px;
-    padding: 14px 18px;
-    display: none; align-items: center; justify-content: space-between; gap: 14px;
-    box-shadow: 0 -8px 30px rgba(0,0,0,0.8), 0 0 20px rgba(255,23,68,0.2);
-    z-index: 50;
-}
-.um-sticky-zapisz.aktywny { display: flex; }
-.um-sticky-info {
-    color: var(--txt-dim); font-family: 'Oswald', sans-serif;
-    letter-spacing: 1.5px; text-transform: uppercase; font-size: .88em;
-}
-.um-sticky-info strong { color: var(--neon-red-hot); margin: 0 4px; font-size: 1.3em; }
-
-@media (max-width: 600px) {
-    .um-head h1 { font-size: 2em; letter-spacing: 2px; }
-    .um-pu-panel { flex-direction: column; text-align: center; }
-    .um-pu-value { font-size: 2em; }
-    .um-nazwa-box:hover::after { width: 220px; left: auto; right: 0; }
-}
+.ku{display:flex;flex-direction:column;gap:18px;padding-bottom:10px}
+.ku .mono{font-family:'JetBrains Mono',monospace}
+.ku .lbl{font-family:'JetBrains Mono',monospace;font-size:.72em;letter-spacing:1.6px;text-transform:uppercase;color:var(--txt-dim)}
+.ku-head{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px;border-bottom:1px solid var(--border-soft);padding-bottom:14px}
+.ku-head h1{font-family:'Oswald',sans-serif;font-weight:600;font-size:2.4em;letter-spacing:4px;text-transform:uppercase;color:#fff;text-shadow:0 0 14px rgba(255,23,68,.55)}
+.ku-head p{color:var(--txt-dim);max-width:560px;line-height:1.45;text-wrap:pretty}
+.ku-msg{padding:12px 16px;border:1px solid var(--neon-green);color:var(--neon-green);font-family:'JetBrains Mono',monospace;font-size:.85em}
+.ku-msg.err{border-color:var(--border-hot);color:var(--neon-red-hot)}
+.ku-top{display:grid;grid-template-columns:minmax(0,340px) minmax(0,1fr);gap:14px}
+.ku-panel{background:var(--bg-panel);border:1px solid var(--border-soft);border-radius:2px;padding:16px 18px;backdrop-filter:blur(6px)}
+.pu-big{display:flex;align-items:baseline;gap:10px;margin:6px 0 12px}
+.pu-big b{font-family:'Oswald',sans-serif;font-size:3.2em;line-height:1;color:#fff;text-shadow:0 0 14px rgba(255,23,68,.7)}
+.pu-big span{color:var(--txt-dim);font-family:'JetBrains Mono',monospace;font-size:.8em}
+.pu-bar{height:6px;background:rgba(255,255,255,.06);position:relative;margin-bottom:14px;overflow:hidden}
+.pu-bar i{position:absolute;top:0;bottom:0;left:0;background:var(--neon-red);box-shadow:0 0 10px var(--neon-red)}
+.pu-bar em{position:absolute;top:0;bottom:0;background:repeating-linear-gradient(45deg,var(--neon-gold) 0 4px,transparent 4px 7px)}
+.pu-src{display:flex;flex-direction:column;gap:5px}
+.pu-src div{display:flex;justify-content:space-between;gap:10px;font-size:.95em}
+.pu-src div span:last-child{font-family:'JetBrains Mono',monospace;color:var(--txt-main)}
+.pu-src div.off,.pu-src div.off span:last-child{color:var(--txt-mute)}
+.pu-src .sum{border-top:1px solid var(--border-soft);padding-top:6px;margin-top:3px;font-weight:700}
+.attr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:8px;margin-top:10px}
+.attr{border:1px solid rgba(255,255,255,.07);background:rgba(0,0,0,.25);padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.attr .n{display:flex;justify-content:space-between;align-items:baseline}
+.attr .n b{font-family:'Oswald',sans-serif;font-size:1.7em;color:#fff}
+.attr .t{height:4px;background:rgba(255,255,255,.07);position:relative}
+.attr .t i{position:absolute;left:0;top:0;bottom:0;background:var(--neon-cyan)}
+.attr .t u{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--neon-gold)}
+.attr small{color:var(--txt-dim);font-family:'JetBrains Mono',monospace;font-size:.7em}
+.attr-note{margin-top:12px;color:var(--txt-dim);font-size:.92em;line-height:1.45}
+.attr-note b{color:var(--txt-main)}
+.pe-key{display:inline-block;width:10px;height:2px;background:var(--neon-gold);vertical-align:middle;margin-right:4px}
+details.ku-basic{background:var(--bg-panel);border:1px solid var(--border-soft)}
+details.ku-basic summary{list-style:none;padding:12px 18px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;font-family:'Oswald',sans-serif;letter-spacing:2px;text-transform:uppercase;color:var(--txt-main)}
+details.ku-basic summary::-webkit-details-marker{display:none}
+details.ku-basic summary::after{content:'+';font-family:'JetBrains Mono',monospace;color:var(--neon-red-hot)}
+details.ku-basic[open] summary::after{content:'−'}
+.ku-basic-body{padding:0 18px 16px;color:var(--txt-dim);line-height:1.5;display:flex;flex-direction:column;gap:10px}
+.ku-basic-body ul{padding-left:18px;display:flex;flex-direction:column;gap:4px}
+.ku-basic-body li{color:var(--txt-main)}
+.ku-tools{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.ku-tools input[type=search]{flex:1 1 220px;background:rgba(0,0,0,.4);border:1px solid var(--border-mid);color:var(--txt-main);padding:9px 12px;font-family:inherit;font-size:1em;outline:none}
+.ku-tools input[type=search]:focus{border-color:var(--border-hot)}
+.ku-chips{display:flex;flex-wrap:wrap;gap:6px}
+.ku-chip{background:transparent;border:1px solid rgba(255,255,255,.12);color:var(--txt-dim);padding:6px 10px;font-size:.88em;font-weight:600;letter-spacing:.5px;font-family:inherit;cursor:pointer}
+.ku-chip:hover{color:#fff;border-color:var(--border-mid)}
+.ku-chip.on{color:#fff;border-color:var(--c,var(--neon-red));box-shadow:inset 0 0 0 1px var(--c,var(--neon-red))}
+.ku-tgl{display:flex;align-items:center;gap:6px;color:var(--txt-dim);font-weight:600;cursor:pointer;user-select:none}
+.ku-tgl input{accent-color:var(--neon-red)}
+.ku-kat{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
+.ku-kat h2{font-family:'Oswald',sans-serif;font-weight:500;letter-spacing:3px;text-transform:uppercase;font-size:1.05em;color:var(--c);display:flex;align-items:center;gap:10px;margin:8px 0 2px}
+.ku-kat h2::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,var(--c),transparent);opacity:.4}
+.ku-kat h2 span{font-family:'JetBrains Mono',monospace;font-size:.7em;color:var(--txt-mute);letter-spacing:1px}
+.ku-row{display:grid;grid-template-columns:minmax(0,1fr) 150px 150px 130px 76px;gap:14px;align-items:center;padding:10px 14px;background:var(--bg-card);border:1px solid rgba(255,255,255,.05);border-left:2px solid transparent}
+.ku-row:hover{border-color:rgba(255,255,255,.1);border-left-color:var(--c)}
+.ku-row.has{border-left-color:var(--c)}
+.ku-row .nm b{font-weight:700;font-size:1.05em;color:#fff}
+.ku-row .nm p{color:var(--txt-dim);font-size:.9em;line-height:1.35;margin-top:2px;text-wrap:pretty}
+.ku-atrs{display:flex;gap:5px;flex-wrap:wrap}
+.ku-at{font-family:'JetBrains Mono',monospace;font-size:.7em;letter-spacing:1px;padding:3px 6px;text-transform:uppercase;white-space:nowrap}
+.ku-at.g{background:rgba(74,214,255,.14);color:var(--neon-cyan);border:1px solid rgba(74,214,255,.4)}
+.ku-at.d{color:var(--txt-dim);border:1px dashed rgba(255,255,255,.2)}
+.ku-pips{display:flex;gap:4px;align-items:center}
+.ku-pip{height:12px;flex:1;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.08)}
+.ku-pip.w2{flex:2}
+.ku-pip.s{background:var(--c);border-color:var(--c);box-shadow:0 0 6px var(--c)}
+.ku-pip.p{background:repeating-linear-gradient(45deg,var(--neon-gold) 0 3px,rgba(255,215,0,.25) 3px 6px);border-color:var(--neon-gold)}
+.ku-lvl{font-family:'JetBrains Mono',monospace;font-size:.72em;color:var(--txt-dim);margin-top:5px;display:flex;justify-content:space-between}
+.ku-ch{display:flex;flex-direction:column;gap:2px}
+.ku-ch b{font-family:'Oswald',sans-serif;font-size:1.45em;color:#fff;line-height:1}
+.ku-ch b.cap{color:var(--neon-gold)}
+.ku-ch small{font-family:'JetBrains Mono',monospace;font-size:.68em;color:var(--txt-dim);line-height:1.35}
+.ku-ch.none b{color:var(--txt-mute);font-size:1.1em}
+.ku-btns{display:flex;gap:4px;justify-content:flex-end}
+.ku-btns button{width:34px;height:34px;background:rgba(0,0,0,.4);border:1px solid var(--border-mid);color:#fff;font-family:'JetBrains Mono',monospace;font-size:1.1em;cursor:pointer}
+.ku-btns button:hover:not(:disabled){border-color:var(--border-hot);background:rgba(255,23,68,.15)}
+.ku-btns button:disabled{opacity:.25;cursor:not-allowed}
+.ku-empty{padding:30px;text-align:center;color:var(--txt-mute);font-family:'JetBrains Mono',monospace}
+.ku-bar{position:sticky;bottom:0;z-index:20;background:rgba(5,6,12,.94);border:1px solid var(--border-mid);backdrop-filter:blur(8px);padding:12px 18px;display:flex;flex-wrap:wrap;align-items:center;gap:14px}
+.ku-bar-info{flex:1 1 260px;display:flex;flex-wrap:wrap;gap:18px;align-items:baseline}
+.ku-bar-info b{font-family:'Oswald',sans-serif;font-size:1.5em;color:var(--neon-gold)}
+.ku-btn{padding:10px 18px;font-family:'Oswald',sans-serif;letter-spacing:2px;text-transform:uppercase;font-size:.95em;border:1px solid var(--border-mid);background:transparent;color:var(--txt-main);cursor:pointer}
+.ku-btn:hover:not(:disabled){border-color:var(--border-hot);color:#fff}
+.ku-btn.pri{background:var(--neon-red);border-color:var(--neon-red);color:#fff;box-shadow:0 0 14px rgba(255,23,68,.45)}
+.ku-btn.pri:hover:not(:disabled){background:var(--neon-red-hot)}
+.ku-btn:disabled{opacity:.3;cursor:not-allowed}
+.ku-btn.ghost{border-color:transparent;color:var(--txt-dim);padding:10px 6px;letter-spacing:1px;font-size:.85em}
+.ku-btn.ghost:hover:not(:disabled){color:var(--neon-red-hot)}
+.ku-modal{position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;padding:20px}
+.ku-modal.on{display:flex}
+.ku-modal-box{max-width:460px;width:100%;background:#0c0910;border:1px solid var(--border-hot);padding:22px;display:flex;flex-direction:column;gap:14px;box-shadow:0 0 40px rgba(255,23,68,.25)}
+.ku-modal-box h3{font-family:'Oswald',sans-serif;letter-spacing:3px;text-transform:uppercase;color:#fff}
+.ku-modal-box p{color:var(--txt-dim);line-height:1.5}
+.ku-modal-box ul{list-style:none;display:flex;flex-direction:column;gap:4px;max-height:200px;overflow:auto}
+.ku-modal-box li{display:flex;justify-content:space-between;gap:10px;font-family:'JetBrains Mono',monospace;font-size:.85em}
+.ku-modal-act{display:flex;justify-content:flex-end;gap:8px}
+@media (max-width:860px){.ku-top{grid-template-columns:minmax(0,1fr)}.ku-row{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"nm btns" "atrs atrs" "pips ch"}.ku-row .nm{grid-area:nm}.ku-row .ku-atrs{grid-area:atrs}.ku-row .pw{grid-area:pips}.ku-row .ku-ch{grid-area:ch;text-align:right}.ku-row .ku-btns{grid-area:btns}}
 </style>
 
-<!-- ══ NAGŁÓWEK ══════════════════════════════════════════════════ -->
-<div class="um-head">
-    <h1>Umiejętności Fabularne</h1>
-    <p>// Trening i Rozwój Postaci</p>
-</div>
+<div class="ku">
+<header class="ku-head">
+<div><div class="lbl">Karta postaci · Fabuła</div><h1>Umiejętności</h1></div>
+<p>Poziom Umiejętności decyduje o szansie powodzenia działań postaci w Opowieściach. Mistrz Gry rzuca k100 na Umiejętność razem z przypisanym do niej Atrybutem.</p>
+</header>
 
-<?php if (!empty($blad)): ?>
-<div class="blad">⚠ <?php echo htmlspecialchars($blad); ?></div>
-<?php endif; ?>
+<?php if ($blad): ?><div class="ku-msg err">⚠ <?php echo htmlspecialchars($blad); ?></div><?php endif; ?>
+<?php if ($komunikat && !$blad): ?><div class="ku-msg"><?php echo htmlspecialchars($komunikat); ?></div><?php endif; ?>
 
-<!-- ══ PASEK PUNKTÓW UMIEJĘTNOŚCI ═══════════════════════════════ -->
-<div class="um-pu-panel">
-    <div>
-        <div class="um-pu-label">◆ Wolne Punkty Umiejętności</div>
-        <div class="um-pu-subtext">Rozdysponuj w wybranych umiejętnościach</div>
-    </div>
-    <div class="um-pu-value" id="licznik"><?php echo $dostepne_pu; ?></div>
-</div>
-
-<!-- ══ INFO ═════════════════════════════════════════════════════ -->
-<div class="um-info">
-    💡 Każdy poziom kosztuje 1 PU. Zawody fabularne wymagają konkretnych poziomów
-    umiejętności, a im wyższy poziom — tym większy bonus w sesjach Centrum Opowieści.
-    Każdy awans mechaniczny daje kolejne PU do rozdysponowania.
-</div>
-
-<form method="POST" action="game.php?page=umiejetnosci" id="form-um">
-
-<?php
-// ─── RENDERUJ KATEGORIE JAKO BLOKI ───────────────────────────────
-foreach ($KATEGORIE as $id_kat => $dane_kat):
-    $liczba_um = count($dane_kat['umiejetnosci']);
-    $liczba_nabytych = 0;
-    foreach (array_keys($dane_kat['umiejetnosci']) as $nazwa_um) {
-        if (!empty($posiadane_um[$nazwa_um])) $liczba_nabytych++;
-    }
-?>
-
-<div class="blok" style="--akcent: <?php echo $dane_kat['akcent']; ?>">
-    <div class="blok-tytul">
-        <span><?php echo $dane_kat['ikona']; ?></span>
-        <span><?php echo htmlspecialchars($dane_kat['nazwa']); ?></span>
-        <span class="licznik-um"><?php echo $liczba_nabytych; ?> / <?php echo $liczba_um; ?> opanowane</span>
-    </div>
-
-    <div class="um-grid">
-    <?php foreach ($dane_kat['umiejetnosci'] as $nazwa => $opis):
-        $poziom = isset($posiadane_um[$nazwa]) ? (int)$posiadane_um[$nazwa] : 0;
-        $klucz = htmlspecialchars($nazwa);
-        $opis_safe = htmlspecialchars($opis, ENT_QUOTES);
-        $klasa_poziom = $poziom === 0 ? 'zero' : ($poziom >= 8 ? 'wysoki' : '');
-    ?>
-        <div class="um-karta">
-            <span class="um-nazwa-box" data-opis="<?php echo $opis_safe; ?>"><?php echo htmlspecialchars($nazwa); ?></span>
-            <div class="um-ctrl">
-                <button type="button" class="btn-um btn-um-minus" onclick="zmienPunkt('<?php echo $klucz; ?>', -1, <?php echo $poziom; ?>)">−</button>
-                <span class="um-poziom <?php echo $klasa_poziom; ?>" id="wyswietl_<?php echo $klucz; ?>"><?php echo $poziom; ?></span>
-                <input type="number" name="um[<?php echo $klucz; ?>]" id="input_<?php echo $klucz; ?>" value="<?php echo $poziom; ?>" style="display:none">
-                <button type="button" class="btn-um" onclick="zmienPunkt('<?php echo $klucz; ?>', 1, <?php echo $poziom; ?>)">+</button>
-            </div>
-        </div>
-    <?php endforeach; ?>
-    </div>
-</div>
-
+<section class="ku-top">
+<div class="ku-panel">
+<div class="lbl">Wolne Punkty Umiejętności</div>
+<div class="pu-big"><b id="puFree"><?php echo $wolne; ?></b><span>/ <?php echo $pula; ?> PU · maks. ok. 60</span></div>
+<div class="pu-bar"><i id="puSpent" style="width:<?php echo $pula ? round($wydane / $pula * 100, 2) : 0; ?>%"></i><em id="puPend"></em></div>
+<div class="pu-src">
+<?php foreach ($zrodla as [$et, $pkt, $akt]): ?>
+<div class="<?php echo $akt ? '' : 'off'; ?>"><span><?php echo htmlspecialchars($et); ?></span><span><?php echo $pkt === null ? '—' : '+' . (int)$pkt; ?></span></div>
 <?php endforeach; ?>
+<div class="sum"><span>Razem</span><span><?php echo $pula; ?> PU</span></div>
+<div><span>Wydane</span><span>−<?php echo $wydane; ?></span></div>
+</div>
+</div>
+<div class="ku-panel">
+<div class="lbl">Atrybuty · skala 0–100</div>
+<div class="attr-grid">
+<?php foreach ($UM_ATRYBUTY as $k => $a): $v = $atr[$k]; ?>
+<div class="attr"><div class="n"><span class="lbl"><?php echo $a['nazwa']; ?></span><b><?php echo $v; ?></b></div><div class="t"><i style="width:<?php echo min(100, $v); ?>%"></i><u style="left:<?php echo UM_PE; ?>%"></u></div><small>⅓ do testu: +<?php echo intdiv($v, 3); ?></small></div>
+<?php endforeach; ?>
+</div>
+<p class="attr-note">Szansa na teście Umiejętności = <b>poziom × 20</b> + <b>⅓ Atrybutu</b> (w dół). Mistrz Gry dolicza modyfikator od −50 do +50. Wynik nie przekroczy <span class="pe-key"></span><b>Progu Efektywności (<?php echo UM_PE; ?>%)</b>. Atrybut dodatkowy (ramka przerywana) wchodzi do testu, gdy MG uzna, że sytuacja to uzasadnia.</p>
+</div>
+</section>
 
-<!-- ══ STICKY PASEK NA DOLE — widoczny gdy są zmiany ═══════════ -->
-<div class="um-sticky-zapisz" id="sticky-zapisz">
-    <div class="um-sticky-info">
-        ◤ Wydajesz <strong id="sticky-wydane">0</strong> PU z <strong><?php echo $dostepne_pu; ?></strong>
-    </div>
-    <button type="submit" name="zapisz_umiejetnosci" style="
-        background:var(--neon-red); color:#fff; border:none; padding:11px 28px;
-        font-family:'Oswald',sans-serif; font-size:1em; font-weight:600;
-        cursor:pointer; text-transform:uppercase; letter-spacing:2.5px; border-radius:2px;
-        box-shadow:0 0 15px rgba(255,23,68,0.5);">
-        ▸ Zatwierdź Wybór
-    </button>
+<details class="ku-basic">
+<summary>Umiejętności podstawowe — ma je każda postać</summary>
+<div class="ku-basic-body">
+<p>Umiejętności podstawowe opisują podstawowe kompetencje każdego mieszkańca The Abyss. Posiadają je wszystkie istoty rozumne, chyba że dana postać ma również Wadę, która wprowadza jakieś ograniczenie.</p>
+<ul>
+<li>czytania i pisania we wszystkich znanych przez siebie językach,</li>
+<li>rachowania — potrafi liczyć na poziomie umożliwiającym zakupy, handel czy kontrolę wydatków,</li>
+<li>teologii i historii kraju skąd pochodzi (w wersji przekazywanej przez rodzime państwo bądź społeczność),</li>
+<li>przygotowywania prostych posiłków, przetworów i napojów,</li>
+<li>tańca i śpiewu — potrafi dostatecznie odtworzyć podstawowe kroki przynajmniej jednego tańca popularnego w środowisku, z którego się wywodzi, zna też kilka rodzimych piosenek i ich teksty,</li>
+<li>pływania i utrzymywania się na wodzie w dogodnych warunkach atmosferycznych,</li>
+<li>jazdy autem lub konno — potrafi jeździć wierzchem, stępem oraz kłusem po równej, bezpiecznej powierzchni w celu przemieszczania się [ta zasada dotyczy tylko jazdy końmi, nie innych wierzchowców],</li>
+<li>używania popularnych produktów medycznych — rozpoznaje i umie zaaplikować najpowszechniejsze środki zbijające gorączkę, uśmierzające ból, a także zaopatrywać rany w sytuacjach niezagrażających istotnie zdrowiu i życiu,</li>
+<li>prostych napraw oręża, wyposażenia i ubrań (w tym proste czynności krawieckie) oraz konserwacji broni, którą się posługuje.</li>
+</ul>
+<p>Akcje odpowiadające wszystkim tu wymienionym w typowych sytuacjach uważa się za automatycznie udane. Chcąc zapewnić swojej postaci wyższe kompetencje w zakresie któregokolwiek z powyższych aspektów, należy wybrać odpowiednią Umiejętność.</p>
+</div>
+</details>
+
+<div class="ku-tools">
+<input type="search" id="kuQ" placeholder="Szukaj umiejętności…">
+<div class="ku-chips" id="kuChips"></div>
+<label class="ku-tgl"><input type="checkbox" id="kuOnly"> Tylko rozwinięte</label>
 </div>
 
+<form method="POST" action="game.php?page=umiejetnosci" id="kuForm">
+<input type="hidden" name="zapisz_umiejetnosci" value="1">
+<div id="kuList"></div>
+<div id="kuInputs"></div>
 </form>
+<form method="POST" action="game.php?page=umiejetnosci" id="kuResetForm"><input type="hidden" name="reset_umiejetnosci" value="1"></form>
+
+<div class="ku-bar">
+<div class="ku-bar-info">
+<span class="lbl">Do wydania <b id="bPend">0</b> PU</span>
+<span class="lbl">Po zapisie zostanie <b id="bLeft" style="color:#fff"><?php echo $wolne; ?></b> PU</span>
+</div>
+<button type="button" class="ku-btn ghost" id="bReset" <?php echo ($g['um_reset_uzyty'] || $wydane === 0) ? 'disabled' : ''; ?>>Reset umiejętności <?php echo $g['um_reset_uzyty'] ? '(wykorzystany)' : '(1× za darmo)'; ?></button>
+<button type="button" class="ku-btn" id="bUndo" disabled>Cofnij</button>
+<button type="button" class="ku-btn pri" id="bSave" disabled>Zatwierdź</button>
+</div>
+</div>
+
+<div class="ku-modal" id="kuModal"><div class="ku-modal-box">
+<h3 id="mT"></h3><p id="mP"></p><ul id="mL"></ul>
+<div class="ku-modal-act"><button type="button" class="ku-btn" id="mNo">Anuluj</button><button type="button" class="ku-btn pri" id="mYes">Potwierdź</button></div>
+</div></div>
 
 <script>
-const maxDostepne = <?php echo $dostepne_pu; ?>;
-let aktualnieWydane = 0;
-
-function zmienPunkt(klucz, zmiana, poziomBazy) {
-    const input = document.getElementById('input_' + klucz);
-    const display = document.getElementById('wyswietl_' + klucz);
-    const obecnyPoziom = parseInt(input.value);
-    const nowyPoziom = obecnyPoziom + zmiana;
-
-    if (nowyPoziom < poziomBazy) {
-        return;
-    }
-    if (zmiana > 0) {
-        if (aktualnieWydane >= maxDostepne) return;
-        aktualnieWydane++;
-    } else if (zmiana < 0) {
-        aktualnieWydane--;
-    }
-
-    input.value = nowyPoziom;
-    display.innerText = nowyPoziom;
-
-    display.classList.remove('zero', 'wysoki');
-    if (nowyPoziom === 0) display.classList.add('zero');
-    else if (nowyPoziom >= 8) display.classList.add('wysoki');
-
-    document.getElementById('licznik').innerText = (maxDostepne - aktualnieWydane);
-    document.getElementById('sticky-wydane').innerText = aktualnieWydane;
-
-    const sticky = document.getElementById('sticky-zapisz');
-    if (aktualnieWydane > 0) sticky.classList.add('aktywny');
-    else sticky.classList.remove('aktywny');
-}
+(function(){
+const D=<?php echo json_encode($dane_js, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+const A=D.atrNazwy,PE=D.pe,MAX=D.max,$=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let pend={},kat="all";
+const koszt=l=>l>=5?2:(l>=1?1:0);
+const kosztDo=l=>{let s=0;for(let i=1;i<=l;i++)s+=koszt(i);return s};
+const lv=i=>D.um[i][5],lvP=i=>lv(i)+(pend[i]||0);
+const oczek=()=>Object.keys(pend).reduce((s,i)=>s+kosztDo(lvP(i))-kosztDo(lv(i)),0);
+const wolne=()=>D.pula-D.wydane-oczek();
+const szansa=(l,a)=>l*20+Math.floor(D.atr[a]/3);
+function renderTop(){const p=oczek();$('puFree').textContent=D.pula-D.wydane-p;
+ const e=$('puPend');e.style.left=(D.pula?D.wydane/D.pula*100:0)+"%";e.style.width=(D.pula?p/D.pula*100:0)+"%";
+ $('bPend').textContent=p;$('bLeft').textContent=D.pula-D.wydane-p;$('bSave').disabled=p===0;$('bUndo').disabled=p===0;
+ $('kuInputs').innerHTML=Object.keys(pend).map(i=>`<input type="hidden" name="um[${i}]" value="${lvP(i)}">`).join("")}
+function renderChips(){const c=[["all",{nazwa:"Wszystkie",kolor:"#ff1744"}]].concat(Object.entries(D.kat));
+ $('kuChips').innerHTML=c.map(([id,k])=>`<button type="button" class="ku-chip${kat===id?' on':''}" style="--c:${k.kolor}" data-k="${id}">${esc(k.nazwa)}</button>`).join("")}
+function row(i,col){const[,n,g,d,o]=D.um[i],s=lv(i),p=lvP(i),nc=koszt(p+1);
+ let pips="";for(let k=1;k<=MAX;k++)pips+=`<span class="ku-pip${k===5?' w2':''}${k<=s?' s':(k<=p?' p':'')}"></span>`;
+ let ch;if(p===0)ch=`<div class="ku-ch none"><b>—</b><small>bez Umiejętności:<br>test Atrybutu ${Math.min(D.atr[g],PE)}%</small></div>`;
+ else{const raw=szansa(p,g);ch=`<div class="ku-ch"><b class="${raw>=PE?'cap':''}">${Math.min(raw,PE)}%</b><small>${p}×20 + ${Math.floor(D.atr[g]/3)} ${A[g].slice(0,3).toUpperCase()}${raw>PE?' · limit PE':''}${d?`<br>z ${A[d]}: ${Math.min(szansa(p,d),PE)}%`:''}</small></div>`}
+ return `<div class="ku-row${p>0?' has':''}" style="--c:${col}"><div class="nm"><b>${esc(n)}</b><p>${esc(o)}</p></div>
+ <div class="ku-atrs"><span class="ku-at g" title="Atrybut główny">${A[g]}</span>${d?`<span class="ku-at d" title="Atrybut dodatkowy">+ ${A[d]}</span>`:''}</div>
+ <div class="pw"><div class="ku-pips">${pips}</div><div class="ku-lvl"><span>poz. ${p}/${MAX}</span><span>${p<MAX?'następny: '+nc+' PU':'maks.'}</span></div></div>
+ ${ch}<div class="ku-btns"><button type="button" data-m="${i}" ${p<=s?'disabled':''} aria-label="Obniż">−</button><button type="button" data-p="${i}" ${p>=MAX||nc>wolne()?'disabled':''} aria-label="Podnieś">+</button></div></div>`}
+function renderList(){const q=$('kuQ').value.trim().toLowerCase(),only=$('kuOnly').checked;let h="";
+ Object.entries(D.kat).forEach(([kid,k])=>{if(kat!=="all"&&kat!==kid)return;
+  const all=D.um.map((u,i)=>i).filter(i=>D.um[i][0]===kid);
+  const vis=all.filter(i=>(!q||D.um[i][1].toLowerCase().includes(q)||D.um[i][4].toLowerCase().includes(q))&&(!only||lvP(i)>0));
+  if(!vis.length)return;h+=`<section class="ku-kat" style="--c:${k.kolor}"><h2>${esc(k.nazwa)} <span>${all.filter(i=>lvP(i)>0).length}/${all.length}</span></h2>${vis.map(i=>row(i,k.kolor)).join("")}</section>`});
+ $('kuList').innerHTML=h||'<div class="ku-empty">// Brak umiejętności dla tego filtra</div>'}
+function all(){renderTop();renderList()}
+$('kuList').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+ if(b.dataset.p!==undefined){const i=b.dataset.p;pend[i]=(pend[i]||0)+1}else if(b.dataset.m!==undefined){const i=b.dataset.m;pend[i]--;if(!pend[i])delete pend[i]}all()});
+$('kuChips').addEventListener('click',e=>{const b=e.target.closest('.ku-chip');if(!b)return;kat=b.dataset.k;renderChips();renderList()});
+$('kuQ').addEventListener('input',renderList);$('kuOnly').addEventListener('change',renderList);
+$('bUndo').onclick=()=>{pend={};all()};
+const M=$('kuModal');let onYes=null;
+function modal(t,p,items,fn){$('mT').textContent=t;$('mP').textContent=p;$('mL').innerHTML=items.map(x=>`<li><span>${esc(x[0])}</span><span>${esc(x[1])}</span></li>`).join("");onYes=fn;M.classList.add('on')}
+$('mNo').onclick=()=>M.classList.remove('on');M.addEventListener('click',e=>{if(e.target===M)M.classList.remove('on')});
+$('mYes').onclick=()=>{M.classList.remove('on');onYes&&onYes()};
+$('bSave').onclick=()=>{const it=Object.keys(pend).map(i=>[D.um[i][1]+" "+lv(i)+" → "+lvP(i),"−"+(kosztDo(lvP(i))-kosztDo(lv(i)))+" PU"]);
+ modal("Zatwierdzić rozwój?","Wydanych PU nie da się odzyskać. Jedyny wyjątek to jednorazowy darmowy reset.",it,()=>$('kuForm').submit())};
+$('bReset').onclick=()=>modal("Reset umiejętności","Wszystkie Umiejętności wrócą do poziomu 0, a PU wrócą do puli. Reset jest darmowy, ale możesz go użyć tylko raz.",[["Zwrot",D.wydane+" PU"]],()=>$('kuResetForm').submit());
+renderChips();all();
+})();
 </script>

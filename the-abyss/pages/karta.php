@@ -619,7 +619,7 @@ if ($_SERVER['REQUEST_METHOD']=='POST' && isset($_POST['wybierz_zawod'])) {
         foreach ($req as $n=>$l) if (($pu[$n]??0)<$l) { $ok=false; break; }
         if ($ok) {
             $wz_esc = $polaczenie->real_escape_string($wz);
-            $polaczenie->query("UPDATE gracze SET profesja_fabularna='$wz_esc' WHERE id=$id_gracza");
+            $polaczenie->query("UPDATE gracze SET profesja_etap=IF(profesja_fabularna<=>'$wz_esc', profesja_etap, 1), profesja_fabularna='$wz_esc' WHERE id=$id_gracza");
             echo "<script>location.href='game.php?page=karta';</script>"; exit;
         } else $blad_zawodu = "Nie spełniasz wymagań, by podjąć ten zawód!";
     }

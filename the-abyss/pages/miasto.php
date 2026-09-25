@@ -47,16 +47,19 @@ foreach ($bw_dane as &$d) foreach ($d['miejsca'] as &$m) {
     foreach (['jpg','jpeg','png','webp'] as $ext) {
         if (is_file("$bw_root/img/miasto/{$m['k']}.$ext")) { $m['img'] = "img/miasto/{$m['k']}.$ext"; break; }
     }
+    if ($m['img'] === '' && is_file("$bw_root/img/{$m['k']}.jpg")) $m['img'] = "img/{$m['k']}.jpg";   // np. istniejące img/katedra.jpg
+
 }
 unset($d, $m);
 ?>
 <style>
-.bw{--bw-bulb:#ffd27a}
+@font-face{font-family:'Ironspace Grunge';src:url('fonts/IronspaceGrunge-BL8D8.woff2') format('woff2'),url('fonts/IronspaceGrunge-BL8D8.woff') format('woff'),url('fonts/IronspaceGrunge-BL8D8.ttf') format('truetype'),url('fonts/IronspaceGrunge-BL8D8.otf') format('opentype');font-display:swap}
+.bw{--bw-bulb:#ffd27a;--bw-szyld:'Ironspace Grunge','Oswald',sans-serif}
 .bw-marq{position:relative;padding:30px 28px 26px;margin-bottom:26px;border:1px solid var(--border-mid);background:linear-gradient(135deg,rgba(255,255,255,.13),rgba(255,255,255,.03) 38%,rgba(255,23,68,.07) 100%);backdrop-filter:blur(16px) saturate(150%);-webkit-backdrop-filter:blur(16px) saturate(150%);border-color:rgba(255,255,255,.18);box-shadow:inset 0 1px 0 rgba(255,255,255,.35),inset 0 -1px 0 rgba(255,23,68,.35),0 10px 40px rgba(0,0,0,.45),0 0 30px rgba(255,23,68,.14);text-align:center;overflow:hidden}
 .bw-marq::before{content:'';position:absolute;inset:0;pointer-events:none;background:radial-gradient(circle,var(--bw-bulb) 0 2px,rgba(255,210,122,.35) 3px,transparent 5px) 0 4px/20px 12px repeat-x,radial-gradient(circle,var(--bw-bulb) 0 2px,rgba(255,210,122,.35) 3px,transparent 5px) 10px calc(100% - 4px)/20px 12px repeat-x;animation:bw-chase 1.6s steps(2) infinite;opacity:.85}
 @keyframes bw-chase{to{background-position:20px 4px,30px calc(100% - 4px)}}
 .bw-marq .eyebrow{font-family:'JetBrains Mono',monospace;font-size:.75em;letter-spacing:4px;text-transform:uppercase;color:var(--neon-red);text-shadow:0 0 6px rgba(255,23,68,.5);margin-bottom:8px}
-.bw-marq h1{font-family:'Oswald',sans-serif;font-weight:600;font-size:3em;letter-spacing:10px;text-transform:uppercase;color:#fff;line-height:1;text-shadow:0 0 18px rgba(255,23,68,.7),0 0 2px #fff}
+.bw-marq h1{font-family:var(--bw-szyld);font-weight:400;font-size:3em;letter-spacing:10px;text-transform:uppercase;color:#fff;line-height:1;text-shadow:0 0 18px rgba(255,23,68,.7),0 0 2px #fff}
 .bw-marq p{margin-top:10px;color:var(--txt-dim);font-size:1.05em;text-wrap:pretty}
 .bw{container-type:inline-size}.bw-uklad{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:24px;align-items:start}
 .bw-aleja{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:22px 16px}
@@ -64,10 +67,10 @@ unset($d, $m);
 .bw-slup::before{content:'';position:absolute;top:8px;bottom:0;left:50%;width:6px;margin-left:-3px;background:linear-gradient(90deg,#16121a,#3a3440 45%,#0c0a0e);border-radius:2px;box-shadow:0 0 10px rgba(0,0,0,.8)}
 .bw-slup::after{content:'';position:absolute;bottom:0;left:50%;width:34px;height:8px;margin-left:-17px;background:#1c1820;border-radius:2px 2px 0 0;box-shadow:0 0 16px color-mix(in srgb,var(--c) 45%,transparent)}
 .bw-tabl{position:relative;z-index:1;width:100%;padding:9px 10px 8px;background:linear-gradient(160deg,rgba(255,255,255,.16),rgba(255,255,255,.04) 45%,color-mix(in srgb,var(--c) 10%,transparent));backdrop-filter:blur(12px) saturate(150%);-webkit-backdrop-filter:blur(12px) saturate(150%);border:1px solid rgba(255,255,255,.2);border-bottom-color:var(--c);box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 0 16px color-mix(in srgb,var(--c) 28%,transparent);text-align:center;margin-bottom:14px}
-.bw-tabl b{display:block;font-family:'Oswald',sans-serif;font-weight:600;font-size:1.35em;letter-spacing:3px;text-transform:uppercase;color:#fff;text-shadow:0 0 10px var(--c)}
+.bw-tabl b{display:block;font-family:var(--bw-szyld);font-weight:400;font-size:1.35em;letter-spacing:3px;text-transform:uppercase;color:#fff;text-shadow:0 0 10px var(--c)}
 .bw-tabl span{display:block;font-family:'JetBrains Mono',monospace;font-size:.68em;letter-spacing:2px;text-transform:uppercase;color:var(--c);margin-top:2px}
 .bw-znaki{position:relative;z-index:1;width:100%;display:flex;flex-direction:column;gap:9px}
-.bw-znak{--ar:14px;position:relative;display:flex;align-items:center;gap:8px;width:92%;min-height:42px;padding:6px 14px;text-decoration:none;color:var(--txt-main);background:linear-gradient(180deg,rgba(255,255,255,.17),rgba(255,255,255,.05) 48%,rgba(255,255,255,.02) 52%,color-mix(in srgb,var(--c) 8%,transparent));backdrop-filter:blur(10px) saturate(160%);-webkit-backdrop-filter:blur(10px) saturate(160%);font-family:'Oswald',sans-serif;font-weight:500;font-size:.9em;letter-spacing:1px;text-transform:uppercase;line-height:1.1;transition:background .35s,color .35s,filter .35s,transform .35s;filter:drop-shadow(0 3px 6px rgba(0,0,0,.55));overflow:hidden}
+.bw-znak{--ar:14px;position:relative;display:flex;align-items:center;gap:8px;width:92%;min-height:42px;padding:6px 14px;text-decoration:none;color:var(--txt-main);background:linear-gradient(180deg,rgba(255,255,255,.17),rgba(255,255,255,.05) 48%,rgba(255,255,255,.02) 52%,color-mix(in srgb,var(--c) 8%,transparent));backdrop-filter:blur(10px) saturate(160%);-webkit-backdrop-filter:blur(10px) saturate(160%);font-family:'Oswald',sans-serif;font-weight:500;font-size:.9em;letter-spacing:1px;text-transform:uppercase;line-height:1.1;transition:background .35s,color .35s,filter .35s,transform .35s;filter:drop-shadow(0 3px 6px rgba(0,0,0,.55));overflow:hidden}.bw-znak .nz{font-family:var(--bw-szyld);font-weight:400}
 .bw-znak.p{align-self:flex-end;padding-right:calc(var(--ar) + 10px);clip-path:polygon(0 0,calc(100% - var(--ar)) 0,100% 50%,calc(100% - var(--ar)) 100%,0 100%)}
 .bw-znak.l{align-self:flex-start;flex-direction:row-reverse;text-align:right;padding-left:calc(var(--ar) + 10px);clip-path:polygon(var(--ar) 0,100% 0,100% 100%,var(--ar) 100%,0 50%)}
 .bw-znak::before{content:'';position:absolute;inset:0;pointer-events:none;border-top:1px solid rgba(255,255,255,.38);border-bottom:1px solid color-mix(in srgb,var(--c) 55%,transparent)}.bw-znak::after{content:'';position:absolute;top:0;bottom:0;left:-60%;width:45%;pointer-events:none;background:linear-gradient(100deg,transparent,rgba(255,255,255,.32),transparent);transform:skewX(-18deg);transition:left .8s ease}.bw-znak:hover::after,.bw-znak.akt::after{left:120%}
