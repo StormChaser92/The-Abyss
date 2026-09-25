@@ -4,6 +4,7 @@ require_once __DIR__ . '/../config/pochodzenia.php';
 require_once __DIR__ . '/../config/zawody.php';
 require_once __DIR__ . '/../config/rp_helpers.php';
 require_once __DIR__ . '/../config/uniwersytet.php';
+require_once __DIR__ . '/../includes/karta_profesje.php';
 
 $id_gracza = $_SESSION['id_gracza'];
 
@@ -616,22 +617,8 @@ if ($_SERVER['REQUEST_METHOD']=='POST' && isset($_POST['zapisz_ap'])) {
 // ── ZAWODY — źródło prawdy: config/zawody.php ─────────────────
 $zawody = $ZAWODY_DANE;
 
-// WYBÓR ZAWODU
-if ($_SERVER['REQUEST_METHOD']=='POST' && isset($_POST['wybierz_zawod'])) {
-    $gd  = $polaczenie->query("SELECT umiejetnosci FROM gracze WHERE id=$id_gracza")->fetch_assoc();
-    $pu  = !empty($gd['umiejetnosci']) ? json_decode($gd['umiejetnosci'],true) : [];
-    $wz  = (string)($_POST['zawod'] ?? '');
-    if (isset($zawody[$wz])) {
-        // Etap 1: dyplom (jeśli Profesja wymaga studiów) + wymagania przeliczone na skalę 1–5.
-        [$ok] = uni_wymog_zawodu($polaczenie, (int)$id_gracza, $zawody[$wz], 1);
-        foreach ($zawody[$wz]['wymagania'] as $n=>$l) if (($pu[$n]??0) < um_wymaganie_etapu((int)$l, 1)) { $ok=false; break; }
-        if ($ok) {
-            $wz_esc = $polaczenie->real_escape_string($wz);
-            $polaczenie->query("UPDATE gracze SET profesja_etap=IF(profesja_fabularna<=>'$wz_esc', profesja_etap, 1), profesja_fabularna='$wz_esc' WHERE id=$id_gracza");
-            echo "<script>location.href='game.php?page=karta';</script>"; exit;
-        } else $blad_zawodu = "Nie spełniasz wymagań, by podjąć ten zawód!";
-    }
-}
+// PROFESJE — wybór, awans, porzucenie (includes/karta_profesje.php)
+$blad_zawodu = kp_obsluz_post($polaczenie, (int)$id_gracza, $zawody);
 
 // ── PEŁNE DANE GRACZA (po wszystkich zapisach POST) ───────────
 $gracz = $polaczenie->query("SELECT * FROM gracze WHERE id=$id_gracza")->fetch_assoc();
@@ -1280,59 +1267,11 @@ $reputacja = reputacja_grupowa($gracz);
 
 <!-- ══ KARIERA ════════════════════════════════════════════════════ -->
 <div class="blok">
-    <div class="blok-tytul">💼 Kariera Fabularna</div>
-
-    <div class="kariera-header">
-        <span class="kariera-label">
-            Obecny zawód:
-            <strong><?php echo htmlspecialchars($gracz['profesja_fabularna'] ?: '—'); ?></strong>
-        </span>
-        <?php $tyt_glowny = uni_tytul_glowny($polaczenie, (int)$id_gracza); if ($tyt_glowny): ?>
-        <span class="kariera-tytul">🎓 <?php echo htmlspecialchars($tyt_glowny); ?></span>
-        <?php endif; ?>
-    </div>
-
-    <?php if($blad_zawodu) echo "<div class='blad'>⚠ $blad_zawodu</div>"; ?>
-
-    <div class="zawody-grid">
-    <?php foreach($zawody as $nazwa=>$dane):
-        [$uni_ok, $req_t] = uni_wymog_zawodu($polaczenie, (int)$id_gracza, $dane, 1);
-        $braki   = false;
-        $html_r  = "";
-        if ($req_t) {
-            if ($uni_ok) $html_r .= "<div class='req-tytul-ok'>🎓 " . htmlspecialchars($req_t) . " ✓</div>";
-            else { $braki=true; $html_r .= "<div class='req-tytul-brak'>🎓 " . htmlspecialchars($req_t) . "</div>"; }
-        }
-        foreach ($dane['wymagania'] as $n=>$l) {
-            $l = um_wymaganie_etapu((int)$l, 1);
-            if ($l <= 0) continue;
-            $p = $posiadane_um[$n] ?? 0;
-            if ($p < $l) { $braki=true; $html_r .= "<div class='req-brak'>$n ($p/$l)</div>"; }
-            else           $html_r .= "<div class='req-ok'>$n ($p/$l) ✓</div>";
-        }
-        $moze   = !$braki;
-        $obecny = ($gracz['profesja_fabularna']==$nazwa);
-        $cls    = $obecny ? 'aktywny' : ($moze ? 'dostepny' : 'niedostepny');
-    ?>
-        <div class="zawod-karta <?php echo $cls; ?>">
-            <div>
-                <div class="zawod-nazwa"><?php echo htmlspecialchars($nazwa); ?></div>
-                <div class="zawod-opis"><?php echo htmlspecialchars($dane['opis']); ?></div>
-            </div>
-            <div class="zawod-req"><?php echo $html_r; ?></div>
-            <form method="POST">
-                <input type="hidden" name="zawod" value="<?php echo htmlspecialchars($nazwa); ?>">
-                <?php if($obecny): ?>
-                    <button type="button" class="btn-zawod btn-z-aktywny">✓ Wykonujesz ten zawód</button>
-                <?php elseif($moze): ?>
-                    <button type="submit" name="wybierz_zawod" class="btn-zawod btn-z-wybierz">Zdobądź ten zawód</button>
-                <?php else: ?>
-                    <button type="button" class="btn-zawod btn-z-brak" disabled>Nie spełniasz wymagań</button>
-                <?php endif; ?>
-            </form>
-        </div>
-    <?php endforeach; ?>
-    </div>
+    <div class="blok-tytul">💼 Kariera Fabularna <span class="note">2 Profesje × 4 etapy · 1 / 2 / 3 / 4 PU</span></div>
+    <?php $tyt_glowny = uni_tytul_glowny($polaczenie, (int)$id_gracza); if ($tyt_glowny): ?>
+    <div class="kariera-header"><span class="kariera-label">Najwyższy tytuł</span><span class="kariera-tytul">🎓 <?php echo htmlspecialchars($tyt_glowny); ?></span></div>
+    <?php endif; ?>
+    <?php kp_renderuj($polaczenie, $gracz, $zawody, $blad_zawodu); ?>
 </div>
 
 <!-- ══ BONUSY RP — aktywne w sesjach Centrum Opowieści ══════════ -->

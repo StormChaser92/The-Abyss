@@ -170,6 +170,8 @@ function um_zrodla(array $g): array {
         $r[] = $n ? ['Profesja ' . ($i + 1) . ': ' . $n . ' · etap ' . $e . '/4', um_pu_profesji($e), true]
                   : ['Profesja ' . ($i + 1) . ': brak', null, false];
     }
+    $zach = (int)($g['profesja_pu_zachowane'] ?? 0);
+    if ($zach > 0) $r[] = ['Porzucona Profesja (zachowane)', $zach, true];
     $r[] = ['Zaleta: Wykształcony', $wyk ? UM_PU_WYKSZTALCONY : null, $wyk];
     // Uniwersytet: 2 PU za stopień z maks. 2 kierunków (config/uniwersytet.php)
     global $polaczenie;
@@ -249,9 +251,9 @@ function um_test(array $g, string $nazwa, string $atr = 'g', int $mod_dod = 0): 
         $poch_pkt  = (int)($POCHODZENIA_DANE[$p]['rp']['umiejetnosci_bonus_flat'][$nazwa] ?? 0);
         $poch_kara = abs((int)($POCHODZENIA_DANE[$p]['rp']['umiejetnosci_kara_flat'][$nazwa] ?? 0));
     }
-    $zaw_proc = 0;
-    $z = $g['profesja_fabularna'] ?? null;
-    if ($z && isset($ZAWODY_DANE[$z]['rp']['umiejetnosci_bonus_proc'][$nazwa])) $zaw_proc = (int)$ZAWODY_DANE[$z]['rp']['umiejetnosci_bonus_proc'][$nazwa];
+    $zaw_proc = 0;   // z obu Profesji liczy się wyższy bonus
+    foreach ([$g['profesja_fabularna'] ?? null, $g['profesja2'] ?? null] as $z)
+        if ($z && isset($ZAWODY_DANE[$z]['rp']['umiejetnosci_bonus_proc'][$nazwa])) $zaw_proc = max($zaw_proc, (int)$ZAWODY_DANE[$z]['rp']['umiejetnosci_bonus_proc'][$nazwa]);
 
     $mod_poch = ($poz > 0 ? $poch_pkt : 0) * UM_MOD_POCHODZENIE_PKT - $poch_kara * UM_MOD_POCHODZENIE_PKT;
     $mod_zaw  = $poz > 0 ? (int)round($zaw_proc / UM_MOD_ZAWOD_DZIELNIK) : 0;

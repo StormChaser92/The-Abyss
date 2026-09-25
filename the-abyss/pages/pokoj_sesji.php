@@ -3,6 +3,7 @@ require_once "db.php";
 require_once __DIR__ . '/../config/pochodzenia.php';
 require_once __DIR__ . '/../config/zawody.php';
 require_once __DIR__ . '/../config/rp_helpers.php';
+require_once __DIR__ . '/../includes/panel_mg.php';
 
 $id_gracza = $_SESSION['id_gracza'];
 
@@ -61,6 +62,10 @@ $uczestnik = $wynik_uczestnik->fetch_assoc();
 $czy_bierze_udzial = ($wynik_uczestnik->num_rows > 0);
 $czy_zaakceptowany = ($czy_bierze_udzial && $uczestnik['status_akceptacji'] == 'Zaakceptowany');
 $czy_mg = ($czy_zaakceptowany && ($uczestnik['rola'] == 'Mistrz Gry' || $czy_wlasciciel));
+
+// ── KULISY MG / RZUTY W SWOBODNEJ (includes/panel_mg.php) ─────
+$pm_blad = pm_obsluz($polaczenie, $sesja, (int)$id_gracza, $czy_mg, $czy_zaakceptowany);
+unset($_POST['wykonaj_rzut']);   // stary generator gracza wyłączony — rzuty idą przez panel
 
 // ── LICZNIK POSTÓW FABUŁY (dla paginacji) ─────────────────────
 $row_cnt = $polaczenie->query("SELECT COUNT(*) c FROM sesje_posty WHERE sesja_id=$sesja_id AND typ_postu != 'OffTop'")->fetch_assoc();
@@ -942,6 +947,7 @@ $akcent_kat = $KAT_KOLORY[$sesja['kategoria']] ?? 'var(--neon-red)';
     </div>
     <?php endif; ?>
 
+    <?php pm_pasek($polaczenie, $sesja); ?>
     <?php if (count($posty_fabula) > 0): ?>
         <?php foreach ($posty_fabula as $post):
             $p_img = !empty($post['avatar']) ? $post['avatar'] : 'https://via.placeholder.com/42/0a0a0a/333?text=?';
@@ -977,6 +983,7 @@ $akcent_kat = $KAT_KOLORY[$sesja['kategoria']] ?? 'var(--neon-red)';
                     </div>
                     <div class="post-cialo">
                         <div id="post-tresc-<?php echo $post['id']; ?>"><?php echo $tresc_html; ?></div>
+                        <?php pm_przycisk_zgloszenia($sesja, $post, (int)$id_gracza, $czy_zaakceptowany); ?>
                         <div id="post-edycja-<?php echo $post['id']; ?>" style="display:none;margin-top:10px">
                             <form method="POST">
                                 <input type="hidden" name="post_id" value="<?php echo $post['id']; ?>">
@@ -1006,86 +1013,6 @@ $akcent_kat = $KAT_KOLORY[$sesja['kategoria']] ?? 'var(--neon-red)';
     <?php endif; ?>
 
     <?php if ($czy_zaakceptowany && !$czy_zakonczona): ?>
-
-        <!-- ══ GENERATOR TESTU k100 ═════════════════════════ -->
-        <div class="form-pisania">
-            <div class="form-tytul rzut">🎲 Test k100</div>
-            <div style="color:var(--txt-dim);font-size:.85em;margin-bottom:14px;line-height:1.5">
-                Jedna akcja = jeden rzut. Wybierz Umiejętność (albo sam Atrybut), ryzyko i cechy, które mają zastosowanie. Szansa = poziom × 20 + ⅓ Atrybutu + mody, maks. <?php echo UM_PE; ?>%. Krytyczny sukces ≤ <?php echo UM_KRYT_SUKCES; ?>, krytyczna porażka ≥ <?php echo UM_KRYT_PORAZKA; ?>.
-            </div>
-            <form method="POST" class="gen-rzut">
-
-                <input type="text" name="akcja_opis" class="akcja-input" placeholder="Co próbuje zrobić Twoja postać? (np. 'przekonać strażnika o niewinności')" maxlength="200">
-
-                <div class="ryzyko-wiersz">
-                    <div class="lbl">◆ Poziom ryzyka akcji:</div>
-                    <?php foreach ($RYZYKO_PT as $rn => $rd):
-                        $akt = ($rn == 'Niskie') ? 'zaz' : ''; ?>
-                        <label class="ryzyko-opt <?php echo $akt; ?>" style="color:<?php echo $rd['kolor']; ?>" title="<?php echo htmlspecialchars($rd['opis']); ?>">
-                            <input type="radio" name="ryzyko" value="<?php echo $rn; ?>" <?php if($rn=='Niskie') echo 'checked'; ?>>
-                            <span class="rk-dot"></span>
-                            <span><?php echo $rn; ?> (<?php echo ($rd['mod'] >= 0 ? '+' : '') . $rd['mod']; ?>)</span>
-                        </label>
-                    <?php endforeach; ?>
-                </div>
-
-                <div class="gen-row">
-                    <div class="gen-kol">
-                        <div class="gen-lbl">◆ Umiejętność (szansa bez modów ryzyka i cech)</div>
-                        <label class="gen-cb">
-                            <input type="radio" name="um_rzut" value="" checked>
-                            <span>Bez Umiejętności — test Atrybutu</span>
-                        </label>
-                        <?php
-                            $um_sort = $umiejetnosci_gracza;
-                            arsort($um_sort);
-                            foreach ($um_sort as $nazwa => $lvl):
-                                if ($lvl <= 0 || !um_definicja($nazwa)) continue;
-                                $w = bonus_rp_umiejetnosci($gracz, $nazwa);
-                        ?>
-                            <label class="gen-cb" title="<?php echo htmlspecialchars(um_opis_testu($w)); ?>">
-                                <input type="radio" name="um_rzut" value="<?php echo htmlspecialchars($nazwa); ?>">
-                                <span><?php echo htmlspecialchars($nazwa); ?> · <?php echo htmlspecialchars($w['atrybut_nazwa']); ?></span>
-                                <span class="pu-tag"><?php echo $w['wartosc_koncowa']; ?>%</span>
-                            </label>
-                        <?php endforeach; ?>
-                        <div class="gen-lbl" style="margin-top:10px">◆ Atrybut</div>
-                        <select name="atr_rzut" class="akcja-input" style="margin:0">
-                            <option value="g">Główny Atrybut Umiejętności</option>
-                            <option value="d">Dodatkowy Atrybut (gdy MG uzna za zasadny)</option>
-                            <?php foreach ($UM_ATRYBUTY as $ak => $ad): ?>
-                            <option value="<?php echo $ak; ?>">Test Atrybutu: <?php echo $ad['nazwa']; ?> (<?php echo um_atrybut($gracz, $ak); ?>)</option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="gen-kol">
-                        <div class="gen-lbl">◆ Zalety / Wady (±<?php echo UM_MOD_CECHA; ?>)</div>
-                        <?php
-                        $brak = true;
-                        foreach ($zalety_gracza as $z) { if (empty($z)) continue; $brak=false; ?>
-                            <label class="gen-cb">
-                                <input type="checkbox" name="cechy_rzut[]" value="<?php echo htmlspecialchars($z); ?>">
-                                <span><?php echo htmlspecialchars($z); ?></span>
-                                <span class="zal-tag">+<?php echo UM_MOD_CECHA; ?></span>
-                            </label>
-                        <?php }
-                        foreach ($wady_gracza as $w) { if (empty($w)) continue; $brak=false; ?>
-                            <label class="gen-cb">
-                                <input type="checkbox" name="cechy_rzut[]" value="<?php echo htmlspecialchars($w); ?>">
-                                <span><?php echo htmlspecialchars($w); ?></span>
-                                <span class="wad-tag">−<?php echo UM_MOD_CECHA; ?></span>
-                            </label>
-                        <?php } if ($brak): ?>
-                            <div style="color:var(--txt-mute);font-size:.85em;font-style:italic">// Brak cech charakteru</div>
-                        <?php endif; ?>
-                    </div>
-                </div>
-
-                <div style="text-align:right;margin-top:10px">
-                    <button type="submit" name="wykonaj_rzut" class="btn-wyslij cyan">🎲 Rzuć d20</button>
-                </div>
-            </form>
-        </div>
 
         <!-- ══ FORMULARZ WPISU FABULARNEGO ═════════════════ -->
         <div class="form-pisania">
@@ -1499,3 +1426,5 @@ document.addEventListener('click', e => {
     if (e.target !== popup && !popup.contains(e.target) && !e.target.classList.contains('tag-input')) hidePop();
 });
 </script>
+
+<?php pm_render($polaczenie, $sesja, (int)$id_gracza, $czy_mg, $czy_zaakceptowany, $pm_blad); ?>

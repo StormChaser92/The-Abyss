@@ -11,7 +11,7 @@ $id_gracza = (int)$_SESSION['id_gracza'];
    ═══════════════════════════════════════════════════════════════════════ */
 
 $KOLUMNY = "id, umiejetnosci, poziom, pochodzenie, zalety, profesja_fabularna, profesja_etap, profesja2, profesja2_etap,
-            um_reset_uzyty, sila, zrecznosc, wytrzymalosc, inteligencja, zmysly, charyzma";
+            um_reset_uzyty, profesja_pu_zachowane, sila, zrecznosc, wytrzymalosc, inteligencja, zmysly, charyzma";
 $g = db_wiersz($polaczenie, "SELECT $KOLUMNY FROM gracze WHERE id = ?", [$id_gracza]);
 $um_raw = $g['umiejetnosci'];
 $um = $um_raw ? (json_decode($um_raw, true) ?: []) : [];

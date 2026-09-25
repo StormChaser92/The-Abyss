@@ -23,7 +23,7 @@ $zakladka    = isset($_GET['zakladka']) ? $_GET['zakladka'] : '';
 $dozwolone_strony = ['witaj','karta','umiejetnosci','czat','rynek','doki','szpital','ekwipunek',
     'ustawienia','firma','miasto','ranking','mieszkanie','laboratorium','silownia','zlomowisko',
     'sklep','warsztat','syndykaty','profil','poczta','bank','walka_pvp','uniwersytet','zlecenia',
-    'sesje','pokoj_sesji','kasyno','katedra','lotnisko','wybor_pochodzenia','premium',
+    'sesje','centrum','rangi','pokoj_sesji','kasyno','katedra','lotnisko','wybor_pochodzenia','premium',
     'profil_firmy','lista_firm'];
 // 1. NAMIERZANIE
 $strona_sql = $polaczenie->real_escape_string($strona);
@@ -108,7 +108,7 @@ $mapa_loc = [
     'mieszkanie'  => 'MIESZKANIE',   'poczta'      => 'TERMINAL POCZTY',
     'miasto'      => 'ULICA',        'uniwersytet' => 'UNIWERSYTET',
     'bank'        => 'BANK',         'szpital'     => 'KLINIKA',
-    'sesje'       => 'CENTRUM OPOWIEŚCI', 'pokoj_sesji'=> 'POKÓJ SESJI',
+    'sesje'       => 'CENTRUM OPOWIEŚCI', 'centrum' => 'CENTRUM OPOWIEŚCI', 'rangi' => 'RANGI PROWADZĄCYCH', 'pokoj_sesji'=> 'POKÓJ SESJI',
     'katedra'     => 'KATEDRA',      'zlecenia'    => 'TABLICA ZLECEŃ',
     'doki'        => 'DOKI',         'zlomowisko'  => 'ZŁOMOWISKO',
     'rynek'       => 'CZARNY RYNEK', 'kasyno'      => 'KASYNO',
@@ -631,7 +631,7 @@ input,select,textarea,button{font-family:'Rajdhani',sans-serif}
     <a href="game.php?page=premium" class="menu-link<?php echo $aktualna=='premium'?' aktywny-gold':''; ?>">★ Premium</a>
     <?php nav("game.php?page=bank","🏦 Bank Centralny",$aktualna,'bank'); ?>
     <?php nav("game.php?page=szpital","🏥 Klinika Rzeźnika",$aktualna,'szpital'); ?>
-    <a href="game.php?page=sesje" class="menu-link<?php echo ($aktualna=='sesje'||$aktualna=='pokoj_sesji')?' aktywny-ember':''; ?>">🎭 Centrum Opowieści</a>
+    <a href="game.php?page=centrum" class="menu-link<?php echo in_array($aktualna,['sesje','centrum','rangi','pokoj_sesji'])?' aktywny-ember':''; ?>">🎭 Centrum Opowieści</a>
       <a href="game.php?page=czat" class="menu-link<?php echo $aktualna=='czat'?' aktywny':''; ?>">🍸 Klub The Abyss</a>
       <?php nav("game.php?page=katedra","⛪ Katedra",$aktualna,'katedra'); ?>
  
