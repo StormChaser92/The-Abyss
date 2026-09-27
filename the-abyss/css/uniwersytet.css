@@ -139,4 +139,59 @@
 .uv .ob-t.on .ob-node{fill:var(--k)}
 .uv .ob-t.on .ob-lamp{fill:#fff8d8;stroke:var(--k);filter:drop-shadow(0 0 8px var(--k))}
 .uv .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:#0e0b0f;border:1px solid var(--brass);color:var(--brass-hi);padding:12px 18px;font-family:'JetBrains Mono',monospace;font-size:.85em;z-index:80;display:none;max-width:90vw;text-align:center}
+/* Kryptogram */
+.uv .sz{display:flex;flex-direction:column;align-items:center;gap:14px}
+.uv .sz-txt{display:flex;flex-wrap:wrap;gap:6px 16px;justify-content:center;max-width:620px}
+.uv .sz-w{display:flex;gap:3px}
+.uv .sz-c{display:flex;flex-direction:column;align-items:center;min-width:20px}
+.uv .sz-c i{font-style:normal;font-family:'Oswald',sans-serif;font-size:1.4em;color:#fff;border-bottom:2px solid var(--k);min-width:18px;text-align:center}
+.uv .sz-c.fix i{color:var(--k)}
+.uv .sz-c small{font-family:'JetBrains Mono',monospace;font-size:.7em;color:var(--txt-dim)}
+.uv .sz-klucz{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;max-width:620px}
+.uv .sz-klucz label{display:flex;flex-direction:column;align-items:center;gap:2px;font-family:'JetBrains Mono',monospace;color:var(--txt-dim)}
+.uv .sz-klucz input{width:34px;height:34px;text-align:center;background:rgba(0,0,0,.55);border:1px solid color-mix(in oklch,var(--k) 55%,transparent);color:#fff;font-family:'Oswald',sans-serif;font-size:1.1em;text-transform:uppercase}
+.uv .sz-klucz input.fix{color:var(--k);border-color:transparent;background:rgba(255,255,255,.05)}
+.uv .sz.done .sz-txt{animation:uv-ok .7s ease-out}
+/* Memory */
+.uv .mm{display:flex;flex-direction:column;align-items:center;gap:12px}
+.uv .mm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;width:min(620px,100%)}
+.uv .mm-k{aspect-ratio:4/3;border:1px solid color-mix(in oklch,var(--k) 45%,transparent);background:repeating-linear-gradient(45deg,rgba(255,255,255,.03) 0 8px,transparent 8px 16px),rgba(0,0,0,.55);color:#fff;font-family:'Rajdhani',sans-serif;font-weight:600;font-size:.95em;padding:6px;line-height:1.2;transition:transform .3s,background .3s,box-shadow .3s}
+.uv .mm-k.on{background:color-mix(in oklch,var(--k) 22%,rgba(0,0,0,.6));transform:rotateY(0) scale(1.03)}
+.uv .mm-k.ok{background:color-mix(in oklch,var(--k) 35%,rgba(0,0,0,.6));box-shadow:0 0 14px -2px var(--k);cursor:default}
+.uv .mm.done .mm-grid{animation:uv-ok .7s ease-out}
+/* Piętnastka */
+.uv .p15{display:flex;flex-direction:column;align-items:center;gap:12px}
+.uv .p15-grid{display:grid;grid-template-columns:repeat(var(--n),64px);gap:4px;padding:8px;background:rgba(0,0,0,.5);border:1px solid color-mix(in oklch,var(--k) 55%,transparent)}
+.uv .p15-t{height:64px;background:rgba(255,255,255,.05);border:1px solid color-mix(in oklch,var(--k) 45%,transparent);color:#fff;font-family:'Oswald',sans-serif;font-size:1.5em;transition:background .15s}
+.uv .p15-t.ok{color:var(--k)}
+.uv .p15-t.pusty{background:transparent;border-style:dashed;border-color:rgba(255,255,255,.1)}
+.uv .p15.done .p15-grid{animation:uv-ok .7s ease-out}
+/* Nonogram */
+.uv .nn{display:flex;flex-direction:column;align-items:center;gap:12px}
+.uv .nn-grid{display:grid;grid-template-columns:auto repeat(var(--n),34px);gap:2px;align-items:end}
+.uv .nn-k{font-family:'JetBrains Mono',monospace;font-size:.78em;color:var(--txt-dim);text-align:center;line-height:1.25;padding-bottom:4px}
+.uv .nn-w{font-family:'JetBrains Mono',monospace;font-size:.78em;color:var(--txt-dim);text-align:right;padding-right:8px;align-self:center;white-space:nowrap}
+.uv .nn-k.ok,.uv .nn-w.ok{color:var(--k)}
+.uv .nn-c{width:34px;height:34px;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.12);padding:0}
+.uv .nn-c.f{background:var(--k);box-shadow:0 0 8px -2px var(--k)}
+.uv .nn-c.x{background:rgba(0,0,0,.55) linear-gradient(45deg,transparent 45%,rgba(255,255,255,.3) 45% 55%,transparent 55%)}
+.uv .nn.done .nn-grid{animation:uv-ok .7s ease-out}
+/* Kto kłamie */
+.uv .kl{display:flex;flex-direction:column;align-items:center;gap:12px}
+.uv .kl-l{display:flex;flex-direction:column;gap:8px;width:min(560px,100%)}
+.uv .kl-z{display:grid;grid-template-columns:170px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 12px;border:1px solid rgba(255,255,255,.1);background:rgba(0,0,0,.45)}
+.uv .kl-z b{font-family:'Oswald',sans-serif;font-weight:500;color:#fff}
+.uv .kl-z q{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:1.15em;quotes:none;color:#ece4ec}
+/* Warcaby */
+.uv .wc{display:flex;flex-direction:column;align-items:center;gap:12px}
+.uv .wc-b{display:grid;grid-template-columns:repeat(8,44px);border:2px solid var(--k);box-shadow:0 0 20px -6px var(--k)}
+.uv .wc-f{width:44px;height:44px;background:#d8cfc0;border:0;padding:0;display:flex;align-items:center;justify-content:center}
+.uv .wc-f.d{background:#3a2a22}
+.uv .wc-f.moz{box-shadow:inset 0 0 0 3px var(--k);cursor:pointer}
+.uv .wc-f.sl{background:color-mix(in oklch,var(--k) 30%,#3a2a22)}
+.uv .wc-p{width:30px;height:30px;border-radius:50%}
+.uv .wc-p.w{background:radial-gradient(circle at 35% 30%,#fff,#cfc6b8);box-shadow:0 0 10px var(--k)}
+.uv .wc-p.b{background:radial-gradient(circle at 35% 30%,#555,#111);border:1px solid #000}
+.uv .wc.done .wc-b{animation:uv-ok .7s ease-out}
+@media (max-width:600px){.uv .wc-b{grid-template-columns:repeat(8,36px)}.uv .wc-f{width:36px;height:36px}.uv .kl-z{grid-template-columns:1fr}.uv .p15-grid{grid-template-columns:repeat(var(--n),54px)}.uv .p15-t{height:54px}}
 @media (max-width:600px){.uv .u-head h1{font-size:2.3em}.uv .sd-grid{grid-template-columns:repeat(6,40px);grid-template-rows:repeat(6,40px)}}

@@ -56,27 +56,6 @@ $gracz = $wynik->fetch_assoc();
 
 $aktualny_avatar = htmlspecialchars(avatar_url($gracz['avatar'] ?? ''), ENT_QUOTES);
 
-if (isset($_GET['diag'])) {
-    $root = dirname(__DIR__);
-    $wpis = (string)($gracz['avatar'] ?? '');
-    $p2 = ltrim(str_replace('\\', '/', $wpis), '/'); $pl = basename($p2);
-    $kat = $root . '/uploads/avatars';
-    echo "<pre style='background:#000;color:#0f0;padding:12px;border:1px solid #f33;white-space:pre-wrap;font-size:13px'>";
-    echo "DIAGNOSTYKA AWATARA\n";
-    echo "wpis w bazie:     " . htmlspecialchars(var_export($wpis, true)) . "\n";
-    echo "katalog gry:      " . htmlspecialchars($root) . "\n";
-    echo "avatar_url():     " . ($aktualny_avatar ?: '(pusto — pliku nie znaleziono)') . "\n";
-    echo "URL strony:       " . htmlspecialchars($_SERVER['REQUEST_URI'] ?? '') . "\n\n";
-    foreach ([$p2, 'uploads/' . $p2, 'uploads/avatars/' . $pl, 'avatars/' . $pl] as $k) {
-        $f = $root . '/' . $k;
-        echo str_pad(htmlspecialchars($k), 60) . (is_file($f) ? 'JEST (' . filesize($f) . ' B)' : 'brak') . "\n";
-    }
-    echo "\nuploads/avatars istnieje: " . (is_dir($kat) ? 'tak' : 'NIE') . ", zapisywalny: " . (is_writable($kat) ? 'tak' : 'NIE') . "\n";
-    echo "GD (imagejpeg):   " . (function_exists('imagejpeg') ? 'tak' : 'NIE') . "\n";
-    echo "post_max_size:    " . ini_get('post_max_size') . "\n";
-    if (is_dir($kat)) { echo "\npliki w uploads/avatars:\n"; foreach (array_slice(scandir($kat), 2) as $x) echo "  $x (" . filesize("$kat/$x") . " B)\n"; }
-    echo "</pre>";
-}
 
 // 2. LOGIKA ZMIANY TRYBU NIETYKALNOŚCI (PACYFISTA)
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['zmien_tryb'])) {

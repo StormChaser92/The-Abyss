@@ -65,10 +65,87 @@ function obwod(el,d,kolor,gotowe){
   rysuj();
 }
 
+/* ── Kryptogram ── */
+function szyfr(el,d,kolor,gotowe){
+  const lit=[...new Set(d.szyfr.replace(/[^A-Z]/g,''))].sort(),map=Object.assign({},d.odsl);
+  el.innerHTML='<div class="sz" style="--k:'+kolor+'"><div class="sz-txt"></div><div class="sz-klucz"></div><button type="button" class="kbtn" style="--k:'+kolor+'">Sprawdź odczyt</button><p class="sd-hint">Każda litera szyfru zastępuje jedną literę tekstu. Część jest już odsłonięta — wpisz resztę. Błędny odczyt kończy próbę.</p></div>';
+  const txt=el.querySelector('.sz-txt'),kl=el.querySelector('.sz-klucz');
+  kl.innerHTML=lit.map(l=>'<label><b>'+l+'</b><input maxlength="1" data-l="'+l+'" value="'+(map[l]||'')+'"'+(d.odsl[l]?' readonly class="fix"':'')+'></label>').join('');
+  const rys=()=>{txt.innerHTML=d.szyfr.split(' ').map(w=>'<span class="sz-w">'+[...w].map(c=>/[A-Z]/.test(c)?'<span class="sz-c'+(d.odsl[c]?' fix':'')+'"><i>'+(map[c]||'·')+'</i><small>'+c+'</small></span>':'<span class="sz-c"><i>'+c+'</i><small></small></span>').join('')+'</span>').join('')};
+  kl.addEventListener('input',e=>{const i=e.target;i.value=i.value.toUpperCase().replace(/[^A-Z]/g,'');map[i.dataset.l]=i.value;rys();if(i.value){const n=[...kl.querySelectorAll('input:not([readonly])')].find(x=>!x.value);if(n)n.focus()}});
+  el.querySelector('button').onclick=()=>{const o=[...d.szyfr].map(c=>/[A-Z]/.test(c)?(map[c]||'?'):c).join('');if(o.includes('?')){alert('Uzupełnij wszystkie litery.');return}el.firstChild.classList.add('done');setTimeout(()=>gotowe(o),500)};
+  rys();
+}
+
+/* ── Memory (karty odkrywa serwer) ── */
+function memory(el,d,kolor,gotowe){
+  el.innerHTML='<div class="mm" style="--k:'+kolor+'"><div class="mm-grid">'+Array.from({length:d.ile},(_,i)=>'<button type="button" class="mm-k" data-i="'+i+'"><span></span></button>').join('')+'</div><p class="sd-hint">Odkrywaj po dwie karty i łącz pojęcie z jego znaczeniem. <b class="mm-r">Ruchy: 0</b></p></div>';
+  const g=el.querySelector('.mm-grid');let blok=false,koniec=false;
+  g.addEventListener('click',async e=>{const b=e.target.closest('.mm-k');if(!b||blok||koniec||b.classList.contains('on')||b.classList.contains('ok'))return;blok=true;
+    const fd=new FormData();fd.append('i',b.dataset.i);
+    try{const r=await(await fetch('api/uni_memory.php',{method:'POST',body:fd,credentials:'same-origin'})).json();
+      if(!r.ok){blok=false;return}b.querySelector('span').textContent=r.t;b.classList.add('on');el.querySelector('.mm-r').textContent='Ruchy: '+r.ruchy;
+      if(r.j===undefined){blok=false;return}
+      const b2=g.querySelector('[data-i="'+r.j+'"]');
+      if(r.para){b.classList.add('ok');b2.classList.add('ok');blok=false;if(r.koniec){koniec=true;el.firstChild.classList.add('done');setTimeout(()=>gotowe('ok'),800)}}
+      else setTimeout(()=>{[b,b2].forEach(x=>{x.classList.remove('on');x.querySelector('span').textContent=''});blok=false},1000);
+    }catch(x){blok=false}});
+}
+
+/* ── Układanka „15” ── */
+function pietnastka(el,d,kolor,gotowe){
+  const n=d.n,p=d.plansza.slice(),ruchy=[];let koniec=false;
+  el.innerHTML='<div class="p15" style="--k:'+kolor+';--n:'+n+'"><div class="p15-grid"></div><p class="sd-hint">Kliknij kafel obok pustego pola, żeby go przesunąć. Ułóż liczby po kolei, puste pole na końcu. <b class="p15-r">Ruchy: 0</b></p></div>';
+  const g=el.querySelector('.p15-grid');
+  const rys=()=>{g.innerHTML=p.map((v,i)=>'<button type="button" class="p15-t'+(v?'':' pusty')+(v===i+1?' ok':'')+'" data-v="'+v+'">'+(v||'')+'</button>').join('');el.querySelector('.p15-r').textContent='Ruchy: '+ruchy.length;
+    if(!koniec&&p.every((v,i)=>v===(i===n*n-1?0:i+1))){koniec=true;el.firstChild.classList.add('done');setTimeout(()=>gotowe(ruchy),700)}};
+  g.addEventListener('click',e=>{const b=e.target.closest('.p15-t');if(!b||koniec)return;const v=+b.dataset.v,k=p.indexOf(v),z=p.indexOf(0);
+    if(!v||Math.abs(Math.floor(k/n)-Math.floor(z/n))+Math.abs(k%n-z%n)!==1)return;p[z]=v;p[k]=0;ruchy.push(v);rys()});
+  rys();
+}
+
+/* ── Nonogram ── */
+function nonogram(el,d,kolor,gotowe){
+  const n=d.n,g=Array.from({length:n},()=>Array(n).fill(0));let koniec=false;
+  const podp=l=>{const o=[];let c=0;l.forEach(v=>{if(v===1)c++;else if(c){o.push(c);c=0}});if(c)o.push(c);return o.length?o:[0]};
+  el.innerHTML='<div class="nn" style="--k:'+kolor+';--n:'+n+'"><div class="nn-grid"></div><p class="sd-hint">Liczby mówią, ile zamalowanych pól stoi kolejno w wierszu i kolumnie. Klik — zamaluj, prawy klik — oznacz jako puste.</p></div>';
+  const G=el.querySelector('.nn-grid');
+  const rys=()=>{let h='<div></div>'+d.k.map((k,c)=>'<div class="nn-k'+(JSON.stringify(podp(g.map(r=>r[c])))===JSON.stringify(k)?' ok':'')+'">'+k.join('<br>')+'</div>').join('');
+    g.forEach((r,ri)=>{h+='<div class="nn-w'+(JSON.stringify(podp(r))===JSON.stringify(d.w[ri])?' ok':'')+'">'+d.w[ri].join(' ')+'</div>'+r.map((v,ci)=>'<button type="button" class="nn-c'+(v===1?' f':v===2?' x':'')+'" data-r="'+ri+'" data-c="'+ci+'"></button>').join('')});
+    G.innerHTML=h;
+    if(!koniec&&g.every((r,i)=>JSON.stringify(podp(r))===JSON.stringify(d.w[i]))&&d.k.every((k,c)=>JSON.stringify(podp(g.map(r=>r[c])))===JSON.stringify(k))){koniec=true;el.firstChild.classList.add('done');setTimeout(()=>gotowe(g.map(r=>r.map(v=>v===1?1:0))),700)}};
+  const kl=(e,x)=>{const b=e.target.closest('.nn-c');if(!b||koniec)return;e.preventDefault();const r=+b.dataset.r,c=+b.dataset.c;g[r][c]=g[r][c]===x?0:x;rys()};
+  G.addEventListener('click',e=>kl(e,1));G.addEventListener('contextmenu',e=>kl(e,2));
+  rys();
+}
+
+/* ── Kto kłamie? ── */
+function klamca(el,d,kolor,gotowe){
+  el.innerHTML='<div class="kl" style="--k:'+kolor+'"><p class="sd-hint" style="max-width:520px">W laboratorium zginęła próbka. Dokładnie jedna osoba kłamie, pozostałe mówią prawdę. Kto kłamie?</p><div class="kl-l">'+d.zdania.map((z,i)=>'<div class="kl-z"><b>'+z[0]+'</b><q>„'+z[1]+'”</q><button type="button" class="kbtn" data-i="'+i+'" style="--k:'+kolor+'">To kłamca</button></div>').join('')+'</div><p class="sd-hint">Wskazanie jest ostateczne — błąd kończy próbę.</p></div>';
+  el.querySelector('.kl-l').addEventListener('click',e=>{const b=e.target.closest('[data-i]');if(!b)return;if(!confirm('Wskazać: '+d.zdania[+b.dataset.i][0]+'?'))return;el.firstChild.classList.add('done');setTimeout(()=>gotowe(+b.dataset.i),500)});
+}
+
+/* ── Warcaby: wieloskok ── */
+function warcaby(el,d,kolor,gotowe){
+  let pos=d.bialy.slice(),cz=d.czarne.map(x=>x.join(',')),sciezka=[],koniec=false;
+  el.innerHTML='<div class="wc" style="--k:'+kolor+'"><div class="wc-b"></div><div class="acts" style="display:flex;gap:8px"><button type="button" class="kbtn" data-reset style="--k:'+kolor+'">Od nowa</button></div><p class="sd-hint">Białym pionkiem zbij wszystkie czarne w jednym ruchu: klikaj kolejne pola lądowania za przeskakiwanym pionkiem. Bić można w każdą stronę.</p></div>';
+  const B=el.querySelector('.wc-b');
+  const rys=()=>{let h='';for(let r=0;r<8;r++)for(let c=0;c<8;c++){const ciemne=(r+c)%2===1,k=r+','+c;let x='';
+      if(pos[0]===r&&pos[1]===c)x='<i class="wc-p w"></i>';else if(cz.includes(k))x='<i class="wc-p b"></i>';
+      const moz=ciemne&&!koniec&&Math.abs(r-pos[0])===2&&Math.abs(c-pos[1])===2&&cz.includes(((r+pos[0])/2)+','+((c+pos[1])/2))&&!cz.includes(k);
+      h+='<button type="button" class="wc-f'+(ciemne?' d':'')+(moz?' moz':'')+(sciezka.some(s=>s[0]===r&&s[1]===c)?' sl':'')+'" data-r="'+r+'" data-c="'+c+'">'+x+'</button>'}B.innerHTML=h;
+    if(!koniec&&!cz.length){koniec=true;el.firstChild.classList.add('done');setTimeout(()=>gotowe(sciezka),700)}};
+  B.addEventListener('click',e=>{const b=e.target.closest('.wc-f.moz');if(!b)return;const r=+b.dataset.r,c=+b.dataset.c;cz=cz.filter(k=>k!==((r+pos[0])/2)+','+((c+pos[1])/2));pos=[r,c];sciezka.push([r,c]);rys()});
+  el.querySelector('[data-reset]').onclick=()=>{pos=d.bialy.slice();cz=d.czarne.map(x=>x.join(','));sciezka=[];rys()};
+  rys();
+}
+
 /* ── Start łamigłówki podanej przez serwer ── */
 if(D.lam){const el=$('uvLam'),f=$('uvLamForm');
   const wyslij=odp=>{f.querySelector('[name=odp]').value=JSON.stringify(odp);f.submit()};
-  if(D.lam.typ==='sudoku')sudoku(el,D.lam.plansza,D.lam.kolor,wyslij);else obwod(el,D.lam,D.lam.kolor,wyslij);
+  const T={sudoku:()=>sudoku(el,D.lam.plansza,D.lam.kolor,wyslij),obwod:()=>obwod(el,D.lam,D.lam.kolor,wyslij),szyfr:()=>szyfr(el,D.lam,D.lam.kolor,wyslij),memory:()=>memory(el,D.lam,D.lam.kolor,wyslij),
+    pietnastka:()=>pietnastka(el,D.lam,D.lam.kolor,wyslij),nonogram:()=>nonogram(el,D.lam,D.lam.kolor,wyslij),klamca:()=>klamca(el,D.lam,D.lam.kolor,wyslij),warcaby:()=>warcaby(el,D.lam,D.lam.kolor,wyslij)};
+  (T[D.lam.typ]||T.sudoku)();
   M.classList.add('on')}
 if(D.egz)M.classList.add('on');
 })();

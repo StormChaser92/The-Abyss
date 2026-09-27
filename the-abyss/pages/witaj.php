@@ -412,9 +412,9 @@ $akcje = match($klasa) {
                 💼 <?php echo htmlspecialchars($gracz['profesja_fabularna']); ?>
             </span>
             <?php endif; ?>
-            <?php if(!empty($gracz['tytul_naukowy'])): ?>
+            <?php require_once __DIR__ . '/../config/uniwersytet.php'; $tyt_uni = uni_tytul_glowny($polaczenie, (int)$gracz['id']); if ($tyt_uni): ?>
             <span style="color:var(--neon-gold);font-family:'Oswald',sans-serif;font-size:.82em;letter-spacing:1px;text-transform:uppercase;text-shadow:0 0 6px rgba(255,215,0,0.4)">
-                🎓 <?php echo htmlspecialchars($gracz['tytul_naukowy']); ?>
+                🎓 <?php echo htmlspecialchars($tyt_uni); ?>
             </span>
             <?php endif; ?>
         </div>

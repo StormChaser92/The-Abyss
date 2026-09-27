@@ -5,11 +5,12 @@ require_once __DIR__ . '/../config/zawody.php';
 require_once __DIR__ . '/../config/rp_helpers.php';
 require_once __DIR__ . '/../includes/panel_mg.php';
 require_once __DIR__ . '/../includes/podsumowanie.php';
+require_once __DIR__ . '/../includes/sesja_nc.php';        // NC + moderacja (config/moderacja.php)
 
 $id_gracza = $_SESSION['id_gracza'];
 
 if (!isset($_GET['id']) || !is_numeric($_GET['id'])) {
-    echo "<script>window.location.href='game.php?page=sesje';</script>"; exit;
+    echo "<script>window.location.href='game.php?page=centrum';</script>"; exit;
 }
 $sesja_id = (int)$_GET['id'];
 
@@ -23,14 +24,6 @@ $KAT_KOLORY = [
     'Publiczna'=>'var(--neon-cyan)',
     'Prywatna'=>'var(--neon-ember)',
     'Rekrutacyjna'=>'var(--neon-red)',
-];
-
-// Poziom ryzyka akcji → modyfikator szansy w teście k100
-$RYZYKO_PT = [
-    'Niskie'      => ['mod' =>  10, 'kolor' => 'var(--neon-green)', 'opis' => 'Sytuacja banalna. Bez wpływu na cel sesji.'],
-    'Średnie'     => ['mod' =>   0, 'kolor' => 'var(--neon-gold)',  'opis' => 'Akcja wpływa na fabułę. Grozi lekkim obrażeniem.'],
-    'Wysokie'     => ['mod' => -10, 'kolor' => 'var(--neon-ember)', 'opis' => 'Akcja kluczowa. Poważne ryzyko dla postaci.'],
-    'Ekstremalne' => ['mod' => -20, 'kolor' => 'var(--neon-red-hot)', 'opis' => 'Desperackie. Możliwa śmierć lub trwałe okaleczenie.'],
 ];
 
 // ── PAGINACJA ─────────────────────────────────────────────────
@@ -64,11 +57,19 @@ $czy_bierze_udzial = ($wynik_uczestnik->num_rows > 0);
 $czy_zaakceptowany = ($czy_bierze_udzial && $uczestnik['status_akceptacji'] == 'Zaakceptowany');
 $czy_mg = ($czy_zaakceptowany && ($uczestnik['rola'] == 'Mistrz Gry' || $czy_wlasciciel));
 
-// ── KULISY MG / RZUTY W SWOBODNEJ (includes/panel_mg.php) ─────
-$pm_blad = pm_obsluz($polaczenie, $sesja, (int)$id_gracza, $czy_mg, $czy_zaakceptowany);
-unset($_POST['wykonaj_rzut']);
-$pd_blad = pd_obsluz($polaczenie, $sesja, (int)$id_gracza, $czy_mg);   // nowe Zakończenie (includes/podsumowanie.php)
-unset($_POST['zakoncz_sesje']);                                      // stary formularz wyłączony   // stary generator gracza wyłączony — rzuty idą przez panel
+// ── MODERACJA: zawieszenie, wyrzucenie z Klubu, wyciszenie w NC (config/moderacja.php) ──
+$mod_blok = mod_zawieszenie_aktywne($polaczenie, (int)$id_gracza);
+if (($sesja['typ_opowiesci'] ?? '') === 'klub' && !$czy_mg && ($mod_blok || mod_wyrzucony($polaczenie, (int)$id_gracza))) {
+    echo "<div style='padding:30px;text-align:center;color:var(--neon-red-hot);background:rgba(0,0,0,0.5);border:1px solid var(--border-mid);border-radius:2px'>⛔ " . ($mod_blok ? 'Zawieszenie do ' . mod_data($mod_blok['do_kiedy']) : 'Wyrzucenie z Klubu') . " — Wydarzenia w Klubie są dla Ciebie zamknięte. <a href='game.php?page=moderacja' style='color:var(--neon-cyan)'>Historia i odwołanie →</a></div>";
+    return;
+}
+$nc_wycisz = nc_wyciszenie($polaczenie, $sesja_id, (int)$id_gracza);
+$moze_nc = !$czy_zakonczona && !$mod_blok && !$nc_wycisz && ($czy_bierze_udzial || ($sesja['kategoria'] ?? '') !== 'Prywatna');
+$nc_blad = nc_obsluz($polaczenie, $sesja, (int)$id_gracza, $czy_mg, $moze_nc);
+
+// ── KULISY MG / RZUTY (includes/panel_mg.php) i Zakończenie (includes/podsumowanie.php) ──
+$pm_blad = pm_obsluz($polaczenie, $sesja, (int)$id_gracza, $czy_mg, $czy_zaakceptowany && !$mod_blok);
+$pd_blad = pd_obsluz($polaczenie, $sesja, (int)$id_gracza, $czy_mg);
 
 // ── LICZNIK POSTÓW FABUŁY (dla paginacji) ─────────────────────
 $row_cnt = $polaczenie->query("SELECT COUNT(*) c FROM sesje_posty WHERE sesja_id=$sesja_id AND typ_postu != 'OffTop'")->fetch_assoc();
@@ -128,108 +129,10 @@ if ($czy_mg) {
         echo "<script>window.location.href='game.php?page=pokoj_sesji&id=$sesja_id&zakladka=ustawienia';</script>"; exit;
     }
 
-    // ── PODSUMOWANIE SESJI (zakończenie + reputacja + konsekwencje) ──
-    if (isset($_POST['zakoncz_sesje'])) {
-        $podsumowanie_tresc = $polaczenie->real_escape_string(trim($_POST['podsumowanie_mg']));
-
-        // Tablica wad — do walidacji konsekwencji
-        $wady_dozwolone = [
-            // ─ Fizyczne: urazy, okaleczenia, upośledzenia zmysłów
-            "Brak Kończyny","Jednooki","Głuchy","Całkowita Ślepota","Oszpecony","Utykający","Hemofiliak",
-            "Astma","Krótkowidz","Daltonizm","Niedosłuch","Wolne Gojenie","Jąkanie","Migreny","Bezsenność",
-            // ─ Psychiczne: traumy, fobie, zaburzenia pourazowe
-            "Trauma Pourazowa","Depresja","Lęki Napadowe","Klaustrofobia","Lęk Wysokości","Lęk Tłumu",
-            "Paranoik","Tchórz","Furiat","Odludek","Naiwny","Mizantrop","Brak Empatii",
-            // ─ Nałogi i zaburzenia charakteru po przeżyciu
-            "Nałogowiec","Hazardzista","Kleptomania",
-            // ─ Społeczne
-            "Zła Reputacja","Gadatliwy",
-            // ─ Umysł (po urazach głowy, traumach)
-            "Ociężały Umysł",
-            // ─ Specyficzne
-            "Pechowiec","Leniwy","Słabeusz"
-        ];
-
-        $reps = $_POST['rep']     ?? []; // [gracz_id][grupa] => int
-        $notes = $_POST['notatka'] ?? []; // [gracz_id] => string
-        $kons_w = $_POST['kons_wada'] ?? []; // [gracz_id] => nazwa wady lub ''
-        $kons_o = $_POST['kons_opis'] ?? []; // [gracz_id] => string
-
-        // Iteruj wszystkich zaakceptowanych uczestników (poza MG)
-        $uczestnicy_final = $polaczenie->query("
-            SELECT u.gracz_id, u.rola FROM sesje_uczestnicy u
-            WHERE u.sesja_id=$sesja_id AND u.status_akceptacji='Zaakceptowany'
-        ");
-
-        while ($u = $uczestnicy_final->fetch_assoc()) {
-            $gid = (int)$u['gracz_id'];
-
-            // MG-owie też mogą dostać podsumowanie, ale normalnie to tylko gracze
-            if ($u['rola'] == 'Mistrz Gry') continue;
-
-            $r_elita = (int)max(-3, min(3, $reps[$gid]['elita']         ?? 0));
-            $r_ulica = (int)max(-3, min(3, $reps[$gid]['ulica']         ?? 0));
-            $r_synd  = (int)max(-3, min(3, $reps[$gid]['syndykat']      ?? 0));
-            $r_wladz = (int)max(-3, min(3, $reps[$gid]['wladze']        ?? 0));
-            $r_spol  = (int)max(-3, min(3, $reps[$gid]['spoleczenstwo'] ?? 0));
-
-            $notatka = $polaczenie->real_escape_string(trim($notes[$gid] ?? ''));
-            $wada_nz = trim($kons_w[$gid] ?? '');
-            $wada = (in_array($wada_nz, $wady_dozwolone)) ? $polaczenie->real_escape_string($wada_nz) : '';
-            $opis_kons = $polaczenie->real_escape_string(trim($kons_o[$gid] ?? ''));
-
-            // UPSERT — zabezpieczenie przed ponownym zakończeniem
-            $polaczenie->query("INSERT INTO sesje_podsumowanie
-                (sesja_id, gracz_id, mg_id, reputacja_elita, reputacja_ulica, reputacja_syndykat, reputacja_wladze, reputacja_spoleczenstwo, notatka_mg, konsekwencja_wada, konsekwencja_opis)
-                VALUES ($sesja_id, $gid, $id_gracza, $r_elita, $r_ulica, $r_synd, $r_wladz, $r_spol, '$notatka',
-                    " . ($wada !== '' ? "'$wada'" : "NULL") . ",
-                    " . ($opis_kons !== '' ? "'$opis_kons'" : "NULL") . ")
-                ON DUPLICATE KEY UPDATE
-                    reputacja_elita=$r_elita, reputacja_ulica=$r_ulica, reputacja_syndykat=$r_synd,
-                    reputacja_wladze=$r_wladz, reputacja_spoleczenstwo=$r_spol,
-                    notatka_mg='$notatka',
-                    konsekwencja_wada=" . ($wada !== '' ? "'$wada'" : "NULL") . ",
-                    konsekwencja_opis=" . ($opis_kons !== '' ? "'$opis_kons'" : "NULL")
-            );
-
-            // AGREGACJA reputacja_sesyjna w tabeli gracze
-            $row_g = $polaczenie->query("SELECT reputacja_sesyjna FROM gracze WHERE id=$gid")->fetch_assoc();
-            $rep_old = $row_g['reputacja_sesyjna'] ? json_decode($row_g['reputacja_sesyjna'], true) : ['elita'=>0,'ulica'=>0,'syndykat'=>0,'wladze'=>0,'spoleczenstwo'=>0];
-            $rep_new = [
-                'elita'         => ($rep_old['elita']         ?? 0) + $r_elita,
-                'ulica'         => ($rep_old['ulica']         ?? 0) + $r_ulica,
-                'syndykat'      => ($rep_old['syndykat']      ?? 0) + $r_synd,
-                'wladze'        => ($rep_old['wladze']        ?? 0) + $r_wladz,
-                'spoleczenstwo' => ($rep_old['spoleczenstwo'] ?? 0) + $r_spol,
-            ];
-            $rep_json_safe = $polaczenie->real_escape_string(json_encode($rep_new, JSON_UNESCAPED_UNICODE));
-            $polaczenie->query("UPDATE gracze SET reputacja_sesyjna='$rep_json_safe' WHERE id=$gid");
-
-            // KONSEKWENCJA: dopisanie wady do postaci (jeśli nie ma jej jeszcze)
-            if ($wada !== '') {
-                $wady_row = $polaczenie->query("SELECT wady FROM gracze WHERE id=$gid")->fetch_assoc();
-                $wady_obecne = ($wady_row['wady']=='Brak'||empty($wady_row['wady'])) ? [] : array_map('trim', explode(", ", $wady_row['wady']));
-                if (!in_array($wada, $wady_obecne)) {
-                    $wady_obecne[] = $wada;
-                    $wady_nowe = $polaczenie->real_escape_string(implode(", ", $wady_obecne));
-                    $polaczenie->query("UPDATE gracze SET wady='$wady_nowe' WHERE id=$gid");
-                }
-            }
-
-            // POWIADOMIENIE DLA GRACZA
-            $tytul_safe = htmlspecialchars($sesja['tytul']);
-            $tresc_pow = "Sesja <i>$tytul_safe</i> została zakończona. MG przygotował podsumowanie Twojej postaci. <a href='game.php?page=pokoj_sesji&id=$sesja_id&zakladka=podsumowanie' style='color:var(--neon-cyan)'>[ Przejdź ]</a>";
-            $polaczenie->query("INSERT INTO powiadomienia (gracz_id, tresc) VALUES ($gid, '".$polaczenie->real_escape_string($tresc_pow)."')");
-        }
-
-        // ZAMKNIĘCIE SESJI
-        $polaczenie->query("UPDATE sesje_rpg SET status='Zakończona', data_zakonczenia=NOW(), podsumowanie_mg='$podsumowanie_tresc' WHERE id=$sesja_id");
-        echo "<script>window.location.href='game.php?page=pokoj_sesji&id=$sesja_id&zakladka=podsumowanie';</script>"; exit;
-    }
 }
 
 // EDYCJA POSTA
-if (isset($_POST['zapisz_edycje']) && $czy_zaakceptowany && !$czy_zakonczona) {
+if (isset($_POST['zapisz_edycje']) && $czy_zaakceptowany && !$czy_zakonczona && (!$mod_blok || $czy_mg)) {
     $post_id = (int)$_POST['post_id'];
     $nowa_tresc = trim($_POST['nowa_tresc']);
     $zakladka_powrot = $polaczenie->real_escape_string($_POST['zakladka_powrot']);
@@ -244,108 +147,15 @@ if (isset($_POST['zapisz_edycje']) && $czy_zaakceptowany && !$czy_zakonczona) {
     }
 }
 
-// DODAWANIE POSTA + RZUT KOŚCIĄ
-if ($czy_zaakceptowany && !$czy_zakonczona) {
-    if (isset($_POST['dodaj_post'])) {
-        $tresc = trim($_POST['tresc_postu']);
-        $typ_postu = $polaczenie->real_escape_string($_POST['typ_postu']);
-        if ($typ_postu != 'Fabuła' && $typ_postu != 'OffTop') $typ_postu = 'Fabuła';
-        if (strlen($tresc) > 0) {
-            $tresc_safe = $polaczenie->real_escape_string($tresc);
-            $polaczenie->query("INSERT INTO sesje_posty (sesja_id, autor_id, typ_postu, tresc) VALUES ($sesja_id, $id_gracza, '$typ_postu', '$tresc_safe')");
-            $polaczenie->query("UPDATE sesje_rpg SET ostatnia_aktywnosc=NOW() WHERE id=$sesja_id");
-
-            // Wzmianki @Nick
-            preg_match_all('/@([a-zA-Z0-9_ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]+)/u', $tresc, $matches);
-            if (!empty($matches[1])) {
-                $wspomniani = array_unique($matches[1]);
-                $tytul_safe = htmlspecialchars($sesja['tytul']);
-                $typ_nazwa = ($typ_postu == 'OffTop') ? 'OffTopie' : 'wpisie fabularnym';
-                $url_z = urlencode($typ_postu);
-                foreach ($wspomniani as $nick) {
-                    $nick_safe = $polaczenie->real_escape_string($nick);
-                    if (strtolower($nick_safe) != strtolower($moj_login)) {
-                        $wu = $polaczenie->query("SELECT id FROM gracze WHERE login='$nick_safe'");
-                        if ($wu && $wu->num_rows > 0) {
-                            $cid = $wu->fetch_assoc()['id'];
-                            $tp = "Gracz <b style='color:var(--neon-green)'>$moj_login</b> wspomniał o Tobie w $typ_nazwa (<i>$tytul_safe</i>). <a href='game.php?page=pokoj_sesji&id=$sesja_id&zakladka=$url_z' style='color:var(--neon-cyan)'>[ Przejdź ]</a>";
-                            $polaczenie->query("INSERT INTO powiadomienia (gracz_id, tresc) VALUES ($cid, '".$polaczenie->real_escape_string($tp)."')");
-                        }
-                    }
-                }
-            }
-
-            $ostatnia_strona = max(1, (int)ceil(($total_fabula + 1) / $limit_fabula));
-            $url = "game.php?page=pokoj_sesji&id=$sesja_id&zakladka=" . ($typ_postu=='OffTop' ? 'offtop' : 'wpisy');
-            if ($typ_postu != 'OffTop') $url .= "&sf=$ostatnia_strona";
-            echo "<script>window.location.href='$url';</script>"; exit;
-        }
-    }
-
-    // ═══ TEST k100 — Umiejętność albo sam Atrybut ═══
-    if (isset($_POST['wykonaj_rzut'])) {
-        $um_nazwa      = trim((string)($_POST['um_rzut'] ?? ''));
-        $atr_wybor     = (string)($_POST['atr_rzut'] ?? 'g');
-        $wybrane_cechy = isset($_POST['cechy_rzut']) ? (array)$_POST['cechy_rzut'] : [];
-        $ryzyko        = isset($_POST['ryzyko'])     ? $_POST['ryzyko']     : 'Niskie';
-        $akcja_opis    = trim($_POST['akcja_opis'] ?? '');
-
-        if (!isset($RYZYKO_PT[$ryzyko])) $ryzyko = 'Niskie';
-        $mod_ryzyka   = $RYZYKO_PT[$ryzyko]['mod'];
-        $ryzyko_kolor = $RYZYKO_PT[$ryzyko]['kolor'];
-
-        // 1) Zalety / Wady — ±UM_MOD_CECHA za każdą
-        $mod_cech = 0;
-        $cechy_parts = [];
-        foreach ($wybrane_cechy as $c) {
-            $c = trim($c);
-            if (in_array($c, $zalety_gracza)) {
-                $mod_cech += UM_MOD_CECHA;
-                $cechy_parts[] = "<span style='color:var(--neon-green)'>" . htmlspecialchars($c) . " +" . UM_MOD_CECHA . "</span>";
-            } elseif (in_array($c, $wady_gracza)) {
-                $mod_cech -= UM_MOD_CECHA;
-                $cechy_parts[] = "<span style='color:var(--neon-red-hot)'>" . htmlspecialchars($c) . " −" . UM_MOD_CECHA . "</span>";
-            }
-        }
-
-        // 2) Szansa — jeden rzut na akcję
-        $mod_dod = $mod_ryzyka + $mod_cech;
-        if ($um_nazwa !== '' && um_definicja($um_nazwa)) {
-            $t = um_test($gracz, $um_nazwa, in_array($atr_wybor, ['g', 'd'], true) ? $atr_wybor : 'g', $mod_dod);
-            $tytul = "Test Umiejętności: <b>" . htmlspecialchars($um_nazwa) . "</b> (poz. {$t['poziom']})";
-        } else {
-            $ak = isset($UM_ATRYBUTY[$atr_wybor]) ? $atr_wybor : 'I';
-            $t = um_test_atrybutu($gracz, $ak, $mod_dod);
-            $tytul = "Test Atrybutu: <b>" . htmlspecialchars($t['atrybut_nazwa']) . "</b>";
-        }
-
-        // 3) k100
-        $k100  = random_int(1, 100);
-        $wynik = um_wynik($k100, $t['szansa']);
-        $kolor_w = $wynik['poziom'] >= 2 ? 'var(--neon-gold)' : ($wynik['sukces'] ? 'var(--neon-green)' : 'var(--neon-red-hot)');
-        $tekst_w = mb_strtoupper($wynik['nazwa']);
-
-        // 4) Formatowanie postu
-        $html  = "<div class='rzut-box'>";
-        $html .= "<div class='rzut-head'><span class='rzut-icon'>🎲</span> <b>Test k100</b> — <span style='color:$ryzyko_kolor'>Ryzyko $ryzyko (" . ($mod_ryzyka >= 0 ? '+' : '') . "$mod_ryzyka)</span></div>";
-        if ($akcja_opis !== '') {
-            $html .= "<div class='rzut-akcja'>&bdquo;" . htmlspecialchars($akcja_opis) . "&rdquo;</div>";
-        }
-        $html .= "<div class='rzut-row'>$tytul</div>";
-        $html .= "<div class='rzut-row'><span class='rzut-lbl'>Szansa:</span> " . htmlspecialchars(um_opis_testu($t)) . "</div>";
-        if (!empty($cechy_parts)) {
-            $html .= "<div class='rzut-row'><span class='rzut-lbl'>Cechy:</span> " . implode(' · ', $cechy_parts) . "</div>";
-        }
-        $html .= "<div class='rzut-row'><span class='rzut-lbl'>Rzut k100:</span> <span class='rzut-val'>$k100</span></div>";
-        $html .= "<div class='rzut-wynik'><b>$k100</b> / {$t['szansa']}% &nbsp;·&nbsp; <b style='color:$kolor_w;letter-spacing:2px'>[$tekst_w]</b></div>";
-        $html .= "</div>";
-
-        $html_safe = $polaczenie->real_escape_string($html);
-        $polaczenie->query("INSERT INTO sesje_posty (sesja_id, autor_id, typ_postu, tresc) VALUES ($sesja_id, $id_gracza, 'Rzut_Koscia', '$html_safe')");
+// DODAWANIE WPISU FABULARNEGO (NC: includes/sesja_nc.php, rzuty: Kulisy MG)
+if ($czy_zaakceptowany && !$czy_zakonczona && !$mod_blok && isset($_POST['dodaj_post'])) {
+    $tresc = trim((string)($_POST['tresc_postu'] ?? ''));
+    if ($tresc !== '') {
+        db_zmien($polaczenie, "INSERT INTO sesje_posty (sesja_id, autor_id, typ_postu, tresc) VALUES (?, ?, 'Fabuła', ?)", [$sesja_id, (int)$id_gracza, $tresc]);
         $polaczenie->query("UPDATE sesje_rpg SET ostatnia_aktywnosc=NOW() WHERE id=$sesja_id");
-
+        nc_wzmianki($polaczenie, $sesja, (int)$id_gracza, $tresc, 'wpisie fabularnym', 'wpisy');
         $ostatnia_strona = max(1, (int)ceil(($total_fabula + 1) / $limit_fabula));
-        echo "<script>window.location.href='game.php?page=pokoj_sesji&id=$sesja_id&zakladka=wpisy&sf=$ostatnia_strona';</script>"; exit;
+        header("Location: game.php?page=pokoj_sesji&id=$sesja_id&zakladka=wpisy&sf=$ostatnia_strona"); exit;
     }
 }
 
@@ -386,18 +196,6 @@ $res_f = $polaczenie->query("
 ");
 while ($p = $res_f->fetch_assoc()) $posty_fabula[] = $p;
 
-// ── POSTY OFFTOP ──────────────────────────────────────────────
-$posty_offtop = [];
-$res_o = $polaczenie->query("
-    SELECT p.*, g.login, g.avatar, u.rola
-    FROM sesje_posty p JOIN gracze g ON p.autor_id=g.id
-    LEFT JOIN sesje_uczestnicy u ON (u.sesja_id=p.sesja_id AND u.gracz_id=p.autor_id)
-    WHERE p.sesja_id=$sesja_id AND p.typ_postu='OffTop'
-    ORDER BY p.data_dodania DESC LIMIT 50
-");
-while ($p = $res_o->fetch_assoc()) $posty_offtop[] = $p;
-$posty_offtop = array_reverse($posty_offtop);
-
 // ── PODSUMOWANIA (jeśli sesja zakończona) ─────────────────────
 $podsumowania = [];
 if ($czy_zakonczona) {
@@ -413,6 +211,7 @@ if ($czy_zakonczona) {
 
 $domyslna_zakladka = isset($_GET['zakladka']) && $_GET['zakladka'] != '' ? htmlspecialchars($_GET['zakladka']) : 'wpisy';
 if ($domyslna_zakladka == 'Fabuła') $domyslna_zakladka = 'wpisy';
+if ($domyslna_zakladka == 'OffTop' || isset($_POST['nc_akcja'])) $domyslna_zakladka = 'offtop';
 if (isset($_POST['szukaj_postow'])) $domyslna_zakladka = 'szukaj';
 if ($czy_zakonczona && !isset($_GET['zakladka'])) $domyslna_zakladka = 'podsumowanie';
 
@@ -654,48 +453,6 @@ $akcent_kat = $KAT_KOLORY[$sesja['kategoria']] ?? 'var(--neon-red)';
 }
 .btn-mini:hover{background:var(--neon-cyan);color:#000;border-color:var(--neon-cyan)}
 
-/* ── RZUT KOŚCIĄ — GENERATOR ────────────────────────── */
-.gen-rzut{margin-top:20px}
-.gen-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:12px}
-@media(max-width:720px){.gen-row{grid-template-columns:1fr}}
-.gen-kol{
-    background:rgba(0,0,0,0.5);border:1px solid var(--border-soft);
-    padding:12px 14px;border-radius:2px;max-height:180px;overflow-y:auto;
-}
-.gen-kol .gen-lbl{
-    font-family:'Oswald',sans-serif;font-size:.78em;color:var(--txt-mute);
-    text-transform:uppercase;letter-spacing:2px;margin-bottom:10px;
-    padding-bottom:6px;border-bottom:1px dashed var(--border-soft);
-}
-.gen-cb{
-    display:flex;align-items:center;gap:8px;padding:5px 0;
-    color:var(--txt-main);font-size:.88em;cursor:pointer;font-family:'Open Sans',sans-serif;
-}
-.gen-cb:hover{color:#fff}
-.gen-cb input{accent-color:var(--neon-cyan);cursor:pointer}
-.gen-cb .pu-tag{color:var(--neon-cyan);font-family:'JetBrains Mono',monospace;font-size:.82em;margin-left:auto}
-.gen-cb .zal-tag{color:var(--neon-green);font-family:'JetBrains Mono',monospace;font-size:.82em;margin-left:auto}
-.gen-cb .wad-tag{color:var(--neon-red-hot);font-family:'JetBrains Mono',monospace;font-size:.82em;margin-left:auto}
-
-.ryzyko-wiersz{
-    display:flex;gap:12px;flex-wrap:wrap;
-    background:rgba(0,0,0,0.4);border:1px solid var(--border-soft);
-    padding:12px 14px;border-radius:2px;margin-bottom:12px;
-}
-.ryzyko-wiersz .lbl{
-    width:100%;font-family:'Oswald',sans-serif;font-size:.78em;
-    color:var(--txt-mute);text-transform:uppercase;letter-spacing:2px;margin-bottom:4px;
-}
-.ryzyko-opt{
-    display:inline-flex;align-items:center;gap:6px;cursor:pointer;
-    padding:6px 12px;border:1px solid var(--border-soft);border-radius:2px;
-    font-family:'Oswald',sans-serif;letter-spacing:1px;text-transform:uppercase;font-size:.8em;
-    transition:.2s;background:rgba(0,0,0,0.5);
-}
-.ryzyko-opt input{display:none}
-.ryzyko-opt .rk-dot{width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 6px currentColor}
-.ryzyko-opt.zaz{background:rgba(255,255,255,0.06);box-shadow:0 0 12px currentColor}
-
 .akcja-input{
     width:100%;padding:10px 14px;
     background:rgba(0,0,0,0.5);border:1px solid var(--border-soft);color:#fff;
@@ -922,9 +679,9 @@ $akcent_kat = $KAT_KOLORY[$sesja['kategoria']] ?? 'var(--neon-red)';
 
     <!-- MENU ZAKŁADEK -->
     <div class="menu-poziome">
-        <a href="game.php?page=sesje" class="menu-pl powrot">← Powrót</a>
+        <a href="game.php?page=centrum" class="menu-pl powrot">← Powrót</a>
         <div class="menu-pl <?php if($domyslna_zakladka=='wpisy') echo 'aktywny'; ?>" onclick="przelaczZakladke('wpisy', this)">📜 Wpisy</div>
-        <div class="menu-pl <?php if($domyslna_zakladka=='offtop') echo 'aktywny'; ?>" onclick="przelaczZakladke('offtop', this)">💬 OffTop</div>
+        <div class="menu-pl <?php if($domyslna_zakladka=='offtop') echo 'aktywny'; ?>" onclick="przelaczZakladke('offtop', this)">💬 NC</div>
         <div class="menu-pl <?php if($domyslna_zakladka=='opis') echo 'aktywny'; ?>" onclick="przelaczZakladke('opis', this)">📖 Opis</div>
         <div class="menu-pl <?php if($domyslna_zakladka=='szukaj') echo 'aktywny'; ?>" onclick="przelaczZakladke('szukaj', this)">🔍 Szukaj</div>
         <?php if ($czy_zakonczona): ?>
@@ -1015,7 +772,11 @@ $akcent_kat = $KAT_KOLORY[$sesja['kategoria']] ?? 'var(--neon-red)';
     </div>
     <?php endif; ?>
 
-    <?php if ($czy_zaakceptowany && !$czy_zakonczona): ?>
+    <?php if ($mod_blok && !$czy_zakonczona): ?>
+        <div style="padding:30px;text-align:center;color:var(--neon-red-hot);background:rgba(0,0,0,0.3);border:1px dashed var(--border-mid);border-radius:2px;margin-top:20px">
+            // Zawieszenie do <?php echo mod_data($mod_blok['do_kiedy']); ?> — nie możesz pisać wpisów. <a href="game.php?page=moderacja" style="color:var(--neon-cyan)">Historia i odwołanie →</a>
+        </div>
+    <?php elseif ($czy_zaakceptowany && !$czy_zakonczona): ?>
 
         <!-- ══ FORMULARZ WPISU FABULARNEGO ═════════════════ -->
         <div class="form-pisania">
@@ -1036,47 +797,9 @@ $akcent_kat = $KAT_KOLORY[$sesja['kategoria']] ?? 'var(--neon-red)';
     <?php endif; ?>
 </div>
 
-<!-- ══ ZAKŁADKA: OFFTOP ══════════════════════════════════════ -->
+<!-- ══ ZAKŁADKA: NC (Non Clima) — includes/sesja_nc.php ═══════════════ -->
 <div id="tab-offtop" class="zakladka-tresc <?php if($domyslna_zakladka=='offtop') echo 'aktywna'; ?>">
-    <div class="offtop-box">
-        <?php foreach ($posty_offtop as $post):
-            $mo = ($post['autor_id'] == $id_gracza || $czy_mg);
-            $th = htmlspecialchars($post['tresc']);
-            $th = preg_replace('/@([a-zA-Z0-9_ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]+)/u', '<span class="wspomnienie">@$1</span>', $th);
-            $th = nl2br($th);
-        ?>
-        <div class="offtop-wpis">
-            <span class="offtop-nick"><?php echo htmlspecialchars($post['login']); ?></span>
-            <span class="offtop-data"><?php echo $post['data_dodania']; ?></span>
-            <?php if ($mo && !$czy_zakonczona): ?>
-                <a href="javascript:void(0)" class="edytuj-link" style="margin-left:10px;font-size:.75em" onclick="pokazEdycje(<?php echo $post['id']; ?>)">✏</a>
-            <?php endif; ?>
-            <div id="post-tresc-<?php echo $post['id']; ?>" class="offtop-tresc"><?php echo $th; ?></div>
-            <div id="post-edycja-<?php echo $post['id']; ?>" style="display:none;margin-top:10px">
-                <form method="POST">
-                    <input type="hidden" name="post_id" value="<?php echo $post['id']; ?>">
-                    <input type="hidden" name="zakladka_powrot" value="offtop">
-                    <textarea name="nowa_tresc" class="edytor-text tag-input" style="min-height:70px"><?php echo htmlspecialchars($post['tresc']); ?></textarea>
-                    <div style="text-align:right">
-                        <button type="button" class="btn-mini" onclick="ukryjEdycje(<?php echo $post['id']; ?>)">Anuluj</button>
-                        <button type="submit" name="zapisz_edycje" class="btn-wyslij ember" style="padding:6px 14px;font-size:.8em">Zapisz</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-        <?php endforeach; ?>
-        <?php if (count($posty_offtop) == 0): ?>
-            <div style="text-align:center;color:var(--txt-mute);font-style:italic;font-family:'JetBrains Mono',monospace;font-size:.9em">// Brak dyskusji</div>
-        <?php endif; ?>
-    </div>
-
-    <?php if ($czy_zaakceptowany && !$czy_zakonczona): ?>
-    <form method="POST" style="display:flex;gap:10px">
-        <input type="hidden" name="typ_postu" value="OffTop">
-        <input type="text" name="tresc_postu" class="edytor-text tag-input" style="margin:0" placeholder="Napisz wiadomość OffTop... (użyj @Nick)" required>
-        <button type="submit" name="dodaj_post" class="btn-wyslij cyan">Wyślij</button>
-    </form>
-    <?php endif; ?>
+    <?php nc_render($polaczenie, $sesja, (int)$id_gracza, $czy_mg, $moze_nc, $czy_zaakceptowany, $mod_blok, $nc_wycisz, $nc_blad); ?>
 </div>
 
 <!-- ══ ZAKŁADKA: OPIS ══════════════════════════════════════ -->
@@ -1263,6 +986,7 @@ function przelaczZakladke(id, el) {
     const tab = document.getElementById('tab-' + id);
     if (tab) tab.classList.add('aktywna');
     el.classList.add('aktywny');
+    const nb = document.getElementById('ncBox'); if (id === 'offtop' && nb) nb.scrollTop = nb.scrollHeight;
 }
 
 function pokazEdycje(id) {
@@ -1273,14 +997,6 @@ function ukryjEdycje(id) {
     document.getElementById('post-tresc-' + id).style.display = 'block';
     document.getElementById('post-edycja-' + id).style.display = 'none';
 }
-
-// Ryzyko - wizualny stan zaznaczenia
-document.querySelectorAll('.ryzyko-opt input').forEach(r => {
-    r.addEventListener('change', function(){
-        document.querySelectorAll('.ryzyko-opt').forEach(l => l.classList.remove('zaz'));
-        if (this.checked) this.closest('.ryzyko-opt').classList.add('zaz');
-    });
-});
 
 // ── MENTIONS (@Nick) ──────────────────────────────────
 const uczestnicy = <?php echo $lista_nickow_json; ?>;

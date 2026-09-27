@@ -23,7 +23,7 @@ $zakladka    = isset($_GET['zakladka']) ? $_GET['zakladka'] : '';
 $dozwolone_strony = ['witaj','karta','umiejetnosci','czat','rynek','doki','szpital','ekwipunek',
     'ustawienia','firma','miasto','ranking','mieszkanie','laboratorium','silownia','zlomowisko',
     'sklep','warsztat','syndykaty','profil','poczta','bank','walka_pvp','uniwersytet','zlecenia',
-    'sesje','centrum','rangi','pokoj_sesji','kasyno','katedra','lotnisko','wybor_pochodzenia','premium',
+    'centrum','rangi','przeglad','pokoj_sesji','moderacja','kasyno','katedra','lotnisko','wybor_pochodzenia','premium',
     'profil_firmy','lista_firm'];
 // 1. NAMIERZANIE
 $strona_sql = $polaczenie->real_escape_string($strona);
@@ -78,6 +78,12 @@ if (empty($gracz_r['pochodzenie']) && $strona !== 'wybor_pochodzenia') {
     exit;
 }
 
+// 2.6. Stara lista sesji (pages/sesje.php) → Centrum Opowieści, 301.
+if ($strona === 'sesje') {
+    header('Location: game.php?page=centrum' . (($_GET['kat'] ?? '') === 'kreator' ? '#nowa' : ''), true, 301);
+    exit;
+}
+
 // 3. ONLINE
 $wynik_online = $polaczenie->query("
     SELECT g.id,g.login,g.avatar,g.poziom,g.klasa,g.profesja_fabularna,g.nazwa_firmy,g.branza_firmy,g.is_premium,
@@ -108,7 +114,7 @@ $mapa_loc = [
     'mieszkanie'  => 'MIESZKANIE',   'poczta'      => 'TERMINAL POCZTY',
     'miasto'      => 'ULICA',        'uniwersytet' => 'UNIWERSYTET',
     'bank'        => 'BANK',         'szpital'     => 'KLINIKA',
-    'sesje'       => 'CENTRUM OPOWIEŚCI', 'centrum' => 'CENTRUM OPOWIEŚCI', 'rangi' => 'RANGI PROWADZĄCYCH', 'pokoj_sesji'=> 'POKÓJ SESJI',
+    'centrum' => 'CENTRUM OPOWIEŚCI', 'moderacja' => 'MODERACJA', 'rangi' => 'RANGI PROWADZĄCYCH', 'przeglad' => 'PRZEGLĄD PODSUMOWAŃ', 'pokoj_sesji'=> 'POKÓJ SESJI',
     'katedra'     => 'KATEDRA',      'zlecenia'    => 'TABLICA ZLECEŃ',
     'doki'        => 'DOKI',         'zlomowisko'  => 'ZŁOMOWISKO',
     'rynek'       => 'CZARNY RYNEK', 'kasyno'      => 'KASYNO',
@@ -631,7 +637,7 @@ input,select,textarea,button{font-family:'Rajdhani',sans-serif}
     <a href="game.php?page=premium" class="menu-link<?php echo $aktualna=='premium'?' aktywny-gold':''; ?>">★ Premium</a>
     <?php nav("game.php?page=bank","🏦 Bank Centralny",$aktualna,'bank'); ?>
     <?php nav("game.php?page=szpital","🏥 Klinika Rzeźnika",$aktualna,'szpital'); ?>
-    <a href="game.php?page=centrum" class="menu-link<?php echo in_array($aktualna,['sesje','centrum','rangi','pokoj_sesji'])?' aktywny-ember':''; ?>">🎭 Centrum Opowieści</a>
+    <a href="game.php?page=centrum" class="menu-link<?php echo in_array($aktualna,['centrum','rangi','przeglad','pokoj_sesji','moderacja'])?' aktywny-ember':''; ?>">🎭 Centrum Opowieści</a>
       <a href="game.php?page=czat" class="menu-link<?php echo $aktualna=='czat'?' aktywny':''; ?>">🍸 Klub The Abyss</a>
       <?php nav("game.php?page=katedra","⛪ Katedra",$aktualna,'katedra'); ?>
  

@@ -57,6 +57,12 @@ if (!$gracz) {
     echo json_encode(['ok' => false, 'msg' => 'Brak danych gracza']);
     exit;
 }
+// Moderacja: zawieszenie i wyrzucenie z Klubu blokują pisanie (config/moderacja.php)
+require_once __DIR__ . "/../config/moderacja.php";
+if (($mod_b = mod_blokada_klubu($polaczenie, $id_gracza)) !== '') {
+    echo json_encode(['ok' => false, 'msg' => $mod_b]);
+    exit;
+}
 $jest_barmanem = (bool)$gracz['is_barman'];
 $jest_mg       = (bool)$gracz['is_mg'];
 $ma_uprawnienia = ($jest_barmanem || $jest_mg);

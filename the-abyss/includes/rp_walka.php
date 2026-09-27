@@ -197,12 +197,13 @@ function rw_dodaj(mysqli $db, int $sid, string $k): bool {
 
 /** Start walki: wszyscy zaakceptowani gracze + NPC Opowieści. Zwraca HTML Inicjatywy. */
 function rw_start(mysqli $db, int $sid): string {
-    db_zmien($db, "DELETE FROM sesje_walka WHERE sesja_id = ?", [$sid]);
+    // PŻ, Urazy i efekty trwają całą Opowieść — kolejna walka dopisuje tylko brakujących uczestników.
     $gracze = function_exists('pm_gracze') ? array_keys(pm_gracze($db, $sid))
             : array_map(fn($u) => (int)$u['gracz_id'], db_wiersze($db, "SELECT gracz_id FROM sesje_uczestnicy WHERE sesja_id = ? AND rola = 'Gracz' AND status_akceptacji = 'Zaakceptowany'", [$sid]));
     foreach ($gracze as $g) rw_dodaj($db, $sid, 'g' . $g);
     foreach (db_wiersze($db, "SELECT id FROM sesje_npc WHERE sesja_id = ?", [$sid]) as $n) rw_dodaj($db, $sid, 'n' . $n['id']);
     db_zmien($db, "UPDATE sesje_rpg SET walka_aktywna = 1, walka_runda = 1, walka_tura = 0 WHERE id = ?", [$sid]);
+    rw_inicjatywa($db, $sid);
     return rw_inicjatywa_html($db, $sid, 'Walka! Inicjatywa');
 }
 
@@ -235,4 +236,28 @@ function rw_koniec_rundy(mysqli $db, int $sid): string {
     }
     db_zmien($db, "UPDATE sesje_rpg SET walka_runda = walka_runda + 1, walka_tura = 0 WHERE id = ?", [$sid]);
     return $log ? rw_karta('Koniec rundy', 'efekty odroczone', "<div class='pmr-o'><span>" . implode('<br>', $log) . "</span></div>") : '';
+}
+
+/** Koniec walki: postać z Urazem krytycznym i PŻ > 0 ma 5 tur na pomoc medyczną (inaczej umiera). */
+function rw_koniec_walki(mysqli $db, int $sid): string {
+    $l = [];
+    foreach (rw_uczestnicy($db, $sid) as $k => $u)
+        if ($k[0] === 'g' && (int)$u['w']['uraz'] >= 4 && (int)$u['w']['hp'] > 0 && $u['w']['kryt_tury'] === null) {
+            db_zmien($db, "UPDATE sesje_walka SET kryt_tury = 5 WHERE sesja_id = ? AND klucz = ?", [$sid, $k]);
+            $l[] = rw_h($u['nazwa']) . ': Uraz krytyczny — pomoc medyczna w ciągu <b>5 tur</b>, inaczej postać umiera';
+        }
+    db_zmien($db, "UPDATE sesje_rpg SET walka_aktywna = 0 WHERE id = ?", [$sid]);
+    return rw_karta('Koniec walki', 'PŻ i Urazy zostają do końca Opowieści', "<div class='pmr-o'><span>" . ($l ? implode('<br>', $l) : 'Walka zakończona.') . "</span></div>");
+}
+
+/** Tura poza walką: odliczanie Urazu krytycznego. */
+function rw_tura_po_walce(mysqli $db, int $sid): string {
+    $l = [];
+    foreach (rw_uczestnicy($db, $sid) as $k => $u) {
+        if ($u['w']['kryt_tury'] === null || (int)$u['w']['kryt_tury'] <= 0) continue;
+        $t = (int)$u['w']['kryt_tury'] - 1;
+        db_zmien($db, "UPDATE sesje_walka SET kryt_tury = ? WHERE sesja_id = ? AND klucz = ?", [$t, $sid, $k]);
+        $l[] = rw_h($u['nazwa']) . ($t ? ": zostało $t t. na pomoc medyczną" : ': czas na pomoc medyczną minął — decyzja MG');
+    }
+    return $l ? rw_karta('Upływ czasu', 'Uraz krytyczny', "<div class='pmr-o'><span>" . implode('<br>', $l) . "</span></div>") : '';
 }

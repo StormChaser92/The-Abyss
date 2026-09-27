@@ -70,7 +70,7 @@ function pd_obsluz(mysqli $db, array $s, int $gid, bool $czy_mg): string {
             $row0 = db_wiersz($db, "SELECT zalety, wady FROM gracze WHERE id = ?", [$id]);
             $mz = pm_cechy($row0['zalety'] ?? ''); $mw = pm_cechy($row0['wady'] ?? ''); $stracone = [];
             if ($usun !== '') { $mz = array_values(array_diff($mz, [$usun])); $mw = array_values(array_diff($mw, [$usun])); }
-            $wyk = function (string $n) { $o = []; foreach (ZW_PARY as [$a, $b]) { if ($a === $n) $o[] = $b; if ($b === $n) $o[] = $a; } return $o; };
+            $wyk = function (string $n) { $o = []; foreach (zw_pary() as [$a, $b]) { if ($a === $n) $o[] = $b; if ($b === $n) $o[] = $a; } return $o; };
             if ($wada && !in_array($wada, $mw, true)) {
                 $x = $wyk($wada); $stracone = array_values(array_intersect(array_merge($mz, $mw), $x));
                 $mz = array_values(array_diff($mz, $x)); $mw = array_values(array_diff($mw, $x)); $mw[] = $wada;
@@ -183,7 +183,7 @@ function pd_formularz(mysqli $db, array $s, string $tab, string $blad = ''): voi
     echo "<script>document.querySelectorAll('[data-pd]').forEach(c=>{const s=c.querySelector('[data-pd-lv]'),r=c.querySelector('[data-pd-pw]'),o=r.nextElementSibling,m=c.querySelector('[data-pd-min]');
       s.onchange=()=>{const x=s.selectedOptions[0];r.min=x.dataset.min;r.max=x.dataset.max;r.value=Math.round((+x.dataset.min+ +x.dataset.max)/2);o.textContent=r.value;m.textContent=x.dataset.min;c.style.setProperty('--lc',x.dataset.kolor)};
       r.oninput=()=>o.textContent=r.value;s.onchange()});
-      const PP=" . json_encode(ZW_PARY, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS) . ",WK=n=>PP.filter(p=>p.includes(n)).map(p=>p[0]===n?p[1]:p[0]);
+      const PP=" . json_encode(zw_pary(), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS) . ",WK=n=>PP.filter(p=>p.includes(n)).map(p=>p[0]===n?p[1]:p[0]);
       document.querySelectorAll('[data-pd-zw]').forEach(c=>{const ma=JSON.parse(c.dataset.pdZw),w=c.querySelector('[data-pd-w]'),z=c.querySelector('[data-pd-z]'),ww=c.querySelector('[data-pd-ww]'),zz=c.querySelector('[data-pd-zz]');
         const up=()=>{const s=w.value?WK(w.value).filter(x=>ma.includes(x)):[];ww.textContent=s.length?'Postać utraci: '+s.join(', '):'';
           const k=z.value?WK(z.value).filter(x=>ma.includes(x)||x===w.value):[];zz.textContent=k.length?'Ta Zaleta wyklucza się z: '+k.join(', ')+' — nie zostanie dodana.':''};w.onchange=up;z.onchange=up});</script>";

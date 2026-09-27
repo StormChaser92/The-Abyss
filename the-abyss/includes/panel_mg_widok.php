@@ -7,7 +7,7 @@ $P    = rw_parametry($s);
 $cele = pm_cele($db, $sid);
 if ($sam) $cele = array_intersect_key($cele, ['g' . $gid => 1]);
 $walka = $prow && !empty($s['walka_aktywna']);
-$U    = $walka ? rw_uczestnicy($db, $sid) : [];
+$U    = $prow ? rw_uczestnicy($db, $sid) : [];   // tracker trwa całą Opowieść
 $Ul   = array_values($U);
 $pv   = $prow ? ($_SESSION['pm_pv'][$sid] ?? null) : null;
 $tab  = $sam ? 'test' : (string)($_GET['pm'] ?? ($pv['tab'] ?? ($walka ? 'walka' : 'test')));
@@ -121,6 +121,12 @@ body.pmk-on .pmk{transform:none}
       <?php if (!$walka): ?>
         <p class="hint">Walka nie trwa. Start doda do trackera wszystkich zaakceptowanych graczy i <?php echo count($npc); ?> NPC tej Opowieści, a potem automatycznie rzuci Inicjatywę (k100 + Zręczność / 5). PŻ startują od maksimum z karty i liczą się tylko w tej Opowieści.</p>
         <p class="hint">Poziom <b style="color:#fff"><?php echo RP_POZIOMY[$s['poziom']]['n'] ?? ''; ?></b> · OoP <b style="color:#fff"><?php echo $P['oop']; ?></b> · obrażenia za trafienie <b style="color:#fff"><?php echo $P['oop'] * $P['mult']; ?></b><?php echo $P['kryt'] ? ' · krytyki obowiązkowe' : ''; ?></p>
+        <?php foreach ($Ul as $u) if ($u['w']['kryt_tury'] !== null): ?>
+          <div class="alert"><b><?php echo $h($u['nazwa']); ?></b>: Uraz krytyczny. <?php echo (int)$u['w']['kryt_tury'] > 0 ? 'Pomoc medyczna w ciągu <b>' . (int)$u['w']['kryt_tury'] . '</b> tur, inaczej postać umiera.' : 'Czas minął — decyzja o śmierci należy do MG.'; ?>
+            <form method="POST" style="flex-direction:row;margin-top:6px"><input type="hidden" name="pm_akcja" value="uczestnik_zapisz"><input type="hidden" name="klucz" value="<?php echo $h($u['k']); ?>"><input type="hidden" name="stabilizuj" value="1"><input type="hidden" name="bron" value="<?php echo $h($u['w']['bron']); ?>"><input type="hidden" name="pancerz" value="<?php echo $h($u['w']['pancerz']); ?>"><input type="hidden" name="hp" value="<?php echo (int)$u['w']['hp']; ?>"><input type="hidden" name="uraz" value="3"><?php if ((int)$u['w']['tarcza']) echo '<input type="hidden" name="tarcza" value="1">'; ?><?php if ((int)$u['w']['nc_ok']) echo '<input type="hidden" name="nc_ok" value="1">'; ?><button class="pmk-btn sm gold" type="submit">Pomoc medyczna udana</button></form></div>
+        <?php endif; ?>
+        <?php if (array_filter($Ul, fn($u) => $u['w']['kryt_tury'] !== null && (int)$u['w']['kryt_tury'] > 0)): ?><form method="POST"><input type="hidden" name="pm_akcja" value="tura_po_walce"><button class="pmk-btn ghost" type="submit">Minęła tura (odliczanie Urazu)</button></form><?php endif; ?>
+        <?php if ($Ul): ?><p class="hint">W trackerze: <?php echo count($Ul); ?> uczestników z poprzedniej walki — PŻ i Urazy zostają do końca Opowieści.</p><?php endif; ?>
         <form method="POST"><input type="hidden" name="pm_akcja" value="walka_start"><button class="pmk-btn" type="submit">Rozpocznij walkę</button></form>
       <?php else: ?>
         <div style="display:flex;justify-content:space-between;align-items:baseline"><span class="lbl">Runda <?php echo (int)$s['walka_runda']; ?> · kolejność Inicjatywy</span><span class="lbl">OoP <?php echo $P['oop']; ?> · obr. <?php echo $P['oop'] * $P['mult']; ?></span></div>
@@ -147,7 +153,7 @@ body.pmk-on .pmk{transform:none}
           <form method="POST"><input type="hidden" name="pm_akcja" value="walka_next"><button class="pmk-btn sm ghost" type="submit">Następny ›</button></form>
           <form method="POST"><input type="hidden" name="pm_akcja" value="walka_runda"><button class="pmk-btn sm ghost" type="submit">Koniec rundy</button></form>
           <form method="POST"><input type="hidden" name="pm_akcja" value="walka_ini"><button class="pmk-btn sm ghost" type="submit">Nowa Inicjatywa</button></form>
-          <form method="POST" onsubmit="return confirm('Zakończyć walkę? Tracker zostanie wyczyszczony.')"><input type="hidden" name="pm_akcja" value="walka_koniec"><button class="pmk-btn sm ghost" type="submit">Zakończ walkę</button></form>
+          <form method="POST" onsubmit="return confirm('Zakończyć walkę? PŻ i Urazy zostają do końca Opowieści.')"><input type="hidden" name="pm_akcja" value="walka_koniec"><button class="pmk-btn sm ghost" type="submit">Zakończ walkę</button></form>
         </div>
         <?php $poza = array_diff_key($cele, $U); if ($poza): ?>
         <form method="POST" style="flex-direction:row"><input type="hidden" name="pm_akcja" value="uczestnik_dodaj"><select name="klucz"><?php echo pm_opcje(array_map(fn($c) => $c['nazwa'], $poza), ''); ?></select><button class="pmk-btn sm ghost" type="submit">+ Do walki</button></form>

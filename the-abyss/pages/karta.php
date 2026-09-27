@@ -506,52 +506,8 @@ $wszystkie_wady_def = [
 // ═══════════════════════════════════════════════════════════════
 // KONFLIKTY — cechy wykluczające się wzajemnie
 // ═══════════════════════════════════════════════════════════════
-$konflikty = [
-    // Oddech i kondycja
-    ['Żelazne Płuca','Astma'],
-    // Wzrok
-    ['Sokoli Wzrok','Krótkowidz','Całkowita Ślepota','Jednooki','Daltonizm'],
-    // Siła fizyczna / kondycja
-    ['Krzepki','Słabeusz'],
-    ['Atletyczne Ciało','Słabeusz','Utykający'],
-    // Szybkość / nogi
-    ['Szybkie Nogi','Utykający','Brak Kończyny'],
-    ['Kocia Zwinność','Utykający','Brak Kończyny'],
-    // Umysł
-    ['Genialny Umysł','Bystrzak','Ociężały Umysł'],
-    ['Analityczny Umysł','Ociężały Umysł','Rozproszenie Uwagi'],
-    ['Poliglota','Dysleksja'],
-    ['Fotograficzna Pamięć','Ociężały Umysł'],
-    // Zdrowie ogólne
-    ['Zdrowie Jak Żelazo','Niska Odporność','Choroba Serca','Cukrzyca','Hemofiliak'],
-    ['Szybka Regeneracja','Wolne Gojenie','Hemofiliak'],
-    // Wygląd
-    ['Zjawiskowa Uroda','Oszpecony'],
-    // Nerwy
-    ['Zimna Krew','Furiat','Tchórz','Lęki Napadowe','Trauma Pourazowa'],
-    ['Wysoka Tolerancja Stresu','Lęki Napadowe','Trauma Pourazowa','Furiat'],
-    ['Mistrz Blefu','Jąkanie'],
-    // Sen
-    ['Pogodny Sen','Bezsenność'],
-    // Nastrój
-    ['Wrodzony Optymizm','Depresja'],
-    // Empatia i społeczne
-    ['Empatyczny','Brak Empatii','Mizantrop'],
-    ['Charyzmatyczny','Odludek','Jąkanie','Mizantrop'],
-    ['Twarda Skóra','Lęki Napadowe'],
-    // Uliczne
-    ['Uliczny Spryt','Naiwny'],
-    // Ręce i precyzja
-    ['Oburęczny','Brak Kończyny'],
-    ['Lekka Ręka','Brak Kończyny'],
-    // Szybkość reakcji
-    ['Refleks Szachisty','Leniwy','Rozproszenie Uwagi'],
-    ['Wytrenowane Odruchy','Leniwy'],
-    // Charakter społeczny
-    ['Bezkompromisowy','Skąpiec'],
-    // Słuch
-    ['Świetna Pamięć Słuchowa','Głuchy','Niedosłuch'],
-];
+require_once __DIR__ . '/../config/zalety_wady.php';
+$konflikty = ZW_GRUPY_STARE;   // przeniesione do config/zalety_wady.php
 
 // ── PUNKTY ZDOLNOŚCI: nowe Zalety/Wady, kategorie, pary wykluczeń (config/zalety_wady.php) ──
 require_once __DIR__ . '/../config/zalety_wady.php';

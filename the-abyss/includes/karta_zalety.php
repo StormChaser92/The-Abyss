@@ -61,8 +61,13 @@ function zw_render(array $g, array $ZDEF, array $WDEF, array $pary, int $pula, s
 @keyframes zwZ{0%{opacity:1;filter:none;transform:none;box-shadow:0 0 0 2px var(--r)}}
 .zw-c b{font-family:'Oswald',sans-serif;font-weight:500;letter-spacing:.8px;color:#fff}
 .zw-c p{color:var(--dim);line-height:1.38;font-size:.93em;margin:0}
-.zw-c em{display:none;font-style:normal;color:#e3dce6;font-size:.88em;line-height:1.4;border-top:1px dotted rgba(255,255,255,.12);padding-top:5px}
-.zw-c:hover em{display:block}
+.zw-c em{display:block;font-style:normal;color:#e3dce6;font-size:.88em;line-height:1.4;border-top:1px dotted rgba(255,255,255,.12);max-height:0;opacity:0;overflow:hidden;padding-top:0;margin-top:-5px;filter:blur(3px);transition:max-height .9s cubic-bezier(.2,.7,.2,1),opacity .8s ease .15s,filter .8s ease .15s,padding-top .6s ease,margin-top .6s ease}
+.zw-c:hover em{max-height:220px;opacity:1;filter:none;padding-top:6px;margin-top:0;text-shadow:0 0 12px rgba(255,61,94,.35)}
+.zw-c:hover{animation:zwPuls 2.4s ease-in-out .3s infinite;border-color:rgba(255,61,94,.55)}
+.zw-c.blk:hover,.zw-c.off:hover{animation:none}
+@keyframes zwPuls{0%,100%{box-shadow:0 0 0 0 rgba(255,23,68,0),0 0 14px rgba(255,23,68,.18)}50%{box-shadow:0 0 0 1px rgba(255,61,94,.5),0 0 26px rgba(255,23,68,.55),inset 0 0 18px rgba(255,23,68,.12)}}
+.zw-c.on:hover{animation-name:zwPulsOn}
+@keyframes zwPulsOn{0%,100%{box-shadow:inset 0 0 0 1px var(--k),0 0 14px rgba(255,23,68,.18)}50%{box-shadow:inset 0 0 0 1px var(--k),0 0 26px rgba(255,23,68,.55),inset 0 0 18px rgba(255,23,68,.12)}}
 .zw-m{display:flex;gap:5px;flex-wrap:wrap}
 .zw-m s,.zw-m i{text-decoration:none;font-style:normal;font-family:'JetBrains Mono',monospace;font-size:.66em;letter-spacing:1.1px;text-transform:uppercase;padding:1px 6px;border:1px solid currentColor}
 .zw-m .pz{color:var(--k)}.zw-m .a{color:#4ad6ff}

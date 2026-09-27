@@ -7,6 +7,11 @@ require_once "db.php";
 require_once __DIR__ . "/../includes/avatar.php";
 $id_gracza = $_SESSION['id_gracza'];
 $login_gracza = $_SESSION['login'];
+require_once __DIR__ . "/../config/moderacja.php";
+if ($mod_w = mod_wyrzucony($polaczenie, (int)$id_gracza)) {
+    echo "<div style='padding:30px;text-align:center;color:var(--neon-red-hot);background:rgba(0,0,0,0.5);border:1px solid var(--border-mid);border-radius:2px;line-height:1.7'>⛔ Zostałeś wyrzucony z Klubu The Abyss.<br>Powód: " . bz_h($mod_w['powod']) . "<br><a href='game.php?page=moderacja' style='color:var(--neon-cyan)'>Historia kar i odwołanie →</a></div>";
+    return;
+}
 
 // ── KATALOG SAL ────────────────────────────────────────────────────
 $SALE = [

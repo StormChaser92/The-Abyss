@@ -5,7 +5,8 @@
    odpowiedź — przeglądarka tylko rysuje. Trudność: 1 Licencjat, 2 Magister, 3 Doktor.
    ═══════════════════════════════════════════════════════════════════════ */
 
-const UNI_LAM_TYPY = ['sudoku' => 'Sudoku 6×6', 'obwod' => 'Łączenie obwodu'];
+const UNI_LAM_TYPY = ['sudoku' => 'Sudoku 6×6', 'obwod' => 'Łączenie obwodu', 'szyfr' => 'Kryptogram', 'memory' => 'Memory: pary pojęć',
+    'pietnastka' => 'Układanka „15”', 'nonogram' => 'Nonogram', 'klamca' => 'Kto kłamie?', 'warcaby' => 'Warcaby: wieloskok'];
 
 function uni_lam_tasuj(array $a): array {
     for ($i = count($a) - 1; $i > 0; $i--) { $j = random_int(0, $i); [$a[$i], $a[$j]] = [$a[$j], $a[$i]]; }
@@ -103,18 +104,159 @@ function uni_obwod_sprawdz(array $dane, $odp): bool {
     return uni_ob_rozwiazany($dane, $rot);
 }
 
+/* ── KRYPTOGRAM — szyfr podstawieniowy, część liter odsłonięta ───────── */
+const UNI_SZ_ZDANIA = [
+    1 => ['WIEDZA TO WALUTA TEGO MIASTA', 'KAZDY SEKRET MA SWOJA CENE', 'NOC NA BROADWAYU NIGDY NIE SPI', 'PROBOWKA NIE KLAMIE', 'ZLOTO LEZY W DOKACH'],
+    2 => ['KTO PYTA TEN NIE BLADZI ALE KTO SZUKA TEN ZNAJDUJE', 'DZIEKAN CZYTA KAZDA ODPOWIEDZ DWA RAZY', 'POD CANARSIE DZIALA DRUGA STACJA', 'KAZDY ZAMEK MA SWOJ KLUCZ I SWOJA CENE'],
+    3 => ['W TYM MIESCIE PRAWDA KOSZTUJE WIECEJ NIZ KLAMSTWO A MILCZENIE NAJWIECEJ', 'NAJLEPSZY SZYFR TO TAKI KTOREGO NIKT NIE SZUKA', 'LABORATORIUM PAMIETA KAZDY BLAD KTORY W NIM POPELNIONO']];
+function uni_szyfr_generuj(int $stopien): array {
+    $pula = UNI_SZ_ZDANIA[$stopien] ?? UNI_SZ_ZDANIA[1];
+    $txt = $pula[random_int(0, count($pula) - 1)];
+    $abc = range('A', 'Z'); $mapa = [];
+    do { $sh = uni_lam_tasuj($abc); $ok = true; foreach ($abc as $i => $l) if ($sh[$i] === $l) { $ok = false; break; } } while (!$ok);
+    foreach ($abc as $i => $l) $mapa[$l] = $sh[$i];
+    $lit = array_values(array_unique(array_filter(str_split($txt), fn($c) => ctype_alpha($c))));
+    $ile = (int)round(count($lit) * ([1 => .45, 2 => .3, 3 => .15][$stopien] ?? .45));
+    $odsl = []; foreach (array_slice(uni_lam_tasuj($lit), 0, $ile) as $l) $odsl[$mapa[$l]] = $l;
+    $szyfr = implode('', array_map(fn($c) => ctype_alpha($c) ? $mapa[$c] : $c, str_split($txt)));
+    return ['typ' => 'szyfr', 'szyfr' => $szyfr, 'odsl' => $odsl, 'tekst' => $txt];
+}
+function uni_szyfr_sprawdz(array $d, $odp): bool { return is_string($odp) && preg_replace('/\s+/', ' ', strtoupper(trim($odp))) === $d['tekst']; }
+
+/* ── MEMORY — karty odkrywa serwer (api/uni_memory.php), przeglądarka nie zna treści ── */
+const UNI_MEM_PARY = [['H₂O', 'Woda'], ['NaCl', 'Sól kuchenna'], ['Habeas corpus', 'Ochrona przed bezprawnym aresztem'], ['Hipokrates', 'Ojciec medycyny'],
+    ['Brooklyn Bridge', '1883'], ['Wall Street', 'Giełda'], ['Pi', '3,14'], ['Adrenalina', 'Hormon stresu'], ['Algorytm', 'Przepis krok po kroku'],
+    ['Alibi', 'Dowód nieobecności'], ['Katalizator', 'Przyspiesza reakcję'], ['Aorta', 'Największa tętnica'], ['Ellis Island', 'Brama imigrantów'],
+    ['Inflacja', 'Spadek wartości pieniądza'], ['Placebo', 'Pozorny lek'], ['Tlen', 'O'], ['Cezar', 'Rubikon'], ['Newton', 'Grawitacja'],
+    ['Kofeina', 'Pobudza'], ['Szekspir', 'Hamlet'], ['Bach', 'Barok'], ['Freud', 'Psychoanaliza'], ['Darwin', 'Ewolucja'], ['Sonet', '14 wersów']];
+function uni_memory_generuj(int $stopien): array {
+    $n = [1 => 6, 2 => 8, 3 => 10][$stopien] ?? 6;
+    $karty = [];
+    foreach (array_slice(uni_lam_tasuj(UNI_MEM_PARY), 0, $n) as $i => [$a, $b]) { $karty[] = [$i, $a]; $karty[] = [$i, $b]; }
+    return ['typ' => 'memory', 'karty' => uni_lam_tasuj($karty), 'znalezione' => [], 'otwarta' => null, 'ruchy' => 0];
+}
+function uni_memory_sprawdz(array $d, $odp): bool { return count($d['znalezione']) * 2 === count($d['karty']); }
+
+/* ── UKŁADANKA „15” — tasowanie losowymi ruchami od stanu ułożonego (zawsze rozwiązywalna) ── */
+function uni_15_ruch(array $p, int $n, int $kafel): ?array {
+    $z = array_search(0, $p, true); $k = array_search($kafel, $p, true);
+    if ($k === false || $kafel === 0) return null;
+    if (abs(intdiv($z, $n) - intdiv($k, $n)) + abs($z % $n - $k % $n) !== 1) return null;
+    $p[$z] = $kafel; $p[$k] = 0; return $p;
+}
+function uni_pietnastka_generuj(int $stopien): array {
+    [$n, $ile] = [1 => [3, 40], 2 => [4, 80], 3 => [4, 160]][$stopien] ?? [3, 40];
+    $p = array_merge(range(1, $n * $n - 1), [0]); $ost = -1;
+    for ($i = 0; $i < $ile; $i++) {
+        $z = array_search(0, $p, true); $opc = [];
+        foreach ([-$n, $n, -1, 1] as $dd) { $t = $z + $dd; if ($t < 0 || $t >= $n * $n || (abs($dd) === 1 && intdiv($t, $n) !== intdiv($z, $n)) || $p[$t] === $ost) continue; $opc[] = $t; }
+        $t = $opc[random_int(0, count($opc) - 1)]; $ost = $p[$t]; $p = uni_15_ruch($p, $n, $p[$t]);
+    }
+    if ($p === array_merge(range(1, $n * $n - 1), [0])) return uni_pietnastka_generuj($stopien);
+    return ['typ' => 'pietnastka', 'n' => $n, 'plansza' => $p];
+}
+function uni_pietnastka_sprawdz(array $d, $odp): bool {
+    if (!is_array($odp) || count($odp) > 5000) return false;
+    $p = $d['plansza'];
+    foreach ($odp as $k) { $p = uni_15_ruch($p, $d['n'], (int)$k); if ($p === null) return false; }
+    return $p === array_merge(range(1, $d['n'] ** 2 - 1), [0]);
+}
+
+/* ── NONOGRAM — losowy obraz, podpowiedzi wierszy i kolumn; liczy się każde rozwiązanie zgodne z podpowiedziami ── */
+function uni_nono_podp(array $linia): array { $o = []; $c = 0; foreach ($linia as $v) { if ($v) $c++; elseif ($c) { $o[] = $c; $c = 0; } } if ($c) $o[] = $c; return $o ?: [0]; }
+function uni_nono_podpowiedzi(array $g): array {
+    $n = count($g); $w = []; $k = [];
+    for ($i = 0; $i < $n; $i++) { $w[] = uni_nono_podp($g[$i]); $k[] = uni_nono_podp(array_column($g, $i)); }
+    return [$w, $k];
+}
+function uni_nonogram_generuj(int $stopien): array {
+    $n = [1 => 5, 2 => 6, 3 => 8][$stopien] ?? 5;
+    do { $g = []; $s = 0; for ($r = 0; $r < $n; $r++) for ($c = 0; $c < $n; $c++) { $g[$r][$c] = random_int(1, 100) <= 58 ? 1 : 0; $s += $g[$r][$c]; } } while ($s < $n * $n * .4);
+    [$w, $k] = uni_nono_podpowiedzi($g);
+    return ['typ' => 'nonogram', 'n' => $n, 'w' => $w, 'k' => $k];
+}
+function uni_nonogram_sprawdz(array $d, $odp): bool {
+    if (!is_array($odp) || count($odp) !== $d['n']) return false;
+    $g = []; foreach ($odp as $r => $w) { if (!is_array($w) || count($w) !== $d['n']) return false; foreach ($w as $v) $g[(int)$r][] = $v ? 1 : 0; }
+    return uni_nono_podpowiedzi($g) === [$d['w'], $d['k']];
+}
+
+/* ── KTO KŁAMIE — dokładnie jeden kłamca; zagadka generowana aż rozwiązanie jest jednoznaczne ── */
+const UNI_KL_IMIONA = ['Asystent Vance', 'Doktorantka Moreau', 'Laborant Okafor', 'Stażystka Lin', 'Portier Kowalczyk', 'Profesor Hale'];
+function uni_kl_prawda(array $st, int $klamca): bool {
+    foreach ($st as $i => [$o, $czy_mowi_prawde]) { $zdanie = ($o !== $klamca) === $czy_mowi_prawde; if ($zdanie !== ($i !== $klamca)) return false; }
+    return true;
+}
+function uni_klamca_generuj(int $stopien): array {
+    $n = [1 => 3, 2 => 4, 3 => 5][$stopien] ?? 3;
+    do {
+        $L = random_int(0, $n - 1); $st = [];
+        for ($i = 0; $i < $n; $i++) { do { $o = random_int(0, $n - 1); } while ($o === $i); $prawda_o = $o !== $L; $st[$i] = [$o, $i === $L ? !$prawda_o : $prawda_o]; }
+        $roz = 0; for ($x = 0; $x < $n; $x++) if (uni_kl_prawda($st, $x)) $roz++;
+    } while ($roz !== 1);
+    $im = array_slice(uni_lam_tasuj(UNI_KL_IMIONA), 0, $n);
+    $zd = []; foreach ($st as $i => [$o, $p]) $zd[] = [$im[$i], $im[$o] . ($p ? ' mówi prawdę.' : ' kłamie.')];
+    return ['typ' => 'klamca', 'zdania' => $zd, 'klamca' => $L, 'n' => $n];
+}
+function uni_klamca_sprawdz(array $d, $odp): bool { return is_int($odp) || ctype_digit((string)$odp) ? (int)$odp === $d['klamca'] : false; }
+
+/* ── WARCABY: WIELOSKOK — biały pionek musi zbić wszystkie czarne w jednym ruchu ── */
+function uni_warcaby_generuj(int $stopien): array {
+    $sk = [1 => 2, 2 => 3, 3 => 4][$stopien] ?? 2;
+    for ($prob = 0; $prob < 500; $prob++) {
+        $r = random_int(0, 7); $c = random_int(0, 7); if (($r + $c) % 2 === 0) continue;
+        $start = [$r, $c]; $zajete = ["$r,$c" => 1]; $czarne = []; $ok = true;
+        for ($i = 0; $i < $sk && $ok; $i++) {
+            $opc = [];
+            foreach ([[-1, -1], [-1, 1], [1, -1], [1, 1]] as [$dr, $dc]) {
+                $mr = $r + $dr; $mc = $c + $dc; $lr = $r + 2 * $dr; $lc = $c + 2 * $dc;
+                if ($lr < 0 || $lc < 0 || $lr > 7 || $lc > 7 || isset($zajete["$mr,$mc"]) || isset($zajete["$lr,$lc"])) continue;
+                $opc[] = [$mr, $mc, $lr, $lc];
+            }
+            if (!$opc) { $ok = false; break; }
+            [$mr, $mc, $r, $c] = $opc[random_int(0, count($opc) - 1)];
+            $czarne[] = [$mr, $mc]; $zajete["$mr,$mc"] = 1; $zajete["$r,$c"] = 1;
+        }
+        if ($ok) return ['typ' => 'warcaby', 'bialy' => $start, 'czarne' => $czarne];
+    }
+    return uni_warcaby_generuj(1);
+}
+function uni_warcaby_sprawdz(array $d, $odp): bool {
+    if (!is_array($odp) || count($odp) !== count($d['czarne'])) return false;
+    [$r, $c] = $d['bialy']; $cz = []; foreach ($d['czarne'] as [$a, $b]) $cz["$a,$b"] = 1;
+    foreach ($odp as $pole) {
+        if (!is_array($pole) || count($pole) !== 2) return false;
+        [$lr, $lc] = [(int)$pole[0], (int)$pole[1]];
+        if ($lr < 0 || $lc < 0 || $lr > 7 || $lc > 7 || abs($lr - $r) !== 2 || abs($lc - $c) !== 2) return false;
+        $m = (($r + $lr) / 2) . ',' . (($c + $lc) / 2);
+        if (!isset($cz[$m]) || isset($cz["$lr,$lc"])) return false;
+        unset($cz[$m]); $r = $lr; $c = $lc;
+    }
+    return !$cz;
+}
+
 /* ── WSPÓLNE ──────────────────────────────────────────────────────── */
 function uni_lam_losuj(int $stopien): array {
     $typ = array_rand(UNI_LAM_TYPY);
-    return $typ === 'sudoku' ? uni_sudoku_generuj($stopien) : uni_obwod_generuj($stopien);
+    return ('uni_' . $typ . '_generuj')($stopien);
 }
 
 function uni_lam_sprawdz(array $dane, $odp): bool {
-    return $dane['typ'] === 'sudoku' ? uni_sudoku_sprawdz($dane, $odp) : uni_obwod_sprawdz($dane, $odp);
+    $f = 'uni_' . $dane['typ'] . '_sprawdz';
+    return function_exists($f) && $f($dane, $odp);
 }
 
-/** Dane dla przeglądarki. Odpowiedź obwodu to liczba obrotów każdego kafla. */
+/** Dane dla przeglądarki — bez rozwiązań (kryptogram bez tekstu, memory bez treści kart, kto kłamie bez kłamcy). */
 function uni_lam_publiczne(array $d): array {
-    return $d['typ'] === 'sudoku' ? ['typ' => 'sudoku', 'plansza' => $d['plansza']]
-                                  : ['typ' => 'obwod', 'n' => $d['n'], 'src' => $d['src'], 'maska' => $d['maska']];
+    switch ($d['typ']) {
+        case 'sudoku':     return ['typ' => 'sudoku', 'plansza' => $d['plansza']];
+        case 'obwod':      return ['typ' => 'obwod', 'n' => $d['n'], 'src' => $d['src'], 'maska' => $d['maska']];
+        case 'szyfr':      return ['typ' => 'szyfr', 'szyfr' => $d['szyfr'], 'odsl' => $d['odsl']];
+        case 'memory':     return ['typ' => 'memory', 'ile' => count($d['karty'])];
+        case 'pietnastka': return ['typ' => 'pietnastka', 'n' => $d['n'], 'plansza' => $d['plansza']];
+        case 'nonogram':   return ['typ' => 'nonogram', 'n' => $d['n'], 'w' => $d['w'], 'k' => $d['k']];
+        case 'klamca':     return ['typ' => 'klamca', 'zdania' => $d['zdania']];
+        case 'warcaby':    return ['typ' => 'warcaby', 'bialy' => $d['bialy'], 'czarne' => $d['czarne']];
+    }
+    return ['typ' => $d['typ']];
 }

@@ -255,9 +255,10 @@ function pm_obsluz(mysqli $db, array $sesja, int $gid, bool $czy_mg, bool $zaakc
         case 'walka_runda':
             $h = rw_koniec_rundy($db, $sid); if ($h) pm_publikuj($db, $sid, $gid, $h); pm_wroc($sid, 'walka');
         case 'walka_koniec':
-            db_zmien($db, "UPDATE sesje_rpg SET walka_aktywna = 0 WHERE id = ?", [$sid]);
-            db_zmien($db, "DELETE FROM sesje_walka WHERE sesja_id = ?", [$sid]);
+            pm_publikuj($db, $sid, $gid, rw_koniec_walki($db, $sid));
             unset($_SESSION['pm_pv'][$sid]); pm_wroc($sid, 'walka');
+        case 'tura_po_walce':
+            $h = rw_tura_po_walce($db, $sid); if ($h) pm_publikuj($db, $sid, $gid, $h); pm_wroc($sid, 'walka');
         case 'uczestnik_dodaj':
             $k = (string)($_POST['klucz'] ?? '');
             if (preg_match('/^[gn]\d+$/', $k)) rw_dodaj($db, $sid, $k);

@@ -9,7 +9,7 @@ $id_gracza = (int)$_SESSION['id_gracza'];
    CENTRUM OPOWIEŚCI v2 — kolumny Nabór / W toku / Podsumowanie,
    zakładanie z uprawnieniami rang, akceptacja Opowieści JMG,
    zgłoszenia z Opowieści Swobodnych (MG i Adminka).
-   Stara lista (pages/sesje.php) działa dalej — w menu podmień link na page=centrum.
+   Stara lista (pages/sesje.php) wyłączona — game.php przekierowuje page=sesje tutaj (301).
    ═══════════════════════════════════════════════════════════════════════ */
 
 $GATUNKI = ['Obyczajowa', 'Kryminalna', 'Śledztwo', 'Akcja', 'Horror', 'Romans', 'Więzienie', 'Polityczna', 'Inna'];
@@ -188,7 +188,7 @@ $link = fn(array $z) => 'game.php?page=centrum&' . http_build_query(array_filter
   <header class="co-head">
     <div><div class="lbl">Ranga: <?php echo $h($R['n']); ?></div><h1>Centrum Opowieści</h1><p>Sesje prowadzone przez Mistrzów Gry, Wydarzenia w Klubie i Opowieści Swobodne, które gracze zakładają sami.</p></div>
     <div class="co-act">
-      <?php if ($nadzor): ?><a class="co-btn ghost" href="game.php?page=centrum&zgl=1#zgl">Zgłoszenia <?php if ($zgloszenia) echo '<b>' . count($zgloszenia) . '</b>'; ?></a><a class="co-btn ghost" href="game.php?page=przeglad">Przegląd</a><a class="co-btn ghost" href="game.php?page=rangi">Rangi</a><?php endif; ?>
+      <?php if ($nadzor): ?><a class="co-btn ghost" href="game.php?page=centrum&zgl=1#zgl">Zgłoszenia <?php if ($zgloszenia) echo '<b>' . count($zgloszenia) . '</b>'; ?></a><a class="co-btn ghost" href="game.php?page=przeglad">Przegląd</a><a class="co-btn ghost" href="game.php?page=rangi">Rangi</a><a class="co-btn ghost" href="game.php?page=moderacja">Moderacja</a><?php endif; ?>
       <a class="co-btn" href="#nowa" onclick="document.getElementById('nowa').open=true">+ Załóż Opowieść</a>
     </div>
   </header>

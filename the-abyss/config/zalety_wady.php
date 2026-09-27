@@ -521,10 +521,58 @@ const ZW_PARY = [
     ['Trauma Pourazowa', 'Spokój ducha'],
 ];
 
+/** Stare grupy wykluczeń z karty (każda pozycja w grupie wyklucza pozostałe). */
+const ZW_GRUPY_STARE = [
+    // Oddech i kondycja
+    ['Żelazne Płuca','Astma'],
+    // Wzrok
+    ['Sokoli Wzrok','Krótkowidz','Całkowita Ślepota','Jednooki','Daltonizm'],
+    // Siła fizyczna / kondycja
+    ['Krzepki','Słabeusz'],
+    ['Atletyczne Ciało','Słabeusz','Utykający'],
+    // Szybkość / nogi
+    ['Szybkie Nogi','Utykający','Brak Kończyny'],
+    ['Kocia Zwinność','Utykający','Brak Kończyny'],
+    // Umysł
+    ['Genialny Umysł','Bystrzak','Ociężały Umysł'],
+    ['Analityczny Umysł','Ociężały Umysł','Rozproszenie Uwagi'],
+    ['Poliglota','Dysleksja'],
+    ['Fotograficzna Pamięć','Ociężały Umysł'],
+    // Zdrowie ogólne
+    ['Zdrowie Jak Żelazo','Niska Odporność','Choroba Serca','Cukrzyca','Hemofiliak'],
+    ['Szybka Regeneracja','Wolne Gojenie','Hemofiliak'],
+    // Wygląd
+    ['Zjawiskowa Uroda','Oszpecony'],
+    // Nerwy
+    ['Zimna Krew','Furiat','Tchórz','Lęki Napadowe','Trauma Pourazowa'],
+    ['Wysoka Tolerancja Stresu','Lęki Napadowe','Trauma Pourazowa','Furiat'],
+    ['Mistrz Blefu','Jąkanie'],
+    // Sen
+    ['Pogodny Sen','Bezsenność'],
+    // Nastrój
+    ['Wrodzony Optymizm','Depresja'],
+    // Empatia i społeczne
+    ['Empatyczny','Brak Empatii','Mizantrop'],
+    ['Charyzmatyczny','Odludek','Jąkanie','Mizantrop'],
+    ['Twarda Skóra','Lęki Napadowe'],
+    // Uliczne
+    ['Uliczny Spryt','Naiwny'],
+    // Ręce i precyzja
+    ['Oburęczny','Brak Kończyny'],
+    ['Lekka Ręka','Brak Kończyny'],
+    // Szybkość reakcji
+    ['Refleks Szachisty','Leniwy','Rozproszenie Uwagi'],
+    ['Wytrenowane Odruchy','Leniwy'],
+    // Charakter społeczny
+    ['Bezkompromisowy','Skąpiec'],
+    // Słuch
+    ['Świetna Pamięć Słuchowa','Głuchy','Niedosłuch'],
+];
+
 function zw_pula(int $poziom, int $bonus = 0): int { return ZW_PULA_START + intdiv(max(0, $poziom), ZW_CO_POZIOMOW) + $bonus; }
 
 /** Wszystkie wykluczenia jako pary: nowe pary + stare grupy z karta.php (każda z każdą). */
-function zw_pary(array $grupy_stare = []): array {
+function zw_pary(array $grupy_stare = ZW_GRUPY_STARE): array {
     $p = ZW_PARY;
     foreach ($grupy_stare as $g) { $g = array_values($g); for ($i = 0; $i < count($g); $i++) for ($j = $i + 1; $j < count($g); $j++) $p[] = [$g[$i], $g[$j]]; }
     return $p;
