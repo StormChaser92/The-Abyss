@@ -1,6 +1,6 @@
 <?php
 session_start();
-ob_start();   // podstrony mogą robić header('Location') mimo że layout już się wypisuje
+ob_start(function ($h) { return function_exists('csrf_wstaw') ? csrf_wstaw($h) : $h; });   // header('Location') z podstron + token CSRF w formularzach (includes/csrf.php)
 
 
 if (!isset($_SESSION['zalogowany']) || $_SESSION['zalogowany'] !== true) {

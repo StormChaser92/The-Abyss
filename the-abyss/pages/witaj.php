@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../includes/formatuj.php';
 require_once "db.php";
 $id_gracza = $_SESSION['id_gracza'];
 
@@ -472,7 +473,7 @@ $akcje = match($klasa) {
     ?>
         <div class="aktywnosc-row">
             <div class="akt-dot"></div>
-            <div style="flex:1"><?php echo htmlspecialchars($a['tresc']); ?></div>
+            <div style="flex:1"><?php echo html_bezpieczny((string)$a['tresc']); ?></div>
             <div class="akt-czas"><?php echo $czas; ?></div>
         </div>
     <?php endwhile; endif; ?>

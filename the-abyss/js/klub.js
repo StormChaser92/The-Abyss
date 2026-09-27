@@ -51,6 +51,8 @@
         s = s.replace(/\*\*(.+?)\*\*/g, '<span class="emph">$1</span>');
         // *akcja*  →  <span class="nar">…</span>
         s = s.replace(/\*(.+?)\*/g, '<span class="nar">$1</span>');
+        // _kursywa_ (nie rusza snake_case w środku słowa)
+        s = s.replace(/(^|[^\p{L}\p{N}_])_(?=\S)(.+?)(?<=\S)_(?![\p{L}\p{N}_])/gu, '$1<i>$2</i>');
         // "dialog"  →  <span class="dialog">"…"</span>
         // (Polish quotes too: „dialog")
         s = s.replace(/&quot;(.+?)&quot;/g, '<span class="dialog">"$1"</span>');

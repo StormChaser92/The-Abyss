@@ -8,6 +8,7 @@ require_once __DIR__ . "/../includes/avatar.php";
 $id_gracza = $_SESSION['id_gracza'];
 $login_gracza = $_SESSION['login'];
 require_once __DIR__ . "/../config/moderacja.php";
+require_once __DIR__ . "/../includes/formatuj.php";
 if ($mod_w = mod_wyrzucony($polaczenie, (int)$id_gracza)) {
     echo "<div style='padding:30px;text-align:center;color:var(--neon-red-hot);background:rgba(0,0,0,0.5);border:1px solid var(--border-mid);border-radius:2px;line-height:1.7'>⛔ Zostałeś wyrzucony z Klubu The Abyss.<br>Powód: " . bz_h($mod_w['powod']) . "<br><a href='game.php?page=moderacja' style='color:var(--neon-cyan)'>Historia kar i odwołanie →</a></div>";
     return;
@@ -314,7 +315,7 @@ function klub_uczestnicy_eventu($polaczenie, $event_id) {
 function klub_render_msg($w) {
     // Wiadomości systemowe (napiwki, zamówienia, ban) — wyśrodkowane
     if (($w['typ'] ?? '') === 'system') {
-        $tresc = $w['tresc']; // już ma <b> i <i>, nie escapujemy
+        $tresc = html_bezpieczny((string)$w['tresc']); // HTML systemu przez białą listę (includes/formatuj.php)
         echo "<div class='msg sys' data-id='".(int)$w['id']."'>
             <span class='sys-line'>$tresc <span class='sys-time'>".htmlspecialchars($w['czas'])."</span></span>
         </div>";

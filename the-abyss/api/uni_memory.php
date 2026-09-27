@@ -8,6 +8,7 @@
 session_start();
 header('Content-Type: application/json; charset=utf-8');
 if (empty($_SESSION['zalogowany'])) { http_response_code(401); echo json_encode(['ok' => false, 'msg' => 'Nie zalogowano']); exit; }
+require_once __DIR__ . '/../includes/csrf.php';
 if (($_SESSION['uni_lam']['d']['typ'] ?? '') !== 'memory') { echo json_encode(['ok' => false, 'msg' => 'Brak aktywnej łamigłówki']); exit; }
 
 $d = &$_SESSION['uni_lam']['d'];

@@ -5,7 +5,8 @@ require_once __DIR__ . '/../config/zawody.php';
 require_once __DIR__ . '/../config/rp_helpers.php';
 require_once __DIR__ . '/../includes/panel_mg.php';
 require_once __DIR__ . '/../includes/podsumowanie.php';
-require_once __DIR__ . '/../includes/sesja_nc.php';        // NC + moderacja (config/moderacja.php)
+require_once __DIR__ . '/../includes/sesja_nc.php';
+require_once __DIR__ . '/../includes/formatuj.php';           // rp_format(), html_bezpieczny()        // NC + moderacja (config/moderacja.php)
 
 $id_gracza = $_SESSION['id_gracza'];
 
@@ -717,13 +718,10 @@ $akcent_kat = $KAT_KOLORY[$sesja['kategoria']] ?? 'var(--neon-red)';
             if ($post['typ_postu'] == 'Rzut_Koscia'): ?>
                 <div class="post-systemowy">
                     <div class="sys-head">// SYSTEM · <?php echo htmlspecialchars($post['login']); ?> · <?php echo $post['data_dodania']; ?></div>
-                    <?php echo $post['tresc']; ?>
+                    <?php echo html_bezpieczny((string)$post['tresc']); ?>
                 </div>
             <?php else:
-                $tresc_html = htmlspecialchars($post['tresc']);
-                $tresc_html = preg_replace('/@([a-zA-Z0-9_ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]+)/u', '<span class="wspomnienie">@$1</span>', $tresc_html);
-                $tresc_html = preg_replace('/\*(.*?)\*/s', '<span style="color:var(--txt-mute);font-style:italic">*$1*</span>', $tresc_html);
-                $tresc_html = nl2br($tresc_html);
+                $tresc_html = rp_format((string)$post['tresc']);   // includes/formatuj.php
             ?>
                 <div class="post-karta <?php if($czy_to_mg) echo 'mg-post'; ?>">
                     <div class="post-naglowek">
@@ -783,7 +781,7 @@ $akcent_kat = $KAT_KOLORY[$sesja['kategoria']] ?? 'var(--neon-red)';
             <div class="form-tytul fabula">✍ Dodaj Wpis Fabularny</div>
             <form method="POST">
                 <input type="hidden" name="typ_postu" value="Fabuła">
-                <textarea name="tresc_postu" class="edytor-text tag-input" style="min-height:180px" placeholder="*Opis narracyjny w gwiazdkach*&#10;&#10;Dialog białym tekstem... (użyj @Nick, aby kogoś wspomnieć)" required></textarea>
+                <textarea name="tresc_postu" class="edytor-text tag-input" style="min-height:180px" placeholder="*Opis narracyjny w gwiazdkach*&#10;&#10;Dialog białym tekstem. **pogrubienie**, _kursywa_, @Nick — wzmianka" required></textarea>
                 <div style="text-align:right">
                     <button type="submit" name="dodaj_post" class="btn-wyslij">Wyślij Wpis →</button>
                 </div>

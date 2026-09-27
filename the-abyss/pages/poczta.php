@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../includes/formatuj.php';
 require_once "db.php";
 $id_gracza = $_SESSION['id_gracza'];
 
@@ -179,7 +180,7 @@ if ($zakladka == 'alerty') {
                 
                 echo "<div class='wiadomosc-box' style='$style padding: 15px; margin-bottom: 10px; border-radius: 4px;'>";
                 echo "<div style='font-size: 0.8em; color: #666; margin-bottom: 5px;'>{$row['data_utworzenia']}</div>";
-                echo "<div style='color: #ccc; font-size: 1.05em;'>{$row['tresc']}</div>";
+                echo "<div style='color: #ccc; font-size: 1.05em;'>" . html_bezpieczny((string)$row['tresc']) . "</div>";
                 echo "</div>";
             }
         } else {

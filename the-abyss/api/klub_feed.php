@@ -20,6 +20,7 @@ if (!isset($_SESSION['zalogowany']) || $_SESSION['zalogowany'] !== true) {
 
 require_once __DIR__ . "/../db.php";
 require_once __DIR__ . "/../includes/avatar.php";
+require_once __DIR__ . "/../includes/formatuj.php";   // html_bezpieczny() dla wiadomości systemowych
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -93,7 +94,7 @@ if ($sala !== 'lobby') {
                 'id'    => (int)$r['id'],
                 'id_gracza' => (int)$r['id_gracza'],
                 'login' => $r['login'],
-                'tresc' => $r['tresc'],
+                'tresc' => $r['typ'] === 'system' ? html_bezpieczny((string)$r['tresc']) : $r['tresc'],
                 'typ'   => $r['typ'],
                 'czas'  => $r['czas'],
                 'ts'    => (int)$r['ts'],

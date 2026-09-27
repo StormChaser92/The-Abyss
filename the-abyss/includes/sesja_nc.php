@@ -6,6 +6,7 @@
    MG i Adminka: dodatkowo ostrzeżenie z poziomu wpisu (config/moderacja.php).
    W bazie posty NC to sesje_posty.typ_postu = 'OffTop'. */
 require_once __DIR__ . '/../config/moderacja.php';
+require_once __DIR__ . '/formatuj.php';
 
 function nc_h($s): string { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 
@@ -123,7 +124,7 @@ function nc_wpis(mysqli $db, array $p, array $c, bool $kopia = false): void {
     $pid = (int)$p['id']; $aut = (int)$p['autor_id'];
     $mg  = $aut === $c['wlasc'] || $p['rola'] === 'Mistrz Gry';
     $rola = $mg ? 'MG' : (($p['rola'] ?? '') === 'Gracz' ? 'Gracz' : 'Obserwator');
-    $t = nl2br(preg_replace('/@([a-zA-Z0-9_ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]+)/u', '<span class="wspomnienie">@$1</span>', nc_h($p['tresc'])));
+    $t = rp_format((string)$p['tresc']);
     $edytuj = !$kopia && !$c['zak'] && (($aut === $c['gid'] && $c['zaakc']) || $c['prow']);
     echo "<div class='nc-wpis" . ($p['nc_upomnienie'] ? ' upo' : '') . "'><div class='nc-gl'>";
     echo "<b class='nc-nick'>" . nc_h($p['login']) . "</b><span class='nc-rola" . ($mg ? ' mg' : '') . "'>$rola</span><span class='nc-data'>" . nc_h($p['data_dodania']) . "</span>";
@@ -175,7 +176,7 @@ function nc_render(mysqli $db, array $s, int $gid, bool $prow, bool $moze, bool 
         echo "</div>";
     }
     if ($moze) {
-        echo "<form method='POST' class='nc-form'><input type='hidden' name='nc_akcja' value='pisz'><textarea name='tresc' class='edytor-text tag-input' required maxlength='5000' placeholder='Napisz w NC… (użyj @Nick)'></textarea><div class='nc-form-d'>";
+        echo "<form method='POST' class='nc-form'><input type='hidden' name='nc_akcja' value='pisz'><textarea name='tresc' class='edytor-text tag-input' required maxlength='5000' placeholder='Napisz w NC… **pogrubienie**, _kursywa_, @Nick'></textarea><div class='nc-form-d'>";
         if ($prow) echo "<label><input type='checkbox' name='upomnienie' value='1'> Wyróżnij jako upomnienie</label>";
         echo "<button type='submit' class='btn-wyslij cyan'>Wyślij</button></div></form>";
     } else {

@@ -14,9 +14,10 @@ require_once __DIR__ . '/rangi.php';
 
 if (!function_exists('mod_moze')) {
 
-const MOD_DNI = [3, 7, 30];
-const MOD_NAZWY = ['ostrzezenie' => 'Ostrzeżenie', 'zawieszenie' => 'Zawieszenie', 'wyrzucenie' => 'Wyrzucenie z Klubu'];
-const NC_CZAS = ['1h' => ['1 godzina', 3600], '24h' => ['24 godziny', 86400], 'sesja' => ['do końca sesji', 0]];
+// define() zamiast const — const nie może stać w bloku if.
+define('MOD_DNI', [3, 7, 30]);
+define('MOD_NAZWY', ['ostrzezenie' => 'Ostrzeżenie', 'zawieszenie' => 'Zawieszenie', 'wyrzucenie' => 'Wyrzucenie z Klubu']);
+define('NC_CZAS', ['1h' => ['1 godzina', 3600], '24h' => ['24 godziny', 86400], 'sesja' => ['do końca sesji', 0]]);
 
 function mod_moze(mysqli $db, int $gid): bool { return rp_nadzor(rp_ranga($db, $gid)); }
 function mod_admin(mysqli $db, int $gid): bool { return rp_ranga($db, $gid) === 'adminka'; }

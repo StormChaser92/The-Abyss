@@ -1,16 +1,18 @@
 <?php
-// Konfiguracja połączenia z lokalną bazą danych (XAMPP)
-$host = "localhost"; // Adres serwera
-$user = "root";      // Domyślny użytkownik XAMPP
-$pass = "";          // Domyślnie brak hasła w XAMPP
-$db   = "the_abyss"; // Nazwa naszej bazy, którą przed chwilą stworzyłaś
+/* the-abyss/db.php — połączenie z bazą.
+   Dane logowania trzymaj w db_haslo.php (obok tego pliku, poza GitHubem — patrz .gitignore).
+   Wzór: db_haslo.przyklad.php. Bez db_haslo.php zostają domyślne ustawienia XAMPP (root bez hasła).
+   Na końcu dołącza includes/csrf.php — ochronę formularzy dla całej gry. */
+$host = "localhost";
+$user = "root";
+$pass = "";
+$db   = "the_abyss";
+if (is_file(__DIR__ . '/db_haslo.php')) require __DIR__ . '/db_haslo.php';
 
-// Próba nawiązania połączenia
 $polaczenie = new mysqli($host, $user, $pass, $db);
-
-// Sprawdzenie, czy most działa
 if ($polaczenie->connect_error) {
-    die("Krytyczny błąd systemu: Serwer bazy danych nie odpowiada. " . $polaczenie->connect_error);
+    die("Krytyczny błąd systemu: Serwer bazy danych nie odpowiada.");
 }
-// Jeśli wszystko jest w porządku, plik ładuje się w ciszy i pozwala działać grze.
-?>
+unset($pass);
+
+require_once __DIR__ . '/includes/csrf.php';

@@ -1,5 +1,6 @@
 <?php
 session_start();
+ob_start(function ($h) { return function_exists('csrf_wstaw') ? csrf_wstaw($h) : $h; });   // token CSRF (includes/csrf.php)
 require_once "db.php";
 
 // Strażnik: Wpuszcza tylko zalogowanych, którzy nie mają jeszcze profesji
