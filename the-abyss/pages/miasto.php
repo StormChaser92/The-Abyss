@@ -33,7 +33,7 @@ $bw_dane = json_decode(<<<'JSON'
   {"k":"rynek","n":"Czarny Rynek","i":"🕶️","lead":"Żadnych pytań.","o":"Jeśli masz gotówkę, tu kupisz każdą nielegalną broń i pancerz z przemytu."},
   {"k":"sklep","n":"Lombard „Rdza i Krew”","i":"🛠️","t":"Dla nowych","lead":"Trzynaście sztuk na wejście.","o":"Wszystko cięższe kuje Inżynier."},
   {"k":"warsztat","n":"Manufaktura","i":"🔧","lead":"Od rurki z barierki do karabinu przeciwpancernego.","o":"Kuj, ulepszaj, przyjmuj zlecenia i licz się z tym, że ręka zadrży."},
-  {"k":"zlecenia","n":"Zlecenia u Inżyniera","i":"📜","lead":"Płacisz z góry.","o":"Ulepszać broń umie tylko Inżynier z warsztatem. Jeśli mu nie wyjdzie, pieniądze wracają, ale broń schodzi o stopień."},
+  {"k":"zlecenia","n":"Tablica Zleceń","i":"📜","lead":"Robota od ludzi, którzy nie dają ogłoszeń.","o":"Kontrakty od stałych zleceniodawców, skoki w kilku etapach i nagrody za głowę. Uważaj na obławę."},
   {"k":"zlomowisko","n":"Złomowisko","i":"🔩","lead":"Góry blachy do przekopania.","o":"Części na broń i towar na sprzedaż, dla tych, którzy nie boją się brudnych rąk."},
   {"k":"laboratorium","n":"Laboratorium Chemiczne","i":"🧪","lead":"Piwnica z wentylacją.","o":"Receptury, odczynniki i produkty, o które nikt głośno nie pyta."},
   {"k":"syndykaty","n":"Syndykaty Miasta","i":"🏴","lead":"Rodziny, klany, podziemie.","o":"Samotne wilki giną tu najszybciej. Załóż własne imperium lub dołącz do potężnego gangu."}

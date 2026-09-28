@@ -13,9 +13,9 @@
     var left = (W - W0 * s) / 2;
     stage.style.transform = 'translate(' + left + 'px,' + (H - H0 * s) / 2 + 'px) scale(' + s + ')';
     html.classList.toggle('szeroki', W0 * s < W - 2);
-    nav.style.width = stopka.style.width = szer + 'px';
+    nav.style.width = szer + 'px';
     nav.style.transform = 'scale(' + s + ')';
-    stopka.style.transform = 'scale(' + s + ')';
+    if (stopka) { stopka.style.width = szer + 'px'; stopka.style.transform = 'scale(' + s + ')'; }
   }
   addEventListener('resize', dopasuj);
   dopasuj();
@@ -33,6 +33,7 @@
 
   // Widoki panelu
   var panel = document.getElementById('stPanel'), zamknij = document.getElementById('stZamknij');
+  if (!panel || !zamknij) return;   // strona wylogowania: bez widoków
   var MENU = { start: 'swiat', opowiesci: 'opowiesci', spolecznosc: 'spolecznosc', faq: 'faq' };
   function pokaz(v, zapisz) {
     if (!document.getElementById('w-' + v)) v = 'start';

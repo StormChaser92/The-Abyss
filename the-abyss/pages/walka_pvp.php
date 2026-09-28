@@ -2,6 +2,7 @@
 require_once "db.php";
 require_once "config/pochodzenia.php";  // pochodzenie_bonus()
 require_once "includes/melina.php";     // rzut na Czarną Pieczęć po wygranej
+require_once "includes/zlecenia_logika.php"; // areszt blokuje walkę, nagrody za głowę
 $id_gracza = $_SESSION['id_gracza'];
 
 if (!isset($_GET['cel']) || !is_numeric($_GET['cel'])) {
@@ -23,6 +24,7 @@ $on = $gracze[$cel_id];
 
 // 2. WALIDACJA - CZY WALKA MOŻE SIĘ ODBYĆ?
 if ($ja['id'] == $on['id']) { die("Nie możesz zaatakować samego siebie."); }
+if (($zl_blok = zl_blokada($polaczenie, (int)$id_gracza)) !== '') { die(htmlspecialchars($zl_blok)); }
 if ($ja['energia_aktualna'] < $koszt_energii) { die("Masz za mało energii ($koszt_energii EN)."); }
 if ($ja['tryb_pacyfisty'] == 1) { die("Jesteś w trybie nietykalności. Wyłącz go, by atakować."); }
 if ($on['tryb_pacyfisty'] == 1) { die("Ten obywatel jest nietykalny."); }
@@ -130,6 +132,7 @@ if ($jego_hp <= 0 || ($jego_hp < $moje_hp && $moje_hp > 10)) {
     $tytul_walki = "ZWYCIĘSTWO!";
     $podsumowanie = "Pokonałeś przeciwnika i zrabowałeś <b>$zrabowano $</b> (ok. $procent_lupu% jego portfela).";
     if ($pieczec) $podsumowanie .= "<br><span style='color:#ffd700;'>Z kieszeni pokonanego wypada <b>Czarna Pieczęć</b>. Gang może z niej postawić warkę w melinie.</span>";
+    $podsumowanie .= zl_glowa_po_walce($polaczenie, $ja, $on, true);
     $kolor = "#00ff00";
 } else {
     // PRZEGRANA
@@ -137,6 +140,7 @@ if ($jego_hp <= 0 || ($jego_hp < $moje_hp && $moje_hp > 10)) {
          [(int)$moje_hp, (int)$koszt_energii, (int)$id_gracza]);
     $tytul_walki = "PORAŻKA!";
     $podsumowanie = "Przeciwnik okazał się silniejszy lub zdołał uciec. Wracasz z niczym i nowymi sińcami.";
+    $podsumowanie .= zl_glowa_po_walce($polaczenie, $ja, $on, false);
     $kolor = "#ff3333";
 }
 ?>

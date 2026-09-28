@@ -9,7 +9,7 @@ if ($_SERVER["REQUEST_METHOD"] !== "POST") { header("Location: index.php#zaloguj
 $login = trim((string)($_POST['login'] ?? ''));
 $haslo = (string)($_POST['haslo'] ?? '');
 
-$st = $polaczenie->prepare("SELECT id, login, haslo, profesja FROM gracze WHERE login = ? LIMIT 1");
+$st = $polaczenie->prepare("SELECT id, login, haslo FROM gracze WHERE login = ? LIMIT 1");
 $st->bind_param('s', $login);
 $st->execute();
 $wiersz = $st->get_result()->fetch_assoc();
@@ -20,8 +20,8 @@ if ($wiersz && password_verify($haslo, $wiersz['haslo'])) {
     $_SESSION['zalogowany'] = true;
     $_SESSION['id_gracza'] = $wiersz['id'];
     $_SESSION['login'] = $wiersz['login'];
-    // Bez profesji → kreator postaci, z profesją → gra
-    header("Location: " . (empty($wiersz['profesja']) ? "creator.php" : "game.php"));
+    // Zawsze do gry — game.php sam poprowadzi nową postać przez wybór pochodzenia i klasy
+    header("Location: game.php");
     exit;
 }
 

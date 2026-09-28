@@ -15,12 +15,11 @@ $komunikat = "";
 $gracz = $polaczenie->query("SELECT * FROM gracze WHERE id=$id_gracza")->fetch_assoc();
 $pokoje = !empty($gracz['pokoje_specjalne']) ? json_decode($gracz['pokoje_specjalne'], true) : [];
 
-if ($gracz['klasa'] !== 'Inżynier' || !in_array("Warsztat Inżynieryjny", (array)$pokoje, true)) {
-    echo "<div style='padding:50px; text-align:center; color:#ff3333; font-family:Oswald,sans-serif; font-size:1.8em;'>
-            Ulepszać broń może tylko Inżynier z własnym warsztatem.<br>
-            <span style='font-size:.55em; color:#888;'>Jeśli szukasz ulepszenia, złóż zlecenie u kogoś, kto go ma.</span>
-          </div>";
-    exit;
+// Manufaktura dla reszty miasta: zamawianie u Inżynierów (dawna strona Zleceń).
+// Inżynier z warsztatem też może tu zajrzeć: game.php?page=warsztat&widok=zamow
+if ($gracz['klasa'] !== 'Inżynier' || !in_array("Warsztat Inżynieryjny", (array)$pokoje, true) || ($_GET['widok'] ?? '') === 'zamow') {
+    include __DIR__ . '/warsztat_zamow.php';
+    return;
 }
 
 /* Bonusy pochodzenia przekazywane jawnie — dawniej wisiały jako martwy kod. */
@@ -126,6 +125,8 @@ foreach ($moje as $kod => $st) {
 </div>
 
 <?php echo $komunikat; ?>
+
+<p style="margin:0 0 16px"><a href="game.php?page=warsztat&widok=zamow" style="color:#ffaa00">→ Zamów u innego Inżyniera</a></p>
 
 <div class="panel-zasobow">
     <div class="zasob"><span>Rusznikarstwo</span><b style="color:#00ff00; text-shadow:0 0 10px rgba(0,255,0,.4);"><?php echo number_format((float)$gracz['umiejetnosc_inzynierii'], 2); ?></b></div>

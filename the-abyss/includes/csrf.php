@@ -3,7 +3,7 @@
    - Token jeden na sesję: $_SESSION['csrf'].
    - Każdy POST zalogowanego gracza musi mieć token: pole _csrf albo nagłówek X-CSRF-Token.
      Logowanie i rejestracja (bez sesji gracza) są poza kontrolą.
-   - csrf_wstaw() — callback ob_start w game.php i creator.php: dopisuje ukryte pole do każdego
+   - csrf_wstaw() — callback ob_start w game.php: dopisuje ukryte pole do każdego
      <form method="post">, meta z tokenem i skrypt, który dokłada nagłówek do fetch/XHR
      i pole do formularzy tworzonych w JS.
    - Zły token: api/ dostaje JSON 419, strona wraca na poprzedni adres z komunikatem. */

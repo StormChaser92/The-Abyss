@@ -1,0 +1,57 @@
+/* the-abyss/css/wylogowanie.css — strona po wylogowaniu (logout.php). Wymaga css/start.css. */
+.wy .st-bg{background-image:url('../img/wylogowanie_bg.jpg')}
+.wy .st-fill{background-image:url('../img/wylogowanie_bg.jpg')}
+.wy-panel{position:absolute;left:479px;top:196px;width:714px;height:552px;--r:460px;
+ background:linear-gradient(180deg,rgba(26,6,14,.46),rgba(12,3,9,.58));border:1px solid rgba(255,31,69,.7);
+ backdrop-filter:blur(12px) saturate(1.15);-webkit-backdrop-filter:blur(12px) saturate(1.15);
+ box-shadow:0 0 30px rgba(255,20,60,.35),0 0 70px rgba(255,20,60,.15),inset 0 0 70px rgba(255,20,60,.08),inset 0 1px 0 rgba(255,255,255,.07)}
+.wy-panel .kl.lg{left:-4px;top:-4px;width:20px;height:20px;border-width:2px;border-right:0;border-bottom:0;opacity:1}
+.wy-ikona{position:absolute;left:305px;top:-16px;width:104px;height:104px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+ background:radial-gradient(circle,rgba(40,4,14,.9),rgba(14,2,7,.95));border:2px solid var(--red-hot);box-shadow:0 0 16px rgba(255,31,69,.8),inset 0 0 18px rgba(255,31,69,.35)}
+.wy-ikona::before{content:'';position:absolute;inset:-12px;border-radius:50%;border:1px solid rgba(255,31,69,.55);border-left-color:transparent;border-bottom-color:transparent;transform:rotate(-20deg)}
+.wy-ikona svg{width:58px;height:58px;color:var(--red-hot);filter:drop-shadow(0 0 6px var(--red))}
+.wy-linia{position:absolute;top:46px;height:1px;width:200px}
+.wy-linia.l{left:91px;background:linear-gradient(90deg,transparent,rgba(255,31,69,.8))}
+.wy-linia.p{right:93px;background:linear-gradient(270deg,transparent,rgba(255,31,69,.8))}
+.wy-hasla{position:absolute;left:0;right:0;top:100px;margin:0;text-align:center;font-weight:700;font-size:40px;line-height:50px;letter-spacing:4.6px;text-transform:uppercase;color:#fff;
+ text-shadow:0 0 10px rgba(255,120,150,.55),0 0 22px rgba(255,31,69,.35)}
+.wy-tytul{position:absolute;left:0;right:0;top:214px;margin:0;text-align:center;font-family:'Ironspace',Impact,sans-serif;font-weight:400;font-size:96px;line-height:92px;letter-spacing:8px;color:#fff;
+ text-shadow:0 0 4px #fff,0 0 12px rgba(255,70,100,.95),0 0 30px rgba(255,31,69,.75),0 0 60px rgba(255,31,69,.45)}
+.wy-tytul em{font-style:normal;color:var(--red-hot)}
+.wy-tytul::before,.wy-tytul::after{content:'';position:absolute;height:2px;background:linear-gradient(90deg,transparent,#ff7d93);box-shadow:0 0 8px var(--red)}
+.wy-tytul::before{left:44px;top:38px;width:70px}
+.wy-tytul::after{right:40px;top:62px;width:60px;transform:scaleX(-1)}
+.wy-pa{position:absolute;left:150px;top:318px;width:420px;height:130px;pointer-events:none}
+.wy-pa b{position:absolute;left:6px;top:40px;font-family:'Kaushan Script',cursive;font-weight:400;font-size:62px;line-height:1;color:var(--red-hot);white-space:nowrap;transform:rotate(-8deg);transform-origin:left bottom;
+ text-shadow:0 0 8px rgba(255,31,69,.9),0 0 22px rgba(255,31,69,.5)}
+.wy-pa svg{position:absolute;left:62px;top:78px;width:360px;height:70px;overflow:visible;filter:drop-shadow(0 0 6px var(--red))}
+.wy-msg{position:absolute;left:41px;top:459px;width:670px;height:57px;display:flex;align-items:center;gap:20px;padding-left:16px;--r:300px;
+ background:linear-gradient(90deg,rgba(40,4,14,.55),rgba(10,3,8,.35));border:1px solid rgba(255,31,69,.28);border-left:3px solid var(--red-hot);box-shadow:-4px 0 12px rgba(255,31,69,.35)}
+.wy-msg svg{width:34px;height:34px;color:var(--red-hot);flex:none;filter:drop-shadow(0 0 5px var(--red))}
+.wy-msg p{margin:0;font-family:'IBM Plex Mono',monospace;font-size:13px;line-height:19px;letter-spacing:1.6px;text-transform:uppercase;color:#e6dce2}
+.wy-akcja{position:absolute;left:676px;top:782px;width:320px}
+.wy-akcja .btn{width:100%}
+/* tablica odlotów na zdjęciu (lewa strona) */
+.wy-tablica{position:absolute;left:60px;top:289px;width:180px;transform:skewY(10.5deg);transform-origin:0 0;pointer-events:none}
+.wy-tablica div{display:flex;justify-content:space-between;align-items:center;height:24.5px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:#ff3355;
+ text-shadow:0 0 5px rgba(255,31,69,.9),0 0 12px rgba(255,31,69,.5)}
+.wy-tablica .m{font-size:17px;display:inline-block;transition:transform .25s,opacity .25s}
+.wy-tablica .m.kl2{transform:scaleY(0);opacity:.2}
+.wy-tablica .s{font-size:14.5px;letter-spacing:1px}
+.wy-tablica .s.bo{animation:wyMig 1.6s steps(2) infinite}
+@keyframes wyMig{50%{opacity:.35}}
+/* wąskie ekrany */
+html.flow .wy .st-bg{background-position:30% 50%}
+html.flow .wy-tablica{display:none}
+html.flow .wy-panel{position:relative;left:0;top:0;width:100%;max-width:640px;height:auto;display:flex;flex-direction:column;align-items:center;padding:70px 18px 24px;margin-top:40px}
+html.flow .wy-ikona{left:50%;margin-left:-44px;top:-44px;width:88px;height:88px}
+html.flow .wy-linia{display:none}
+html.flow .wy-hasla,html.flow .wy-tytul,html.flow .wy-pa,html.flow .wy-msg{position:relative;left:auto;right:auto;top:auto}
+html.flow .wy-hasla{font-size:24px;line-height:32px;letter-spacing:2.5px}
+html.flow .wy-tytul{font-size:60px;line-height:64px;margin-top:10px;letter-spacing:5px}
+html.flow .wy-tytul::before,html.flow .wy-tytul::after{display:none}
+html.flow .wy-pa{width:300px;height:100px}
+html.flow .wy-pa b{font-size:44px;left:14px}
+html.flow .wy-pa svg{left:30px;top:50px;width:260px}
+html.flow .wy-msg{width:100%;height:auto;padding:12px 14px;margin-top:10px}
+html.flow .wy-akcja{position:relative;left:auto;top:auto;width:100%;max-width:640px}

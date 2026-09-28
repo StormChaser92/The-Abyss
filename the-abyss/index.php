@@ -83,7 +83,7 @@ $st_nowe   = number_format(st_licz($polaczenie, "SELECT COUNT(*) FROM sesje_rpg 
 <div class="st-kicker">Pytania <em>//</em> Odpowiedzi</div>
 <h2 class="st-h2">Jak to działa</h2>
 <div class="st-faq">
-<details name="faq" class="szklo" open><summary>Jak zacząć?</summary><p>Stwórz postać: wybierz imię, e-mail i hasło. Po pierwszym logowaniu kreator poprowadzi Cię przez pochodzenie i profesję. Potem wejdź do Centrum Opowieści albo do Klubu.</p></details>
+<details name="faq" class="szklo" open><summary>Jak zacząć?</summary><p>Stwórz postać: wybierz imię, e-mail i hasło. Po pierwszym logowaniu wybierzesz pochodzenie postaci, a potem jej klasę: Szabrownika, Inżyniera albo Egzekutora. Potem wejdź do Centrum Opowieści albo do Klubu.</p></details>
 <details name="faq" class="szklo"><summary>Jak pisać post fabularny?</summary><p>Narrację piszesz w gwiazdkach <code>*tak*</code>, dialog zwykłym tekstem. Działa też <code>**pogrubienie**</code>, <code>_kursywa_</code> i <code>@Nick</code>, żeby kogoś wspomnieć.</p></details>
 <details name="faq" class="szklo"><summary>Czy jest kolejka tur?</summary><p>Nie. Piszesz swój wpis w dowolnym momencie, zgodnie z charakterem postaci. Rzuty i przebieg sceny ustala prowadzący.</p></details>
 <details name="faq" class="szklo"><summary>Czym jest NC?</summary><p>Non Clima, zakładka rozmów poza fabułą w każdej Opowieści. Piszą w niej uczestnicy i obserwatorzy.</p></details>

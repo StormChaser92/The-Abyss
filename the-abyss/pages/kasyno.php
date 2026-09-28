@@ -38,117 +38,22 @@ $reputacja = $netto >= 25000 ? 'Rekin stołów' : ($netto <= -25000 ? 'Frajer ka
 $ranking = $polaczenie->query("SELECT login, netto, rozdania, reputacja FROM v_kasyno_ranking ORDER BY netto DESC LIMIT 8");
 $pule    = $polaczenie->query("SELECT nr, pula, board FROM v_kasyno_pule_dnia LIMIT 5");
 ?>
-<style>
-.kh{--gold:#ffd700;--neon:#00ff00;--red:#ff3333;--cyan:#00ccff;--dim:#888;--glass:rgba(20,20,20,.6);--edge:rgba(255,255,255,.06);width:100%;max-width:1000px;margin:0 auto}
-.kh *{box-sizing:border-box}
-.kh .glass{background:var(--glass);border:1px solid var(--edge);border-radius:10px;backdrop-filter:blur(15px);-webkit-backdrop-filter:blur(15px);box-shadow:0 10px 40px rgba(0,0,0,.8)}
-.kh-head{background:rgba(17,17,17,.7);border:1px solid rgba(255,215,0,.1);border-radius:8px;padding:34px 20px;text-align:center;box-shadow:0 0 50px rgba(0,0,0,.5);margin-bottom:22px}
-.kh-head h1{color:var(--gold);font-family:'Oswald',sans-serif;font-size:3em;margin:0;text-shadow:0 0 30px var(--gold);text-transform:uppercase;letter-spacing:2px}
-.kh-head p{color:var(--dim);font-size:1.1em;margin:8px 0 0;font-style:italic}
-.kh-nav{display:flex;gap:14px;justify-content:center;margin-bottom:24px;flex-wrap:wrap}
-.kh-nav a{text-decoration:none;background:rgba(20,20,20,.8);border:1px solid rgba(255,215,0,.3);color:var(--gold);padding:12px 26px;font-family:'Oswald',sans-serif;font-size:1.1em;text-transform:uppercase;border-radius:4px;transition:.3s}
-.kh-nav a.on{background:rgba(255,215,0,.1);border-color:var(--gold);color:#fff;box-shadow:0 0 30px rgba(255,215,0,.3)}
-.kh-nav a.soon{opacity:.35;pointer-events:none}
-.kh-nav a:hover:not(.on){color:#fff;transform:translateY(-3px)}
-/* pasek portfela */
-.kh-bar{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:14px 20px;margin-bottom:18px;flex-wrap:wrap}
-.kh-bar .grp{display:flex;gap:26px;font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:1px;font-size:.82em;color:var(--dim)}
-.kh-bar .grp b{display:block;font-size:1.5em;letter-spacing:0;color:var(--neon);margin-top:2px}
-.kh-bar .grp .zet b{color:var(--gold)}
-.kh-bar .rep{font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:2px;font-size:.78em;color:var(--gold);border:1px solid rgba(255,215,0,.35);padding:6px 14px;border-radius:3px}
-/* filc */
-.kh-tbl{position:relative;height:500px;margin:0 30px;background:radial-gradient(ellipse at 50% 45%,#0e1512 0%,#070a09 60%,#040505 100%);border:2px solid rgba(255,215,0,.22);border-radius:180px/120px;box-shadow:inset 0 0 90px rgba(0,0,0,.95),0 0 50px rgba(255,215,0,.04)}
-.kh-mid{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:14px;width:100%}
-.kh-pot .lbl{font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:3px;color:var(--dim);font-size:.7em;text-align:center}
-.kh-pot .val{font-family:'Oswald',sans-serif;font-weight:700;color:var(--gold);font-size:2.1em;line-height:1;text-shadow:0 0 28px rgba(255,215,0,.4);text-align:center}
-.kh-pot .rake{font-size:.7em;color:#5f5f5f;text-align:center;margin-top:3px}
-.kh-faza{font-family:'Oswald',sans-serif;letter-spacing:2px;text-transform:uppercase;color:#5f5f5f;font-size:.7em}
-.kh .cards{display:flex;gap:8px;justify-content:center}
-.kh .cards.mini{gap:4px;margin-top:6px}
-.kh .cards.mini .card{width:30px;height:44px;font-size:.78em;padding:4px}
-.kh .card{width:54px;height:78px;background:rgba(22,22,22,.96);border:1px solid rgba(255,255,255,.07);border-radius:7px;display:flex;flex-direction:column;justify-content:space-between;padding:6px 7px;font-family:'Times New Roman',serif;font-weight:700;font-size:1.15em;box-shadow:0 6px 18px rgba(0,0,0,.75)}
-.kh .card .f{line-height:1}.kh .card .s{text-align:right;font-size:1.5em;line-height:1}
-.kh .card.r{color:var(--red);text-shadow:0 0 12px rgba(255,51,51,.45)}
-.kh .card.b{color:#eee;text-shadow:0 0 12px rgba(255,255,255,.25)}
-.kh .card.big{width:74px;height:106px;font-size:1.55em}
-.kh .card.back{background:radial-gradient(circle at center,#1a1206 0%,#070707 100%);border:2px solid rgba(255,215,0,.35)}
-.kh-hand{position:absolute;left:50%;bottom:74px;transform:translateX(-50%)}
-/* miejsca */
-.kh-s{position:absolute;z-index:4}
-.kh-s1{left:50%;bottom:-16px;transform:translateX(-50%)}
-.kh-s2{left:1%;bottom:78px}
-.kh-s3{left:1%;top:78px}
-.kh-s4{left:50%;top:-16px;transform:translateX(-50%)}
-.kh-s5{right:1%;top:78px}
-.kh-s6{right:1%;bottom:78px}
-.kh .seat{background:rgba(12,12,12,.86);border:1px solid var(--edge);border-radius:8px;padding:9px 12px;min-width:158px;backdrop-filter:blur(8px);transition:.25s}
-.kh .seat .nm{font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:1px;color:#fff;font-size:.88em;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.kh .seat .st{font-family:'Oswald',sans-serif;color:var(--neon);font-size:1.05em;margin-top:2px}
-.kh .seat .act{font-family:'Oswald',sans-serif;text-transform:uppercase;font-size:.68em;letter-spacing:1px;color:var(--dim);margin-top:3px;min-height:1em}
-.kh .seat.turn{border-color:var(--gold);box-shadow:0 0 28px rgba(255,215,0,.28)}
-.kh .seat.out{opacity:.4}
-.kh .seat.free{border-style:dashed;border-color:rgba(255,255,255,.12);color:var(--dim);text-align:center;font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:1px;font-size:.76em;padding:14px 12px;cursor:pointer}
-.kh .seat.free:hover{border-color:rgba(255,215,0,.5);color:var(--gold)}
-.kh .tag{font-family:'Oswald',sans-serif;font-size:.6em;letter-spacing:1.5px;padding:2px 6px;border-radius:3px;border:1px solid rgba(0,204,255,.45);color:var(--cyan);text-transform:uppercase}
-.kh .tag.d{border-color:rgba(255,215,0,.5);color:var(--gold)}
-.kh .tag.me{border-color:rgba(0,255,0,.4);color:var(--neon)}
-.kh .bet{font-family:'Oswald',sans-serif;color:var(--gold)}
-/* akcje */
-.kh-act{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:16px 20px;margin-top:18px;flex-wrap:wrap}
-.kh .btn{font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:1.5px;font-size:1em;padding:12px 22px;border-radius:4px;cursor:pointer;border:1px solid rgba(255,255,255,.14);background:rgba(25,25,25,.85);color:#ddd;transition:.2s}
-.kh .btn:hover{color:#fff;border-color:rgba(255,255,255,.3)}
-.kh .btn.gold{background:linear-gradient(180deg,var(--gold),#ff8800);color:#000;border:none;font-weight:700;box-shadow:0 6px 22px rgba(255,215,0,.3)}
-.kh .btn.gold:hover{background:linear-gradient(180deg,#fff,var(--gold))}
-.kh .btn.ghost{background:rgba(0,0,0,.4)}
-.kh .kwota{background:rgba(0,0,0,.55);border:1px solid #444;color:var(--neon);font-family:'Oswald',sans-serif;font-size:1.2em;padding:10px 12px;width:120px;text-align:center;border-radius:4px}
-.kh-timer{font-family:'Oswald',sans-serif;color:var(--gold);font-size:.85em;letter-spacing:1px;white-space:nowrap}
-.kh-timer .bar{display:block;width:120px;height:3px;background:rgba(255,255,255,.1);border-radius:2px;margin-top:5px;overflow:hidden}
-.kh-timer .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--gold),#ff8800);transition:width 1s linear}
-/* dół */
-.kh-low{display:grid;grid-template-columns:1fr 300px;gap:18px;margin-top:18px}
-.kh-chat{display:flex;flex-direction:column;height:280px}
-.kh-chat .ttl{font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:2px;color:var(--dim);font-size:.72em;padding:12px 14px 8px;border-bottom:1px solid var(--edge)}
-.kh-feed{padding:10px 14px;display:flex;flex-direction:column;gap:8px;overflow-y:auto;flex:1}
-.kh .msg{font-size:.87em;line-height:1.5}
-.kh .msg .who{font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:1px;color:var(--gold);font-size:.85em;margin-right:6px}
-.kh .msg.emote{color:#b39ddb;font-style:italic}
-.kh .msg.sys{color:#5f6f5f;font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:1px;font-size:.72em}
-.kh .msg.mg{color:var(--cyan);border-left:2px solid rgba(0,204,255,.4);padding-left:9px}
-.kh-say{display:flex;gap:8px;padding:10px 14px;border-top:1px solid var(--edge)}
-.kh-say input{flex:1;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.1);color:var(--neon);font-family:'Open Sans',sans-serif;font-size:.88em;padding:9px 11px;border-radius:4px}
-.kh-say input::placeholder{color:#555}
-.kh-say button{font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:1px;font-size:.8em;padding:0 15px;border-radius:4px;border:1px solid rgba(255,215,0,.35);background:rgba(255,215,0,.08);color:var(--gold);cursor:pointer}
-.kh-side{padding:16px;font-size:.85em}
-.kh-side .ttl{font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:2px;color:var(--dim);font-size:.72em;margin-bottom:8px}
-.kh-side .ttl+*{margin-bottom:16px}
-#kh-widzowie{display:flex;flex-wrap:wrap;gap:6px}
-#kh-widzowie span{background:rgba(0,0,0,.5);border:1px solid var(--edge);border-radius:20px;padding:3px 10px;font-size:.85em;color:#aaa}
-.kh-tab{width:100%;border-collapse:collapse;font-size:.85em}
-.kh-tab td{padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04);color:#aaa}
-.kh-tab td:last-child{text-align:right;font-family:'Oswald',sans-serif;color:var(--gold)}
-.kh-tab .plus{color:var(--neon)}.kh-tab .minus{color:var(--red)}
-.kh-komunikat{max-height:0;overflow:hidden;transition:.3s;text-align:center;font-family:'Oswald',sans-serif;letter-spacing:1px;border-radius:4px;margin-bottom:0}
-.kh-komunikat.widoczny{max-height:60px;padding:13px;margin-bottom:16px;background:rgba(0,255,0,.08);border:1px solid rgba(0,255,0,.3);color:var(--neon)}
-.kh-komunikat.widoczny.blad{background:rgba(255,51,51,.1);border-color:var(--red);color:var(--red)}
-.kh-zamkniete{padding:50px 40px;text-align:center}
-.kh-zamkniete h2{font-family:'Oswald',sans-serif;color:var(--red);text-transform:uppercase;letter-spacing:2px;margin:0 0 14px}
-.kh-zamkniete p{color:#aaa;line-height:1.8;max-width:520px;margin:0 auto}
-.kh-zamkniete b{color:var(--gold)}
-</style>
+<link rel="stylesheet" href="css/kasyno_skora.css">
 
 <div class="kh">
 
   <div class="kh-head">
+    <div class="eyebrow">// Złoty Smok · sala gier</div>
     <h1 id="kh-nazwa">Kasyno Golden Dragon</h1>
     <p>Zaryzykuj wszystko. Zdobądź miasto.</p>
   </div>
 
   <div class="kh-nav">
-    <a href="game.php?page=kasyno" class="on">🃏 Hold'em</a>
-    <a href="game.php?page=kasyno&gra=blackjack">🂡 Blackjack</a>
-    <a href="game.php?page=kasyno&gra=videopoker">🎴 Video Poker</a>
-    <a href="game.php?page=kasyno&gra=sloty">🎰 Sloty</a>
-    <a href="game.php?page=kasyno&gra=ruletka">🎲 Ruletka</a>
+    <a href="game.php?page=kasyno" class="on">Hold'em</a>
+    <a href="game.php?page=kasyno&gra=blackjack">Blackjack</a>
+    <a href="game.php?page=kasyno&gra=videopoker">Video Poker</a>
+    <a href="game.php?page=kasyno&gra=sloty">Sloty</a>
+    <a href="game.php?page=kasyno&gra=ruletka">Ruletka</a>
   </div>
 
 <?php if (!$wpuszczony): ?>

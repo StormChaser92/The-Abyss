@@ -23,6 +23,13 @@ $kolumny = "id, poziom, exp, gotowka, hp_aktualne, hp_max, energia_aktualna,
             uniki_male_kumulacja, walka_male_kumulacja";
 $gracz = $polaczenie->query("SELECT $kolumny FROM gracze WHERE id=$id_gracza")->fetch_assoc();
 
+/* Areszt / przyczajenie z Tablicy Zleceń blokuje walkę (includes/zlecenia_logika.php). */
+require_once "includes/zlecenia_logika.php";
+if (($zl_blok = zl_blokada($polaczenie, (int)$id_gracza)) !== '' && isset($_POST['walcz'])) {
+    unset($_POST['walcz']);
+    $komunikat = "<div class='alert-err'>" . htmlspecialchars($zl_blok) . "</div>";
+}
+
 /* Wrogowie tylko z miasta, w którym stoi postać. */
 $miasto = strtoupper(trim($gracz['obecne_miasto'] ?? ''));
 $m_esc  = $polaczenie->real_escape_string($miasto);
