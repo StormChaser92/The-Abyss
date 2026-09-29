@@ -120,7 +120,7 @@
             ${portret}
             <div class="body">
                 <div class="who">
-                    <span class="nm">${escapeHtml(cleanLogin)}</span>
+                    <span class="nm${m.nk_klasa ? ' ' + m.nk_klasa : ''}"${m.nk_styl ? ' style="' + m.nk_styl + '"' : ''}>${escapeHtml(cleanLogin)}</span>${m.nk_ikony || ''}
                     ${role ? '<span class="role">' + role + '</span>' : ''}
                     ${editedNote}
                     <span class="when">${escapeHtml(m.czas)}</span>
@@ -300,7 +300,7 @@
                 ? `<div class="av" style="background-image:url('${escapeHtml(o.avatar)}');background-size:cover;background-position:center;color:transparent">${escapeHtml(ini)}</div>`
                 : `<div class="av">${escapeHtml(ini)}</div>`;
             const mood = o.klub_mood || (o.is_barman ? 'za barem' : 'w sali');
-            html += `<a href="game.php?page=profil&id=${o.id}" class="guest-row ${cls}">${ava}<div class="who"><span class="nm">${escapeHtml(o.login)}</span><span class="mood">${escapeHtml(mood)}</span></div></a>`;
+            html += `<a href="game.php?page=profil&id=${o.id}" class="guest-row ${cls}">${ava}<div class="who"><span class="nm${o.nk_klasa ? ' ' + o.nk_klasa : ''}"${o.nk_styl ? ' style="' + o.nk_styl + '"' : ''}>${escapeHtml(o.login)}${o.nk_ikony || ''}</span><span class="mood">${escapeHtml(mood)}</span></div></a>`;
         }
         obecniBox.innerHTML = html;
     }

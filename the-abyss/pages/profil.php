@@ -1,6 +1,7 @@
 <?php
 require_once "db.php";
 require_once __DIR__ . "/../includes/profil_sanitizer.php";
+require_once __DIR__ . "/../includes/avatar.php";
 
 if (!isset($_SESSION['id_gracza'])) {
     echo "<div style='padding:50px;color:#ff3333'>Brak sesji gracza.</div>";
@@ -12,6 +13,8 @@ if (empty($_SESSION['csrf_profil'])) {
     $_SESSION['csrf_profil'] = bin2hex(random_bytes(32));
 }
 $csrf = $_SESSION['csrf_profil'];
+
+require_once __DIR__ . '/../includes/nick.php';
 
 function abyss_e($value): string {
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
@@ -39,23 +42,8 @@ function abyss_get_history(mysqli $polaczenie, int $gracz_id): array {
 }
 
 function generuj_odznaki($profil, $duze = false) {
-    $odznaki = [];
-    $size = $duze ? '1em' : '.72em';
-    $pad  = $duze ? '4px 12px' : '2px 8px';
-
-    if (!empty($profil['is_premium'])) {
-        $odznaki[] = "<span class='odznaka o-vip' style='font-size:$size;padding:$pad'>★ VIP</span>";
-    }
-    if (!empty($profil['is_mg'])) {
-        $odznaki[] = "<span class='odznaka o-mg' style='font-size:$size;padding:$pad'>🎭 MG</span>";
-    }
-    if (!empty($profil['is_proboszcz'])) {
-        $odznaki[] = "<span class='odznaka o-proboszcz' style='font-size:$size;padding:$pad'>⛪ Proboszcz</span>";
-    }
-    if (!empty($profil['is_barman'])) {
-        $odznaki[] = "<span class='odznaka o-barman' style='font-size:$size;padding:$pad'>🍸 Barman</span>";
-    }
-    return implode(' ', $odznaki);
+    require_once __DIR__ . '/../includes/nick.php';
+    return nk_odznaki($profil);   // ikony i nazwy rang: includes/nick.php
 }
 
 // Gracz oglądający profil — do trybu pacyfisty przy przycisku ataku.
@@ -71,7 +59,7 @@ if (!isset($_GET['id']) || !is_numeric($_GET['id'])) {
 }
 
 $tab = $_GET['tab'] ?? 'kartoteka';
-$dozwolone_taby = ['kartoteka', 'historia', 'dziennik', 'relacje', 'sesje', 'plotki'];
+$dozwolone_taby = ['kartoteka', 'historia', 'dziennik', 'relacje', 'sesje', 'plotki', 'nick'];
 if (!in_array($tab, $dozwolone_taby, true)) $tab = 'kartoteka';
 $edit_historia = ($cel_id === $id_gracza && $tab === 'historia' && isset($_GET['edit']));
 
@@ -154,8 +142,9 @@ if ($cel_id !== $id_gracza) {
     if ($stmt) { $stmt->bind_param('i', $cel_id); $stmt->execute(); }
 }
 
+$nke_kom = nk_zapisz($polaczenie, (int)$id_gracza);   // kolor nicka zapisujemy przed odczytem profilu
 $sql = "SELECT g.id, g.login, g.avatar, g.poziom, g.klasa, g.profesja_fabularna, g.opis_profilu,
-        g.ostatnia_aktywnosc, g.data_rejestracji, g.is_premium, g.is_mg, g.is_proboszcz, g.is_barman,
+        g.ostatnia_aktywnosc, g.data_rejestracji, g.is_premium, g.is_mg, g.is_proboszcz, g.is_barman, g.is_admin, g.ranga_rp, g.nick_kolor, g.nick_poswiata, g.nick_efekt,
         g.syndykat_rola, g.bonus_atak, g.bonus_obrona, g.tryb_pacyfisty,
         s.nazwa AS nazwa_syndykatu, s.tag AS tag_syndykatu
         FROM gracze g
@@ -189,7 +178,7 @@ if (abyss_table_exists($polaczenie, 'malzenstwa')) {
     }
 }
 
-$avatar = !empty($profil['avatar']) ? abyss_e($profil['avatar']) : '';
+$avatar = abyss_e(avatar_url($profil['avatar'] ?? ''));
 $opis = !empty($profil['opis_profilu']) ? nl2br(abyss_e($profil['opis_profilu'])) : "<span class='pusto'>Ten gracz woli pozostać w cieniu. Brak wpisu w kartotece.</span>";
 $klasa_nicku = !empty($profil['is_premium']) ? ' vip' : '';
 
@@ -214,7 +203,9 @@ $story_html = $story_public ? ($historia['historia_html'] ?? '') : '';
 .profil-avatar{width:100%;aspect-ratio:500/625;background:linear-gradient(160deg,#2a0a14,#0a0408 70%);background-position:top center!important;background-size:cover!important;border:1px solid var(--border-mid);border-radius:2px;margin-bottom:16px;box-shadow:0 0 22px rgba(255,23,68,.22),inset 0 0 30px rgba(0,0,0,.5);position:relative;overflow:hidden}
 .profil-avatar::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,transparent 60%,rgba(255,23,68,.12));pointer-events:none}
 .profil-nick{font-family:'Oswald',sans-serif;font-weight:500;font-size:1.9em;line-height:1.05;margin:0 0 6px;text-transform:uppercase;letter-spacing:3px;color:#fff;overflow-wrap:anywhere;text-shadow:0 0 4px rgba(255,255,255,.4),0 0 16px var(--neon-red),0 0 32px var(--neon-red-deep)}
-.profil-nick.vip{color:var(--neon-gold);text-shadow:0 0 12px rgba(255,215,0,.55)}
+.profil-nick-rangi{display:inline-flex;gap:5px;margin-left:8px;vertical-align:middle}
+.profil-nick-rangi:empty{display:none}
+.profil-nick-rangi .nk-r svg{width:20px;height:20px}
 .profil-status{font-family:'JetBrains Mono',monospace;font-size:.74em;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px}
 .status-on{color:var(--neon-green);text-shadow:0 0 6px rgba(90,255,154,.4)}
 .status-off{color:var(--txt-mute)}
@@ -304,7 +295,7 @@ $story_html = $story_public ? ($historia['historia_html'] ?? '') : '';
             <div class="odznaki-profil"><?php echo $odznaki_html; ?></div>
         <?php endif; ?>
 
-        <h1 class="profil-nick<?php echo $klasa_nicku; ?>"><?php echo abyss_e($profil['login']); ?></h1>
+        <h1 class="profil-nick<?php echo nk_klasa($profil); ?>"<?php $nk_s = nk_styl($profil); echo $nk_s !== '' ? " style=\"$nk_s\"" : ''; ?>><?php echo abyss_e($profil['login']); ?><span class="profil-nick-rangi"><?php echo nk_ikony($profil); ?></span></h1>
         <div class="profil-status"><?php echo $status_online; ?></div>
 
         <?php if ($malzenstwo_profilu):
@@ -318,7 +309,7 @@ $story_html = $story_public ? ($historia['historia_html'] ?? '') : '';
                 $partner_login_mal = $malzenstwo_profilu['m1_login'];
                 $partner_avatar_mal = $malzenstwo_profilu['m1_avatar'];
             }
-            $av_par = !empty($partner_avatar_mal) ? abyss_e($partner_avatar_mal) : '';
+            $av_par = abyss_e(avatar_url($partner_avatar_mal ?? ''));
         ?>
         <div class="malz-baner">
             <div class="malz-info">
@@ -358,13 +349,19 @@ $story_html = $story_public ? ($historia['historia_html'] ?? '') : '';
         <div class="profil-tabs">
             <?php
             $tabs = ['kartoteka'=>'Kartoteka','historia'=>'Historia','dziennik'=>'Dziennik','relacje'=>'Relacje','sesje'=>'Sesje','plotki'=>'Plotki'];
+            if ($cel_id === $id_gracza && nk_moze_kolor($profil)) $tabs['nick'] = 'Kolor nicka';
             foreach ($tabs as $key=>$label):
             ?>
                 <a class="profil-tab <?php echo $tab===$key?'active':''; ?>" href="game.php?page=profil&id=<?php echo $cel_id; ?>&tab=<?php echo $key; ?>"><?php echo $label; ?></a>
             <?php endforeach; ?>
         </div>
 
-        <?php if ($tab === 'kartoteka'): ?>
+        <?php if ($tab === 'nick' && $cel_id === $id_gracza): ?>
+            <div class="karta-info">
+                <h3>Kolor nicka <span class="tag">RANGA</span></h3>
+                <?php include __DIR__ . '/../includes/nick_edytor.php'; ?>
+            </div>
+        <?php elseif ($tab === 'kartoteka' || $tab === 'nick'): ?>
             <div class="karta-info">
                 <h3>Kartoteka obywatela <span class="tag">ID <?php echo (int)$profil['id']; ?></span></h3>
                 <div class="stat-grid">

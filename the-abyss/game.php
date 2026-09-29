@@ -569,6 +569,7 @@ input,select,textarea,button{font-family:'Rajdhani',sans-serif}
 </style>
 <link rel="stylesheet" href="css/gornav.css">
 <link rel="stylesheet" href="css/nick.css">
+<link rel="stylesheet" href="css/strony.css">
 </head>
 <body>
 <?php include 'includes/gornav.php'; ?>
@@ -695,7 +696,7 @@ input,select,textarea,button{font-family:'Rajdhani',sans-serif}
         <?php echo nk_html($o, ['klasa' => 'nick-link']); ?>
         <div class="tt">
             <div class="tt-av" data-av="<?php echo $img; ?>" data-ini="<?php echo htmlspecialchars($ini); ?>"></div>
-            <div class="tt-name"<?php $tts = nk_styl($o); echo $tts !== '' ? " style=\"$tts\"" : ''; ?>><?php echo htmlspecialchars($o['login']); ?></div>
+            <div class="tt-name<?php echo nk_klasa($o); ?>"<?php $tts = nk_styl($o); echo $tts !== '' ? " style=\"$tts\"" : ''; ?>><?php echo htmlspecialchars($o['login']); ?></div>
             <div class="tt-rangi"><?php echo nk_odznaki($o); ?></div>
             <span class="tt-lvl">LVL <?php echo (int)$o['poziom']; ?></span>
             <div class="tt-row"><span>Fabularna</span><b class="fab"><?php echo $o['profesja_fabularna'] ? htmlspecialchars($o['profesja_fabularna']) : '—'; ?></b></div>

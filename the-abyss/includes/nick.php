@@ -18,8 +18,19 @@ define('NK_RANGI', [
     'proboszcz' => ['n' => 'Proboszcz',           'k' => '#f2dc8c', 'i' => '<path d="M12 3v18M7 8h10"/>'],
     'vip'       => ['n' => 'VIP',                 'k' => '#ffd700', 'i' => '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>'],
 ]);
-define('NK_KOLUMNY', ['id', 'login', 'is_premium', 'is_mg', 'is_barman', 'is_proboszcz', 'is_admin', 'ranga_rp', 'nick_kolor', 'nick_poswiata']);
-define('NK_SZYBKIE', ['#ff3d5e', '#ff7a3d', '#ffd700', '#f2dc8c', '#5aff9a', '#4ad6ff', '#9fa8ff', '#c896ff', '#ffffff']);
+define('NK_KOLUMNY', ['id', 'login', 'is_premium', 'is_mg', 'is_barman', 'is_proboszcz', 'is_admin', 'ranga_rp', 'nick_kolor', 'nick_poswiata', 'nick_efekt']);
+define('NK_PALETA', [
+    '#ff1744' => 'Krwawy neon',   '#ff3d5e' => 'Szminka',     '#ff6fae' => 'Guma balonowa', '#ff7a3d' => 'Żar',
+    '#ffb86b' => 'Bursztyn',      '#ffd700' => 'Złoto',       '#f2dc8c' => 'Kadzidło',      '#d4ff5a' => 'Kwas',
+    '#5aff9a' => 'Toksyna',       '#3dffd8' => 'Mięta',       '#4ad6ff' => 'Lód',           '#6f9bff' => 'Kobalt',
+    '#9fa8ff' => 'Lawenda',       '#c896ff' => 'Ametyst',     '#e46bff' => 'Fuksja',        '#ffffff' => 'Biel magnezji',
+]);
+define('NK_EFEKTY', [
+    'staly'   => ['n' => 'Stały',        'o' => 'Równe światło, bez ruchu.'],
+    'oddech'  => ['n' => 'Oddech',       'o' => 'Poświata powoli narasta i gaśnie.'],
+    'zepsuty' => ['n' => 'Zepsuty neon', 'o' => 'Nieregularne mrugnięcia jak stara rurka.'],
+    'skan'    => ['n' => 'Skan',         'o' => 'Po literach co kilka sekund przebiega błysk.'],
+]);
 
 /** Kolumny do SELECT. $alias = alias tabeli gracze, $prefiks = przedrostek kluczy w wyniku. */
 function nk_pola(string $alias = '', string $prefiks = ''): string {
@@ -78,18 +89,26 @@ function nk_poswiata(string $c, int $p): string {
 }
 
 /** Styl inline nicka ('' = domyślny kolor miejsca, w którym stoi). VIP bez rangi: złoty jak dotąd. */
+function nk_wlasny(array $g): bool { return nk_moze_kolor($g) && nk_hex_ok($g['nick_kolor'] ?? null); }
+
 function nk_styl(array $g): string {
-    if (nk_moze_kolor($g) && nk_hex_ok($g['nick_kolor'] ?? null)) {
+    if (nk_wlasny($g)) {
         $c = nk_czytelny($g['nick_kolor']);
-        return "color:$c;text-shadow:" . nk_poswiata($c, (int)($g['nick_poswiata'] ?? 0));
+        return "--nk-c:$c;color:$c;text-shadow:" . nk_poswiata($c, (int)($g['nick_poswiata'] ?? 0));
     }
     if (!empty($g['is_premium']) && !nk_moze_kolor($g)) return 'color:#ffd700;text-shadow:0 0 6px rgba(255,215,0,.45)';
     return '';
 }
 
+/** Klasa efektu (' nk-e-oddech' itd.) albo ''. */
+function nk_klasa(array $g): string {
+    $e = (string)($g['nick_efekt'] ?? 'staly');
+    return nk_wlasny($g) && $e !== 'staly' && isset(NK_EFEKTY[$e]) ? " nk-e-$e" : '';
+}
+
 function nk_ikona(string $k, string $klasa = 'nk-r'): string {
     $r = NK_RANGI[$k];
-    return "<span class=\"$klasa\" style=\"color:{$r['k']}\" title=\"" . nk_h($r['n']) . "\" aria-label=\"" . nk_h($r['n']) . "\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\">{$r['i']}</svg></span>";
+    return "<span class=\"$klasa\" style=\"color:{$r['k']}\" title=\"" . nk_h($r['n']) . "\" aria-label=\"" . nk_h($r['n']) . "\"><svg viewBox=\"0 0 24 24\" width=\"15\" height=\"15\" aria-hidden=\"true\">{$r['i']}</svg></span>";
 }
 function nk_ikony(array $g): string { return implode('', array_map('nk_ikona', nk_rangi($g))); }
 
@@ -97,7 +116,7 @@ function nk_ikony(array $g): string { return implode('', array_map('nk_ikona', n
 function nk_odznaki(array $g): string {
     return implode('', array_map(function ($k) {
         $r = NK_RANGI[$k];
-        return "<span class=\"nk-odz\" style=\"color:{$r['k']}\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\">{$r['i']}</svg>" . nk_h($r['n']) . "</span>";
+        return "<span class=\"nk-odz\" style=\"color:{$r['k']}\"><svg viewBox=\"0 0 24 24\" width=\"12\" height=\"12\" aria-hidden=\"true\">{$r['i']}</svg>" . nk_h($r['n']) . "</span>";
     }, nk_rangi($g)));
 }
 
@@ -105,7 +124,7 @@ function nk_odznaki(array $g): string {
 function nk_html(array $g, array $o = []): string {
     $link = $o['link'] ?? true;
     $styl = nk_styl($g);
-    $attr = 'class="nk-n"' . ($styl !== '' ? " style=\"$styl\"" : '');
+    $attr = 'class="nk-n' . nk_klasa($g) . '"' . ($styl !== '' ? " style=\"$styl\"" : '');
     $nick = $link && !empty($g['id'])
         ? '<a href="game.php?page=profil&amp;id=' . (int)$g['id'] . "\" $attr>" . nk_h($g['login'] ?? '?') . '</a>'
         : '<' . ($o['tag'] ?? 'span') . " $attr>" . nk_h($g['login'] ?? '?') . '</' . ($o['tag'] ?? 'span') . '>';
@@ -113,18 +132,20 @@ function nk_html(array $g, array $o = []): string {
 }
 
 /** Dane do JSON (czat Klubu): styl nicka i gotowy HTML ikon. */
-function nk_json(array $g): array { return ['nk_styl' => nk_styl($g), 'nk_ikony' => nk_ikony($g)]; }
+function nk_json(array $g): array { return ['nk_styl' => nk_styl($g), 'nk_klasa' => trim(nk_klasa($g)), 'nk_ikony' => nk_ikony($g)]; }
 
 /** Zapis koloru z formularza (Ustawienia / Profil). Zwraca komunikat albo ''. */
 function nk_zapisz(mysqli $db, int $gid): string {
     if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST' || (!isset($_POST['nk_zapisz']) && !isset($_POST['nk_reset']))) return '';
     $g = db_wiersz($db, 'SELECT ' . nk_pola() . ' FROM gracze WHERE id = ?', [$gid]);
     if (!$g || !nk_moze_kolor($g)) return 'Własny kolor nicka mają tylko gracze z rangą.';
-    if (!empty($_POST['nk_reset'])) { db_q($db, 'UPDATE gracze SET nick_kolor = NULL, nick_poswiata = 0 WHERE id = ?', [$gid]); return 'Przywrócono domyślny kolor nicka.'; }
+    if (!empty($_POST['nk_reset'])) { db_q($db, "UPDATE gracze SET nick_kolor = NULL, nick_poswiata = 0, nick_efekt = 'staly' WHERE id = ?", [$gid]); return 'Przywrócono domyślny kolor nicka.'; }
     $k = strtolower(trim((string)($_POST['nk_kolor'] ?? '')));
     $p = max(0, min(3, (int)($_POST['nk_poswiata'] ?? 0)));
+    $e = (string)($_POST['nk_efekt'] ?? 'staly');
+    if (!isset(NK_EFEKTY[$e])) $e = 'staly';
     if (!nk_hex_ok($k)) return 'Niepoprawny kolor.';
-    db_q($db, 'UPDATE gracze SET nick_kolor = ?, nick_poswiata = ? WHERE id = ?', [$k, $p, $gid]);
+    db_q($db, 'UPDATE gracze SET nick_kolor = ?, nick_poswiata = ?, nick_efekt = ? WHERE id = ?', [$k, $p, $e, $gid]);
     return 'Zapisano kolor nicka.';
 }
 
