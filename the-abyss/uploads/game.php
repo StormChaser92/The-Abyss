@@ -15,7 +15,6 @@ require_once "config/miasta.php";   // ← katalog miast + helpery pogody/odleg�
 require_once "config/pochodzenia.php";  // ← katalog narodowości + helpery bonusów
 require_once "helpers/vip.php";   // ← helper systemu VIP
 require_once "helpers/firmy.php";   // ← helper systemu firm
-require_once "includes/nick.php";   // ← nick z ikonami rang i własnym kolorem
 
 $id_gracza   = (int)$_SESSION['id_gracza'];
 $strona      = isset($_GET['page'])     ? $_GET['page']     : 'witaj';
@@ -87,7 +86,7 @@ if ($strona === 'sesje') {
 
 // 3. ONLINE
 $wynik_online = $polaczenie->query("
-    SELECT " . nk_pola('g') . ",g.avatar,g.poziom,g.klasa,g.profesja_fabularna,g.nazwa_firmy,g.branza_firmy,
+    SELECT g.id,g.login,g.avatar,g.poziom,g.klasa,g.profesja_fabularna,g.nazwa_firmy,g.branza_firmy,g.is_premium,
            DATEDIFF(NOW(),g.data_rejestracji) AS dni, s.nazwa AS s_nazwa, s.tag AS s_tag
     FROM gracze g LEFT JOIN syndykaty s ON g.syndykat_id=s.id
     WHERE g.ostatnia_aktywnosc >= NOW() - INTERVAL 15 MINUTE ORDER BY g.login ASC");
@@ -97,10 +96,6 @@ $ilosc_online = count($lista_online);
 // 4. LICZNIKI (najpierw ogłoś gotowe kontrakty — trafiają do powiadomień, nie do poczty)
 require_once "includes/zlecenia_powiadom.php";
 $n_zlecenia = zl_powiadom_gotowe($polaczenie, $id_gracza, (string)($gracz_r['obecne_miasto'] ?? 'NEW YORK'));
-// Otwarcie listu gasi licznik poczty jeszcze w tym samym odświeżeniu.
-if ($strona === 'poczta' && ($zakladka === '' || $zakladka === 'odbiorcza') && !empty($_GET['list'])) {
-    db_q($polaczenie, "UPDATE wiadomosci SET odczytana = 1 WHERE id = ? AND odbiorca_id = ?", [(int)$_GET['list'], $id_gracza]);
-}
 $n_poczta = $polaczenie->query("SELECT COUNT(*) c FROM wiadomosci WHERE odbiorca_id=$id_gracza AND odczytana=0")->fetch_assoc()['c'];
 $n_alerty  = $polaczenie->query("SELECT COUNT(*) c FROM powiadomienia WHERE gracz_id=$id_gracza AND odczytane=0")->fetch_assoc()['c'];
 $aktualna  = $strona;
@@ -491,9 +486,8 @@ body::after{
 .gracz-online:hover{background:rgba(255,23,68,0.06);border-left-color:var(--neon-red);padding-left:14px}
 .dot{width:6px;height:6px;background:var(--neon-red);border-radius:50%;flex-shrink:0;box-shadow:0 0 8px var(--neon-red);animation:dot-pulse 2s infinite}
 @keyframes dot-pulse{0%,100%{opacity:1}50%{opacity:.4}}
-.gracz-online .nick-link{flex:1;min-width:0;color:#fff}
-.tt-rangi{display:flex;flex-wrap:wrap;justify-content:center;gap:5px;margin:-4px 0 10px}
-.tt-rangi:empty{display:none}
+.gracz-online .nick-link{color:#fff;text-decoration:none;flex:1}
+.gracz-online .nick-link.vip{color:var(--neon-gold)}
 
 /* Szybki podgląd postaci — wyłania się z czerwonego cienia.
    Szablon .tt siedzi ukryty w wierszu; JS kopiuje go do #tt-float w <body>,
@@ -568,7 +562,6 @@ input,select,textarea,button{font-family:'Rajdhani',sans-serif}
 }
 </style>
 <link rel="stylesheet" href="css/gornav.css">
-<link rel="stylesheet" href="css/nick.css">
 </head>
 <body>
 <?php include 'includes/gornav.php'; ?>
@@ -692,11 +685,12 @@ input,select,textarea,button{font-family:'Rajdhani',sans-serif}
     ?>
     <div class="gracz-online">
         <div class="dot"></div>
-        <?php echo nk_html($o, ['klasa' => 'nick-link']); ?>
+        <a href="game.php?page=profil&id=<?php echo $o['id']; ?>" class="nick-link <?php echo $kol; ?>">
+            <?php echo ($o['is_premium']?"★ ":"").htmlspecialchars($o['login']); ?>
+        </a>
         <div class="tt">
             <div class="tt-av" data-av="<?php echo $img; ?>" data-ini="<?php echo htmlspecialchars($ini); ?>"></div>
-            <div class="tt-name"<?php $tts = nk_styl($o); echo $tts !== '' ? " style=\"$tts\"" : ''; ?>><?php echo htmlspecialchars($o['login']); ?></div>
-            <div class="tt-rangi"><?php echo nk_odznaki($o); ?></div>
+            <div class="tt-name<?php echo $o['is_premium']?' vip':''; ?>"><?php echo ($o['is_premium']?"★ ":"").htmlspecialchars($o['login']); ?></div>
             <span class="tt-lvl">LVL <?php echo (int)$o['poziom']; ?></span>
             <div class="tt-row"><span>Fabularna</span><b class="fab"><?php echo $o['profesja_fabularna'] ? htmlspecialchars($o['profesja_fabularna']) : '—'; ?></b></div>
             <div class="tt-row"><span>Mechaniczna</span><b><?php echo $o['klasa'] ? htmlspecialchars($o['klasa']) : '—'; ?></b></div>

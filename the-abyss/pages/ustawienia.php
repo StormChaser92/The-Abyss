@@ -70,47 +70,70 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['zmien_tryb'])) {
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
 
 <style>
-    .ustawienia-panel { background: #111; border: 1px solid #333; padding: 25px; border-radius: 4px; margin-bottom: 20px; }
-    .ustawienia-panel h2 { color: #00ff00; font-family: 'Oswald'; text-transform: uppercase; margin-top: 0; border-bottom: 1px solid #222; padding-bottom: 10px; }
+    .ustawienia-panel { background:rgba(18,10,18,.45); border: 1px solid var(--border-soft); padding: 25px; border-radius:2px; margin-bottom: 20px; }
+    .ustawienia-panel h2 { color: var(--neon-green); font-family:'Oswald',sans-serif; text-transform: uppercase; margin-top: 0; border-bottom: 1px solid var(--border-soft); padding-bottom: 10px; }
     
-    .input-file { width: 100%; padding: 12px; background: #050505; border: 1px solid #444; color: #fff; border-radius: 3px; font-size: 1em; margin-bottom: 15px; box-sizing: border-box; cursor: pointer; }
+    .input-file { width: 100%; padding: 12px; background:rgba(0,0,0,.5); border: 1px solid var(--border-soft); color: #fff; border-radius:2px; font-size: 1em; margin-bottom: 15px; box-sizing: border-box; cursor: pointer; }
     
-    .btn-zapisz { background: transparent; color: #00ff00; border: 1px solid #00ff00; padding: 10px 25px; font-family: 'Oswald'; cursor: pointer; text-transform: uppercase; transition: 0.3s; font-size: 1.1em; border-radius: 3px; width: 100%; }
-    .btn-zapisz:hover { background: #00ff00; color: #000; }
+    .btn-zapisz { background: transparent; color: var(--neon-green); border: 1px solid var(--neon-green); padding: 10px 25px; font-family:'Oswald',sans-serif; cursor: pointer; text-transform: uppercase; transition: 0.3s; font-size: 1.1em; border-radius:2px; width: 100%; }
+    .btn-zapisz:hover { background: var(--neon-green); color: #000; }
 
-    .btn-akcja { background: #0066cc; color: #fff; border: 1px solid #00aaff; padding: 10px 25px; font-family: 'Oswald'; cursor: pointer; text-transform: uppercase; border-radius: 3px; transition: 0.3s; font-size: 1.1em; }
-    .btn-akcja:hover { background: #00aaff; color: #000; }
+    .btn-akcja { background: rgba(255,23,68,.14); color: #fff; border: 1px solid var(--neon-cyan); padding: 10px 25px; font-family:'Oswald',sans-serif; cursor: pointer; text-transform: uppercase; border-radius:2px; transition: 0.3s; font-size: 1.1em; }
+    .btn-akcja:hover { background: var(--neon-cyan); color: #000; }
 
-    .sukces { background: rgba(0,255,0,0.1); border: 1px solid #00ff00; color: #00ff00; padding: 15px; margin-bottom: 15px; text-align: center; font-weight: bold; }
-    .blad { background: rgba(255,51,51,0.1); border: 1px solid #ff3333; color: #ff3333; padding: 15px; margin-bottom: 15px; text-align: center; font-weight: bold; }
-    .info-tekst { color: #888; font-size: 0.9em; margin-bottom: 20px; line-height: 1.6; }
+
+    .info-tekst { color:var(--txt-dim); font-size: 0.9em; margin-bottom: 20px; line-height: 1.6; }
 
     /* CSS DO CROPPERA */
     .cropper-wrapper { display: flex; gap: 30px; flex-wrap: wrap; margin-bottom: 20px; }
     .cropper-left { flex: 1; min-width: 200px; max-width: 300px; }
     .cropper-right { flex: 2; min-width: 300px; }
     
-    .img-container { max-width: 100%; max-height: 500px; display: none; background: #000; border: 1px dashed #555; margin-bottom: 20px; }
+    .img-container { max-width: 100%; max-height: 500px; display: none; background:rgba(0,0,0,.5); border: 1px dashed var(--border-soft); margin-bottom: 20px; }
     .img-container img { display: block; max-width: 100%; }
     
     /* ZAKTUALIZOWANE NA WYSOKI PORTRET (5:6.25) */
-    .podglad-avatara { width: 100%; max-width: 250px; aspect-ratio: 500/625; background-color: #050505; background-size: cover; background-repeat: no-repeat; background-position: center; border: 1px solid #444; border-radius: 3px; margin-bottom: 15px; box-shadow: inset 0 0 15px #000; }
+    .podglad-avatara { width: 100%; max-width: 250px; aspect-ratio: 500/625; background:rgba(0,0,0,.5); background-size: cover; background-repeat: no-repeat; background-position: center; border: 1px solid var(--border-soft); border-radius:2px; margin-bottom: 15px; box-shadow: inset 0 0 15px #000; }
     
     /* ZAKTUALIZOWANE NA WYSOKI PORTRET (Podgląd na żywo) */
-    .img-preview { width: 100%; max-width: 250px; height: 312.5px; overflow: hidden; border: 1px solid #00ccff; background: #050505; border-radius: 3px; box-shadow: 0 0 15px rgba(0,204,255,0.1); margin-bottom: 20px; }
+    .img-preview { width: 100%; max-width: 250px; height: 312.5px; overflow: hidden; border: 1px solid var(--neon-cyan); background:rgba(0,0,0,.5); border-radius:2px; box-shadow: 0 0 15px rgba(74,214,255,0.1); margin-bottom: 20px; }
+
+    .ustawienia-panel { background: rgba(18,10,18,.45); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); border: 1px solid var(--border-soft); border-radius: 2px; position: relative; }
+    .ustawienia-panel::before { content: ''; position: absolute; top: 0; left: 0; width: 28px; height: 1px; background: var(--neon-red); box-shadow: 0 0 6px var(--neon-red); }
+
+    .ustawienia-panel h2 { font-family: 'Oswald', sans-serif; font-weight: 500; font-size: 1.05em; letter-spacing: 2px; text-transform: uppercase; color: #fff; border-bottom: 1px solid var(--border-soft); padding-bottom: 10px; }
+
+    .btn-zapisz, .btn-akcja { background: rgba(255,23,68,.08); border: 1px solid var(--border-mid); color: #fff; font-family: 'Oswald', sans-serif; letter-spacing: 2px; text-transform: uppercase; border-radius: 1px; }
+    .btn-zapisz:hover:not(:disabled), .btn-akcja:hover:not(:disabled) { background: var(--neon-red); color: #fff; box-shadow: 0 0 18px rgba(255,23,68,.7); text-shadow: 0 0 6px rgba(255,255,255,.8); }
+
+    .ustawienia-panel { padding: 20px; margin-bottom: 18px; }
+    .ustawienia-panel h2 { margin: 0 0 14px; }
+    .input-file { background: rgba(0,0,0,.5); border: 1px solid var(--border-soft); border-radius: 1px; font-family: 'Rajdhani', sans-serif; }
+    .img-container { border: 1px dashed var(--border-mid); background: rgba(0,0,0,.5); }
+    .podglad-avatara { background-color: rgba(0,0,0,.5); border: 1px solid var(--border-mid); border-radius: 2px; box-shadow: 0 0 18px rgba(255,23,68,.2); }
+    .img-preview { border: 1px solid var(--border-mid); border-radius: 2px; box-shadow: 0 0 15px rgba(255,23,68,.15); background: rgba(0,0,0,.5); }
+    .info-tekst { color: var(--txt-dim); font-size: .98em; }
 </style>
 
-<h1 class="witaj">Ustawienia Konta</h1>
+<div class="page-head">
+    <div class="eyebrow">// KONTO</div>
+    <h1>Ustawienia</h1>
+</div>
 
 <?php echo $komunikat; ?>
 
+<div class="ustawienia-panel" id="panel-nick">
+    <h2>Kolor nicka</h2>
+    <?php include __DIR__ . '/../includes/nick_edytor.php'; ?>
+</div>
+
 <div class="ustawienia-panel">
-    <h2>Zarządzanie Wizerunkiem (Portret)</h2>
+    <h2>Portret</h2>
     <p class="info-tekst">Wgraj zdjęcie ze swojego urządzenia. Optymalne, zalecane minimum to <b>szerokość 500px i wysokość 625px</b> (wysoki portret). System uruchomi narzędzie, które pozwoli Ci idealnie wykadrować postać z zachowaniem tych proporcji.</p>
     
     <div class="cropper-wrapper">
         <div class="cropper-left">
-            <b style="color: #888; display: block; margin-bottom: 10px; text-transform: uppercase;">Aktualny wizerunek:</b>
+            <b style="color:var(--txt-dim); display: block; margin-bottom: 10px; text-transform: uppercase;">Aktualny wizerunek:</b>
             <div class="podglad-avatara"<?php if ($aktualny_avatar): ?> style="background-image: url('<?php echo $aktualny_avatar; ?>');"<?php endif; ?>></div>
             
             <input type="file" id="imageInput" class="input-file" accept="image/png, image/jpeg, image/gif, image/webp">
@@ -122,7 +145,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['zmien_tryb'])) {
             </div>
             
             <div id="preview-section" style="display: none;">
-                <b style="color: #00ccff; display: block; margin-bottom: 10px; text-transform: uppercase; font-family: 'Oswald';">Podgląd portretu na żywo:</b>
+                <b style="color: var(--neon-cyan); display: block; margin-bottom: 10px; text-transform: uppercase; font-family:'Oswald',sans-serif;">Podgląd portretu na żywo:</b>
                 <div class="img-preview"></div>
             </div>
 
@@ -135,16 +158,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['zmien_tryb'])) {
     </div>
 </div>
 
-<div class="ustawienia-panel" style="border-color: #0066cc;">
-    <h2 style="color: #00aaff; border-bottom-color: #004488;">🛡️ Tryb Nietykalności (PvP)</h2>
+
+<div class="ustawienia-panel">
+    <h2>Tryb nietykalności (PvP)</h2>
     <p class="info-tekst">Włączenie tego trybu sprawi, że nikt nie będzie mógł zaatakować Cię na ulicy ani Cię okraść. Z drugiej strony, Ty również stracisz możliwość inicjowania walk i napadów na innych obywateli.</p>
     
     <div style="margin-bottom: 20px; font-size: 1.1em;">
         Twój obecny status: 
         <?php if ($gracz['tryb_pacyfisty'] == 1): ?>
-            <b style="color: #00ccff;">WŁĄCZONY (Jesteś bezpieczny)</b>
+            <b style="color: var(--neon-cyan);">WŁĄCZONY (Jesteś bezpieczny)</b>
         <?php else: ?>
-            <b style="color: #ff3333;">WYŁĄCZONY (Można Cię zaatakować)</b>
+            <b style="color: var(--neon-red-hot);">WYŁĄCZONY (Można Cię zaatakować)</b>
         <?php endif; ?>
     </div>
     

@@ -309,6 +309,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['kup_dom'])) {
     border-bottom: 1px dashed rgba(255,23,68,0.08);
 }
 .urzad-tabela tr:hover td { background: rgba(255,23,68,0.04); }
+.urzad-nick { color: #fff; font-weight: 700; text-decoration: none; border-bottom: 1px dashed rgba(255,61,94,0.45); transition: color .2s, border-color .2s, text-shadow .2s; }
+.urzad-nick:hover { color: var(--neon-red-hot); border-bottom-color: var(--neon-red-hot); text-shadow: 0 0 8px rgba(255,23,68,0.7); }
 
 /* Karta nieruchomości */
 .dom-karta {
@@ -558,13 +560,13 @@ elseif ($dzial == 'spis_ludnosci'):
             </thead>
             <tbody>
                 <?php
-                $mieszkancy_sql = $polaczenie->query("SELECT login, poziom, klasa, profesja_fabularna, is_premium FROM gracze $warunek_wyszukiwania ORDER BY id ASC LIMIT 50");
+                $mieszkancy_sql = $polaczenie->query("SELECT id, login, poziom, klasa, profesja_fabularna, is_premium FROM gracze $warunek_wyszukiwania ORDER BY id ASC LIMIT 50");
                 if ($mieszkancy_sql && $mieszkancy_sql->num_rows > 0):
                     while($m = $mieszkancy_sql->fetch_assoc()):
                         $vip = ($m['is_premium']==1) ? "<span style='color:var(--neon-gold);'>★</span> " : "";
                 ?>
                     <tr>
-                        <td><b style="color:#fff;"><?php echo $vip . htmlspecialchars($m['login']); ?></b></td>
+                        <td><?php echo $vip; ?><a href="game.php?page=profil&amp;id=<?php echo (int)$m['id']; ?>" class="urzad-nick" title="Podgląd profilu"><?php echo htmlspecialchars($m['login']); ?></a></td>
                         <td style="color: var(--neon-green);"><?php echo (int)$m['poziom']; ?></td>
                         <td><?php echo htmlspecialchars($m['klasa']); ?></td>
                         <td><?php echo htmlspecialchars($m['profesja_fabularna']); ?></td>

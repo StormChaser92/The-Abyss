@@ -119,7 +119,7 @@ function zl_szansa(array $g, array $d, int $ryz, int $premia = 0): array {
     if ($premia) $cz[] = ['Z poprzedniego etapu', $premia];
     $cz[] = ['Ryzyko: ' . ZL_RYZYKO[$ryz]['n'], ZL_RYZYKO[$ryz]['s']];
     $ob = (int)$g['zl_oblawa'];
-    if ($ob) $cz[] = ["Obława $ob★", -5 * $ob];
+    if ($ob) $cz[] = ["Obława {$ob}★", -5 * $ob];
     return ['s' => max(5, min(95, array_sum(array_column($cz, 1)))), 'czesci' => $cz];
 }
 

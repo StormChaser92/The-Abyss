@@ -3,7 +3,7 @@
    Zakładka NC (Non Clima) w pokoju sesji — rozmowy poza fabułą we wszystkich rodzajach Opowieści.
    Piszą uczestnicy i obserwatorzy (w sesjach prywatnych tylko uczestnicy). Nic nie jest obowiązkowe.
    Prowadzący: wpis-upomnienie, przypinanie, usuwanie, wyciszenie (1 h / 24 h / do końca sesji).
-   MG i Adminka: dodatkowo ostrzeżenie z poziomu wpisu (config/moderacja.php).
+   MG i Administrator: dodatkowo ostrzeżenie z poziomu wpisu (config/moderacja.php).
    W bazie posty NC to sesje_posty.typ_postu = 'OffTop'. */
 require_once __DIR__ . '/../config/moderacja.php';
 require_once __DIR__ . '/formatuj.php';
