@@ -1,855 +1,282 @@
 <?php
 require_once "db.php";
-$id_gracza = $_SESSION['id_gracza'];
-$komunikat = "";
+require_once __DIR__ . '/../includes/katedra.php';
+$id_gracza = (int)$_SESSION['id_gracza'];
 
-// Pobierz dane gracza
-$gracz = $polaczenie->query("SELECT * FROM gracze WHERE id=$id_gracza")->fetch_assoc();
-
-$jest_mg = (bool)($gracz['is_mg'] ?? 0);
-$jest_proboszczem = (bool)($gracz['is_proboszcz'] ?? 0);
-$ma_uprawnienia = ($jest_mg || $jest_proboszczem);
-
-// Sprawdź czy gracz jest już w związku małżeńskim
-$moje_malzenstwo = $polaczenie->query("SELECT m.*,
-    g1.login AS m1_login, g1.avatar AS m1_avatar,
-    g2.login AS m2_login, g2.avatar AS m2_avatar
-    FROM malzenstwa m
-    JOIN gracze g1 ON m.malzonek_1_id = g1.id
-    JOIN gracze g2 ON m.malzonek_2_id = g2.id
-    WHERE (m.malzonek_1_id=$id_gracza OR m.malzonek_2_id=$id_gracza)
-      AND m.status='aktywne'")->fetch_assoc();
-
-// Sprawdź czy gracz ma już oczekujące zgłoszenie
-$moje_zgloszenie = $polaczenie->query("SELECT z.*, g.login AS partner_login, g.avatar AS partner_avatar
-    FROM zgloszenia_slubu z
-    JOIN gracze g ON g.id = CASE WHEN z.zglaszajacy_id=$id_gracza THEN z.partner_id ELSE z.zglaszajacy_id END
-    WHERE (z.zglaszajacy_id=$id_gracza OR z.partner_id=$id_gracza)
-      AND z.status IN ('oczekuje','partner_potwierdzil','zatwierdzone')
-    ORDER BY z.data_zgloszenia DESC
-    LIMIT 1")->fetch_assoc();
-
-// ═══════════════════════════════════════════════════════════════
-// ZŁOŻENIE ZGŁOSZENIA ŚLUBU
-// ═══════════════════════════════════════════════════════════════
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['zglos_slub'])) {
-    $partner_id = (int)$_POST['partner_id'];
-    $narracja = trim($_POST['narracja'] ?? '');
-
-    if ($moje_malzenstwo) {
-        $komunikat = "<div class='blad'>Jesteś już w związku małżeńskim! Nie możesz zgłosić kolejnego.</div>";
-    } elseif ($moje_zgloszenie) {
-        $komunikat = "<div class='blad'>Masz już aktywne zgłoszenie oczekujące na rozpatrzenie!</div>";
-    } elseif ($partner_id == $id_gracza) {
-        $komunikat = "<div class='blad'>Nie możesz zgłosić ślubu z samym sobą.</div>";
-    } elseif (mb_strlen($narracja) < 100) {
-        $komunikat = "<div class='blad'>Narracja zaręczyn musi mieć minimum 100 znaków (aktualnie: ".mb_strlen($narracja).").</div>";
-    } elseif (mb_strlen($narracja) > 3000) {
-        $komunikat = "<div class='blad'>Narracja zaręczyn może mieć maksymalnie 3000 znaków.</div>";
-    } else {
-        // Sprawdź czy partner istnieje
-        $partner = $polaczenie->query("SELECT id, login FROM gracze WHERE id=$partner_id")->fetch_assoc();
-        if (!$partner) {
-            $komunikat = "<div class='blad'>Nie ma gracza o ID $partner_id.</div>";
-        } else {
-            // Sprawdź czy partner nie jest już w związku
-            $partner_w_zwiazku = $polaczenie->query("SELECT id FROM malzenstwa
-                WHERE (malzonek_1_id=$partner_id OR malzonek_2_id=$partner_id) AND status='aktywne'")->fetch_assoc();
-            if ($partner_w_zwiazku) {
-                $komunikat = "<div class='blad'>Twój wybranek/wybranka jest już w związku małżeńskim!</div>";
-            } else {
-                $narracja_esc = $polaczenie->real_escape_string($narracja);
-                $polaczenie->query("INSERT INTO zgloszenia_slubu
-                    (zglaszajacy_id, partner_id, narracja_zaręczyn, status)
-                    VALUES ($id_gracza, $partner_id, '$narracja_esc', 'oczekuje')");
-
-                // Powiadomienie dla partnera
-                $pow = "💍 <b>{$gracz['login']}</b> zgłosił wolę zawarcia z Tobą związku małżeńskiego! Sprawdź Katedrę.";
-                $polaczenie->query("INSERT INTO powiadomienia (gracz_id, tresc) VALUES ($partner_id, '$pow')");
-
-                // Powiadomienie dla wszystkich Proboszczów i MG
-                $administracja = $polaczenie->query("SELECT id FROM gracze WHERE is_mg=1 OR is_proboszcz=1");
-                if ($administracja) {
-                    while ($admin = $administracja->fetch_assoc()) {
-                        if ($admin['id'] == $id_gracza) continue;
-                        $pow_admin = "⛪ Nowe zgłoszenie małżeńskie w Katedrze: <b>{$gracz['login']}</b> & <b>".htmlspecialchars($partner['login'])."</b>";
-                        $polaczenie->query("INSERT INTO powiadomienia (gracz_id, tresc) VALUES ({$admin['id']}, '$pow_admin')");
-                    }
-                }
-
-                $komunikat = "<div class='sukces'>💒 Zgłoszenie wysłane! Teraz <b>".htmlspecialchars($partner['login'])."</b> musi je potwierdzić, a potem rozpatrzy je Proboszcz lub Mistrz Gry.</div>";
-                echo "<script>setTimeout(()=>location.href='game.php?page=katedra',2000);</script>";
-            }
-        }
-    }
+/* KATEDRA v2 — śluby z ceną ustalaną przez Proboszcza, rozwody, karencja, Księga (oś czasu). Logika: includes/katedra.php */
+$kom = null;
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $zid = (int)($_POST['kt_id'] ?? 0);
+    $cena = (int)preg_replace('/\D/', '', (string)($_POST['kt_cena'] ?? '0'));
+    $uw = (string)($_POST['kt_uwaga'] ?? '');
+    if (isset($_POST['kt_oswiadcz']))      $kom = kt_oswiadcz($polaczenie, $id_gracza, (string)($_POST['kt_login'] ?? ''), (string)($_POST['kt_slowa'] ?? ''));
+    elseif (isset($_POST['kt_rozwod']))    $kom = kt_rozwod_proponuj($polaczenie, $id_gracza);
+    elseif (isset($_POST['kt_tak']))       $kom = kt_odpowiedz($polaczenie, $id_gracza, $zid, true);
+    elseif (isset($_POST['kt_nie']))       $kom = kt_odpowiedz($polaczenie, $id_gracza, $zid, false);
+    elseif (isset($_POST['kt_wycofaj']))   $kom = kt_wycofaj($polaczenie, $id_gracza, $zid);
+    elseif (isset($_POST['kt_zaplac']))    $kom = kt_zaplac_zgloszenie($polaczenie, $id_gracza, $zid);
+    elseif (isset($_POST['kt_zatwierdz'])) $kom = kt_decyzja($polaczenie, $id_gracza, $zid, true, $cena, $uw);
+    elseif (isset($_POST['kt_odmow']))     $kom = kt_decyzja($polaczenie, $id_gracza, $zid, false, 0, $uw);
 }
 
-// ═══════════════════════════════════════════════════════════════
-// POTWIERDZENIE ZGŁOSZENIA PRZEZ PARTNERA
-// ═══════════════════════════════════════════════════════════════
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['potwierdz_zgloszenie'])) {
-    $zgl_id = (int)$_POST['zgl_id'];
-    $zgl = $polaczenie->query("SELECT * FROM zgloszenia_slubu WHERE id=$zgl_id AND partner_id=$id_gracza AND status='oczekuje'")->fetch_assoc();
-    if ($zgl) {
-        $polaczenie->query("UPDATE zgloszenia_slubu SET status='partner_potwierdzil' WHERE id=$zgl_id");
-        // Powiadomienie dla zgłaszającego
-        $pow = "💖 <b>{$gracz['login']}</b> potwierdził/a wolę ślubu. Teraz czekacie na decyzję Proboszcza lub Mistrza Gry.";
-        $polaczenie->query("INSERT INTO powiadomienia (gracz_id, tresc) VALUES ({$zgl['zglaszajacy_id']}, '$pow')");
-        $komunikat = "<div class='sukces'>💖 Potwierdziłeś zgłoszenie! Teraz administracja zdecyduje.</div>";
-    }
+$pola_a = nk_pola('a', 'a_'); $pola_b = nk_pola('b', 'b_');
+$gn = fn(int $id) => db_wiersz($polaczenie, 'SELECT ' . nk_pola() . ' FROM gracze WHERE id = ?', [$id]);
+$ja = $gn($id_gracza);
+$gotowka = (int)(db_wiersz($polaczenie, 'SELECT gotowka FROM gracze WHERE id = ?', [$id_gracza])['gotowka'] ?? 0);
+$proboszcz = kt_proboszcz($polaczenie, $id_gracza);
+$mal = kt_malzenstwo($polaczenie, $id_gracza);
+$zg  = kt_w_toku($polaczenie, $id_gracza);
+$karencja = !$mal ? kt_karencja($polaczenie, $id_gracza) : null;
+if ($mal) {
+    $partner = $gn((int)$mal['malzonek_1_id'] === $id_gracza ? (int)$mal['malzonek_2_id'] : (int)$mal['malzonek_1_id']);
+    $udzielil = !empty($mal['proboszcz_id']) ? $gn((int)$mal['proboszcz_id']) : null;
 }
-
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['odrzuc_zgloszenie'])) {
-    $zgl_id = (int)$_POST['zgl_id'];
-    $zgl = $polaczenie->query("SELECT * FROM zgloszenia_slubu WHERE id=$zgl_id AND partner_id=$id_gracza AND status='oczekuje'")->fetch_assoc();
-    if ($zgl) {
-        $polaczenie->query("UPDATE zgloszenia_slubu SET status='odrzucone', uzasadnienie_odrzucenia='Odrzucone przez partnera' WHERE id=$zgl_id");
-        $pow = "💔 <b>{$gracz['login']}</b> odrzucił/a Twoje zgłoszenie małżeńskie.";
-        $polaczenie->query("INSERT INTO powiadomienia (gracz_id, tresc) VALUES ({$zgl['zglaszajacy_id']}, '$pow')");
-        $komunikat = "<div class='sukces'>Zgłoszenie odrzucone.</div>";
-    }
+if ($zg) {
+    $drugi = $gn((int)$zg['od_id'] === $id_gracza ? (int)$zg['do_id'] : (int)$zg['od_id']);
+    $wycenil = !empty($zg['proboszcz_id']) ? $gn((int)$zg['proboszcz_id']) : null;
+    $moje_od = (int)$zg['od_id'] === $id_gracza;
 }
+if ($karencja) $ostatni = db_wiersz($polaczenie, "SELECT m.data_rozwodu, IF(m.malzonek_1_id = ?, m.malzonek_2_id, m.malzonek_1_id) ex FROM malzenstwa m
+    WHERE (m.malzonek_1_id = ? OR m.malzonek_2_id = ?) AND m.status = 'rozwiazane' ORDER BY m.data_rozwodu DESC LIMIT 1", [$id_gracza, $id_gracza, $id_gracza]);
 
-// ═══════════════════════════════════════════════════════════════
-// AKCJE PROBOSZCZA / MG
-// ═══════════════════════════════════════════════════════════════
+$do_decyzji = $proboszcz ? db_wiersze($polaczenie, "SELECT z.*, $pola_a, $pola_b, m.data_slubu, m.cena AS cena_slubu FROM katedra_zgloszenia z
+    JOIN gracze a ON a.id = z.od_id JOIN gracze b ON b.id = z.do_id LEFT JOIN malzenstwa m ON m.id = z.malzenstwo_id
+    WHERE z.status = 'czeka_proboszcz' ORDER BY z.kiedy ASC") : [];
 
-// Zatwierdzenie zgłoszenia (wyznaczenie daty ślubu)
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['zatwierdz_zgloszenie']) && $ma_uprawnienia) {
-    $zgl_id = (int)$_POST['zgl_id'];
-    $data_slubu = $_POST['data_slubu'] ?? null;
+$KS_NA_STRONE = 20;
+$ks_str = max(0, (int)($_GET['ks'] ?? 0));
+$ksiega = db_wiersze($polaczenie, "SELECT * FROM (
+      SELECT m.data_slubu AS kiedy, 'slub' AS typ, m.data_slubu, m.proboszcz_id, $pola_a, $pola_b FROM malzenstwa m JOIN gracze a ON a.id = m.malzonek_1_id JOIN gracze b ON b.id = m.malzonek_2_id
+      UNION ALL
+      SELECT m.data_rozwodu AS kiedy, 'rozwod' AS typ, m.data_slubu, m.proboszcz_id, $pola_a, $pola_b FROM malzenstwa m JOIN gracze a ON a.id = m.malzonek_1_id JOIN gracze b ON b.id = m.malzonek_2_id WHERE m.status = 'rozwiazane' AND m.data_rozwodu IS NOT NULL
+    ) os ORDER BY kiedy DESC LIMIT " . ($KS_NA_STRONE + 1) . " OFFSET " . ($ks_str * $KS_NA_STRONE));
+$ks_dalej = count($ksiega) > $KS_NA_STRONE;
+$ksiega = array_slice($ksiega, 0, $KS_NA_STRONE);
+$ks_proboszcz = [];
+foreach ($ksiega as $k) if (!empty($k['proboszcz_id'])) $ks_proboszcz[(int)$k['proboszcz_id']] = null;
+foreach (array_keys($ks_proboszcz) as $pid) $ks_proboszcz[$pid] = kt_login($polaczenie, $pid);
 
-    $zgl = $polaczenie->query("SELECT * FROM zgloszenia_slubu WHERE id=$zgl_id AND status='partner_potwierdzil'")->fetch_assoc();
-    if ($zgl && $data_slubu) {
-        $data_esc = $polaczenie->real_escape_string($data_slubu);
-        $polaczenie->query("UPDATE zgloszenia_slubu SET
-            status='zatwierdzone',
-            rozpatrujacy_id=$id_gracza,
-            data_rozpatrzenia=NOW(),
-            planowana_data_slubu='$data_esc'
-            WHERE id=$zgl_id");
-
-        // Powiadomienie dla pary
-        $pow = "🎉 Wasze zgłoszenie zostało zatwierdzone przez <b>{$gracz['login']}</b>! Ślub odbędzie się ".date('d.m.Y H:i', strtotime($data_slubu)).". Przygotujcie się na sesję fabularną!";
-        $polaczenie->query("INSERT INTO powiadomienia (gracz_id, tresc) VALUES ({$zgl['zglaszajacy_id']}, '$pow')");
-        $polaczenie->query("INSERT INTO powiadomienia (gracz_id, tresc) VALUES ({$zgl['partner_id']}, '$pow')");
-
-        $komunikat = "<div class='sukces'>✅ Zgłoszenie zatwierdzone, data wyznaczona na ".date('d.m.Y H:i', strtotime($data_slubu))."</div>";
-    } else {
-        $komunikat = "<div class='blad'>Nieprawidłowe zgłoszenie lub data.</div>";
-    }
-}
-
-// Odrzucenie zgłoszenia przez administrację
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['admin_odrzuc_zgloszenie']) && $ma_uprawnienia) {
-    $zgl_id = (int)$_POST['zgl_id'];
-    $uzasadnienie = $polaczenie->real_escape_string(trim($_POST['uzasadnienie'] ?? 'Brak uzasadnienia'));
-
-    $zgl = $polaczenie->query("SELECT * FROM zgloszenia_slubu WHERE id=$zgl_id")->fetch_assoc();
-    if ($zgl) {
-        $polaczenie->query("UPDATE zgloszenia_slubu SET
-            status='odrzucone',
-            rozpatrujacy_id=$id_gracza,
-            data_rozpatrzenia=NOW(),
-            uzasadnienie_odrzucenia='$uzasadnienie'
-            WHERE id=$zgl_id");
-
-        $pow = "⛪ Wasze zgłoszenie małżeńskie zostało odrzucone przez <b>{$gracz['login']}</b>. Powód: $uzasadnienie";
-        $polaczenie->query("INSERT INTO powiadomienia (gracz_id, tresc) VALUES ({$zgl['zglaszajacy_id']}, '$pow')");
-        $polaczenie->query("INSERT INTO powiadomienia (gracz_id, tresc) VALUES ({$zgl['partner_id']}, '$pow')");
-
-        $komunikat = "<div class='sukces'>Zgłoszenie odrzucone.</div>";
-    }
-}
-
-// Udzielenie ślubu (finalizacja — tworzenie małżeństwa)
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['udziel_slubu']) && $ma_uprawnienia) {
-    $zgl_id = (int)$_POST['zgl_id'];
-    $zgl = $polaczenie->query("SELECT * FROM zgloszenia_slubu WHERE id=$zgl_id AND status='zatwierdzone'")->fetch_assoc();
-    if ($zgl) {
-        // Upewnij się że ID w kolejności (dla unique key)
-        $m1 = min($zgl['zglaszajacy_id'], $zgl['partner_id']);
-        $m2 = max($zgl['zglaszajacy_id'], $zgl['partner_id']);
-
-        // Sprawdź czy żadne z nich nie jest już w małżeństwie
-        $spr = $polaczenie->query("SELECT id FROM malzenstwa WHERE
-            (malzonek_1_id IN ($m1,$m2) OR malzonek_2_id IN ($m1,$m2)) AND status='aktywne'")->fetch_assoc();
-
-        if ($spr) {
-            $komunikat = "<div class='blad'>Jedno z narzeczonych jest już w innym związku!</div>";
-        } else {
-            $narracja_esc = $polaczenie->real_escape_string($zgl['narracja_zaręczyn']);
-            $polaczenie->query("INSERT INTO malzenstwa
-                (malzonek_1_id, malzonek_2_id, narracja_zaręczyn, udzielajacy_slubu_id, status)
-                VALUES ($m1, $m2, '$narracja_esc', $id_gracza, 'aktywne')");
-
-            $polaczenie->query("UPDATE zgloszenia_slubu SET status='slubowali' WHERE id=$zgl_id");
-
-            // ══ AUTOMATYCZNE ZAMIESZKANIE RAZEM ══
-            // Sprawdź kto ma lepszy dom i tam wprowadź drugiego
-            $g1_info = $polaczenie->query("SELECT id_domu FROM gracze WHERE id=$m1")->fetch_assoc();
-            $g2_info = $polaczenie->query("SELECT id_domu FROM gracze WHERE id=$m2")->fetch_assoc();
-
-            $wlasciciel_dom = null;
-            $lokator_dom = null;
-            if ($g1_info['id_domu'] > $g2_info['id_domu']) {
-                $wlasciciel_dom = $m1; $lokator_dom = $m2;
-            } elseif ($g2_info['id_domu'] > $g1_info['id_domu']) {
-                $wlasciciel_dom = $m2; $lokator_dom = $m1;
-            } elseif ($g1_info['id_domu'] > 0) {
-                // Oboje mają takie same — bierzemy m1 jako właściciela
-                $wlasciciel_dom = $m1; $lokator_dom = $m2;
-            }
-
-            if ($wlasciciel_dom && $lokator_dom) {
-                // Usuń istniejące wspollokatorstwo lokatora (jeśli gdzieś mieszka)
-                $polaczenie->query("DELETE FROM wspollokatorzy WHERE lokator_id=$lokator_dom");
-                // Dodaj jako małżonka z pełnym dostępem
-                $polaczenie->query("INSERT IGNORE INTO wspollokatorzy (wlasciciel_id, lokator_id, typ, moze_spac, ma_dostep_do_pokoi)
-                    VALUES ($wlasciciel_dom, $lokator_dom, 'malzonek', 1, 1)");
-            }
-
-            // Upgrade istniejących wspollokatorow na małżonków (jeśli już mieszkali razem)
-            $polaczenie->query("UPDATE wspollokatorzy SET typ='malzonek', ma_dostep_do_pokoi=1
-                WHERE (wlasciciel_id=$m1 AND lokator_id=$m2) OR (wlasciciel_id=$m2 AND lokator_id=$m1)");
-
-            // Powiadomienia
-            $pow = "💍 Gratulacje! Jesteście teraz małżeństwem! Ślubu udzielił/a <b>{$gracz['login']}</b>.";
-            $polaczenie->query("INSERT INTO powiadomienia (gracz_id, tresc) VALUES ($m1, '$pow')");
-            $polaczenie->query("INSERT INTO powiadomienia (gracz_id, tresc) VALUES ($m2, '$pow')");
-
-            $komunikat = "<div class='sukces' style='font-size:1.1em'>💒 Udzieliłeś sakramentu małżeństwa! Niech żyją nowożeńcy! 🥂</div>";
-        }
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════
-// ZGŁOSZENIE ROZWODU
-// ═══════════════════════════════════════════════════════════════
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['zglos_rozwod'])) {
-    $powod = trim($_POST['powod_rozwodu'] ?? '');
-
-    if (!$moje_malzenstwo) {
-        $komunikat = "<div class='blad'>Nie jesteś w związku małżeńskim!</div>";
-    } elseif (mb_strlen($powod) < 50) {
-        $komunikat = "<div class='blad'>Uzasadnienie rozwodu musi mieć minimum 50 znaków.</div>";
-    } else {
-        $spr = $polaczenie->query("SELECT id FROM zgloszenia_rozwodu WHERE malzenstwo_id={$moje_malzenstwo['id']} AND status='oczekuje'")->fetch_assoc();
-        if ($spr) {
-            $komunikat = "<div class='blad'>Zgłoszenie rozwodu już jest w trakcie rozpatrywania.</div>";
-        } else {
-            $powod_esc = $polaczenie->real_escape_string($powod);
-            $polaczenie->query("INSERT INTO zgloszenia_rozwodu (zglaszajacy_id, malzenstwo_id, powod)
-                VALUES ($id_gracza, {$moje_malzenstwo['id']}, '$powod_esc')");
-
-            // Powiadomienie partnera
-            $partner_id = ($moje_malzenstwo['malzonek_1_id'] == $id_gracza) ? $moje_malzenstwo['malzonek_2_id'] : $moje_malzenstwo['malzonek_1_id'];
-            $pow = "💔 <b>{$gracz['login']}</b> złożył/a wniosek o rozwód. Sprawę rozpatrzy Proboszcz lub Mistrz Gry.";
-            $polaczenie->query("INSERT INTO powiadomienia (gracz_id, tresc) VALUES ($partner_id, '$pow')");
-
-            // Powiadomienie administracji
-            $admini = $polaczenie->query("SELECT id FROM gracze WHERE is_mg=1 OR is_proboszcz=1");
-            if ($admini) {
-                while ($a = $admini->fetch_assoc()) {
-                    if ($a['id'] == $id_gracza) continue;
-                    $pow_a = "⚖️ Nowe zgłoszenie rozwodu w Katedrze — rozpatrz w panelu administracji.";
-                    $polaczenie->query("INSERT INTO powiadomienia (gracz_id, tresc) VALUES ({$a['id']}, '$pow_a')");
-                }
-            }
-
-            $komunikat = "<div class='sukces'>💔 Wniosek złożony. Proboszcz lub MG rozpatrzy go wkrótce.</div>";
-        }
-    }
-}
-
-// ZATWIERDZENIE ROZWODU PRZEZ MG
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['zatwierdz_rozwod']) && $ma_uprawnienia) {
-    $rid = (int)$_POST['rozwod_id'];
-    $r = $polaczenie->query("SELECT * FROM zgloszenia_rozwodu WHERE id=$rid AND status='oczekuje'")->fetch_assoc();
-    if ($r) {
-        $m = $polaczenie->query("SELECT * FROM malzenstwa WHERE id={$r['malzenstwo_id']} AND status='aktywne'")->fetch_assoc();
-        if ($m) {
-            // Rozwiąż małżeństwo
-            $polaczenie->query("UPDATE malzenstwa SET status='rozwiedzione', data_rozwodu=NOW() WHERE id={$m['id']}");
-            $polaczenie->query("UPDATE zgloszenia_rozwodu SET status='zatwierdzone', rozpatrujacy_id=$id_gracza, data_rozpatrzenia=NOW() WHERE id=$rid");
-
-            // Usuń lokatorstwo małżonka (obie strony)
-            $polaczenie->query("DELETE FROM wspollokatorzy WHERE
-                (wlasciciel_id={$m['malzonek_1_id']} AND lokator_id={$m['malzonek_2_id']})
-                OR (wlasciciel_id={$m['malzonek_2_id']} AND lokator_id={$m['malzonek_1_id']})");
-
-            // Powiadomienia
-            $pow = "⚖️ Wasze małżeństwo zostało rozwiązane przez <b>{$gracz['login']}</b>.";
-            $polaczenie->query("INSERT INTO powiadomienia (gracz_id, tresc) VALUES ({$m['malzonek_1_id']}, '$pow')");
-            $polaczenie->query("INSERT INTO powiadomienia (gracz_id, tresc) VALUES ({$m['malzonek_2_id']}, '$pow')");
-
-            $komunikat = "<div class='sukces'>⚖️ Małżeństwo rozwiązane.</div>";
-        }
-    }
-}
-
-// ODRZUCENIE ROZWODU
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['odrzuc_rozwod']) && $ma_uprawnienia) {
-    $rid = (int)$_POST['rozwod_id'];
-    $uzas = $polaczenie->real_escape_string(trim($_POST['uzasadnienie_roz'] ?? 'Brak uzasadnienia'));
-    $r = $polaczenie->query("SELECT * FROM zgloszenia_rozwodu WHERE id=$rid AND status='oczekuje'")->fetch_assoc();
-    if ($r) {
-        $polaczenie->query("UPDATE zgloszenia_rozwodu SET status='odrzucone', rozpatrujacy_id=$id_gracza, data_rozpatrzenia=NOW(), uzasadnienie='$uzas' WHERE id=$rid");
-        $m = $polaczenie->query("SELECT * FROM malzenstwa WHERE id={$r['malzenstwo_id']}")->fetch_assoc();
-        if ($m) {
-            $pow = "⚖️ Wniosek rozwodowy odrzucony przez <b>{$gracz['login']}</b>. Powód: $uzas";
-            $polaczenie->query("INSERT INTO powiadomienia (gracz_id, tresc) VALUES ({$m['malzonek_1_id']}, '$pow')");
-            $polaczenie->query("INSERT INTO powiadomienia (gracz_id, tresc) VALUES ({$m['malzonek_2_id']}, '$pow')");
-        }
-        $komunikat = "<div class='sukces'>Wniosek odrzucony.</div>";
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════
-// POBIERANIE DANYCH DO WIDOKU
-// ═══════════════════════════════════════════════════════════════
-
-// Oczekujące zgłoszenia dla administracji
-$zgloszenia_do_rozpatrzenia = [];
-if ($ma_uprawnienia) {
-    $q = $polaczenie->query("SELECT z.*,
-        g1.login AS login_1, g1.avatar AS avatar_1,
-        g2.login AS login_2, g2.avatar AS avatar_2
-        FROM zgloszenia_slubu z
-        JOIN gracze g1 ON z.zglaszajacy_id = g1.id
-        JOIN gracze g2 ON z.partner_id = g2.id
-        WHERE z.status IN ('partner_potwierdzil','zatwierdzone')
-        ORDER BY z.data_zgloszenia DESC");
-    if ($q) while($r = $q->fetch_assoc()) $zgloszenia_do_rozpatrzenia[] = $r;
-}
-
-// Zgłoszenia do potwierdzenia przez obecnego gracza (jeśli jest partnerem)
-$zgloszenia_do_potwierdzenia = [];
-$q = $polaczenie->query("SELECT z.*, g.login AS od_login, g.avatar AS od_avatar
-    FROM zgloszenia_slubu z
-    JOIN gracze g ON z.zglaszajacy_id = g.id
-    WHERE z.partner_id=$id_gracza AND z.status='oczekuje'
-    ORDER BY z.data_zgloszenia DESC");
-if ($q) while($r = $q->fetch_assoc()) $zgloszenia_do_potwierdzenia[] = $r;
-
-// Zaplanowane śluby publiczne
-$zaplanowane_sluby = [];
-$q = $polaczenie->query("SELECT z.*, g1.login AS login_1, g2.login AS login_2
-    FROM zgloszenia_slubu z
-    JOIN gracze g1 ON z.zglaszajacy_id = g1.id
-    JOIN gracze g2 ON z.partner_id = g2.id
-    WHERE z.status='zatwierdzone' AND z.planowana_data_slubu > NOW()
-    ORDER BY z.planowana_data_slubu ASC LIMIT 10");
-if ($q) while($r = $q->fetch_assoc()) $zaplanowane_sluby[] = $r;
-
-// Spis małżeństw
-$malzenstwa_spis = [];
-$q = $polaczenie->query("SELECT m.*,
-    g1.login AS m1_login, g1.avatar AS m1_avatar,
-    g2.login AS m2_login, g2.avatar AS m2_avatar,
-    gu.login AS udzielajacy_login,
-    DATEDIFF(NOW(), m.data_slubu) AS dni_razem
-    FROM malzenstwa m
-    JOIN gracze g1 ON m.malzonek_1_id = g1.id
-    JOIN gracze g2 ON m.malzonek_2_id = g2.id
-    LEFT JOIN gracze gu ON m.udzielajacy_slubu_id = gu.id
-    WHERE m.status='aktywne'
-    ORDER BY m.data_slubu DESC LIMIT 50");
-if ($q) while($r = $q->fetch_assoc()) $malzenstwa_spis[] = $r;
-// Zgłoszenia rozwodowe (dla administracji)
-$zgloszenia_rozwodu = [];
-if ($ma_uprawnienia) {
-    $q = $polaczenie->query("SELECT r.*, m.malzonek_1_id, m.malzonek_2_id, m.data_slubu, m.narracja_zaręczyn AS m_narracja,
-        g1.login AS login_1, g1.avatar AS avatar_1,
-        g2.login AS login_2, g2.avatar AS avatar_2,
-        gz.login AS zglaszajacy_login
-        FROM zgloszenia_rozwodu r
-        JOIN malzenstwa m ON r.malzenstwo_id = m.id
-        JOIN gracze g1 ON m.malzonek_1_id = g1.id
-        JOIN gracze g2 ON m.malzonek_2_id = g2.id
-        JOIN gracze gz ON r.zglaszajacy_id = gz.id
-        WHERE r.status = 'oczekuje'
-        ORDER BY r.data_zgloszenia DESC");
-    if ($q) while($r = $q->fetch_assoc()) $zgloszenia_rozwodu[] = $r;
-}
-
-// Moje zgłoszenie rozwodu (jeśli jest)
-$moje_zgl_rozwodu = null;
-if ($moje_malzenstwo) {
-    $moje_zgl_rozwodu = $polaczenie->query("SELECT * FROM zgloszenia_rozwodu
-        WHERE malzenstwo_id={$moje_malzenstwo['id']} AND status='oczekuje'")->fetch_assoc();
-}
-
+$proboszczowie = db_wiersze($polaczenie, 'SELECT ' . nk_pola() . ' FROM gracze WHERE is_proboszcz = 1 ORDER BY login');
+$data = fn($d) => date('d.m.Y', strtotime($d));
+$kroki = function (array $nazwy, int $teraz) {
+    $h = '<div class="kt-kroki">';
+    foreach ($nazwy as $i => $n) $h .= '<div class="' . ($i < $teraz ? 'ok' : ($i === $teraz ? 'teraz' : '')) . '">' . $n . '</div>';
+    return $h . '</div>';
+};
+$K_SLUB = ['Oświadczyny', 'Proboszcz', 'Opłata', 'Ślub'];
+$K_ROZW = ['Zgoda', 'Wycena', 'Opłata', 'Rozwód'];
 ?>
-
 <style>
-/* ══ KATEDRA — NAGŁÓWEK Z OBRAZKIEM ══ */
-.kat-header{
-    position:relative;
-    border-radius:12px;margin-bottom:22px;overflow:hidden;
-    border:1px solid rgba(255,215,0,.3);
-    box-shadow:0 0 40px rgba(255,215,0,.1);
-    min-height:320px;
-    background:
-        linear-gradient(to bottom, rgba(0,0,0,.3) 0%, rgba(0,0,0,.7) 70%, rgba(0,0,0,.95) 100%),
-        url('img/katedra.jpg') center/cover no-repeat;
-    /* WRZUĆ OBRAZEK do img/katedra.jpg — zalecam min 1400x500px, ciemny klimat */
-    background-color:#1a0a00;
-}
-.kat-header-content{
-    position:absolute;bottom:0;left:0;right:0;
-    padding:30px 40px;
-    text-align:center;
-}
-.kat-ikona{font-size:3.5em;line-height:1;margin-bottom:8px;filter:drop-shadow(0 0 20px #ffd700)}
-.kat-nazwa{font-family:'Oswald',sans-serif;color:#ffd700;font-size:2.5em;
-    margin:0 0 6px;text-transform:uppercase;letter-spacing:3px;
-    text-shadow:0 0 25px rgba(255,215,0,.6),0 2px 10px #000}
-.kat-motto{color:#ccc;font-style:italic;font-size:1em;max-width:600px;margin:0 auto}
-
-/* ══ SEKCJE ══ */
-.sekcja-tytul{color:#ffd700;font-family:'Oswald',sans-serif;text-transform:uppercase;
-    letter-spacing:2px;font-size:1em;margin:26px 0 14px;padding-bottom:10px;
-    border-bottom:1px solid rgba(255,215,0,.2);display:flex;align-items:center;gap:10px}
-.sekcja-tytul .licznik{background:rgba(255,215,0,.15);color:#ffd700;padding:2px 10px;border-radius:12px;font-size:.75em;font-weight:400;letter-spacing:0}
-
-/* ══ ZGŁOŚ ŚLUB — FORMULARZ ══ */
-.zglos-box{
-    background:linear-gradient(135deg,rgba(255,215,0,.05),rgba(0,0,0,.4));
-    border:1px solid rgba(255,215,0,.25);border-radius:12px;padding:24px;margin-bottom:24px;
-}
-.zglos-tytul{font-family:'Oswald',sans-serif;color:#ffd700;font-size:1.3em;
-    text-transform:uppercase;letter-spacing:2px;margin-bottom:8px;text-align:center;
-    text-shadow:0 0 10px rgba(255,215,0,.4)}
-.zglos-podtytul{color:#888;font-style:italic;text-align:center;margin-bottom:20px;font-size:.9em}
-.zglos-form label{display:block;color:#aaa;font-family:'Oswald',sans-serif;
-    font-size:.85em;text-transform:uppercase;letter-spacing:1px;margin-bottom:5px}
-.zglos-form input,.zglos-form textarea{
-    width:100%;background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.1);
-    color:#ddd;padding:10px 14px;border-radius:6px;font-family:'Open Sans',sans-serif;
-    font-size:.95em;box-sizing:border-box;margin-bottom:14px;
-}
-.zglos-form textarea{resize:vertical;min-height:180px;line-height:1.6}
-.zglos-form input:focus,.zglos-form textarea:focus{outline:none;border-color:rgba(255,215,0,.5);box-shadow:0 0 10px rgba(255,215,0,.15)}
-.licznik-znakow{font-size:.8em;color:#666;text-align:right;margin-top:-10px;margin-bottom:10px}
-.licznik-znakow.ok{color:#00ff88}
-.licznik-znakow.za-malo{color:#ff6666}
-
-.btn-zglos{
-    width:100%;background:rgba(255,215,0,.15);color:#ffd700;
-    border:1px solid rgba(255,215,0,.5);padding:14px;font-family:'Oswald',sans-serif;
-    font-size:1.1em;font-weight:700;cursor:pointer;text-transform:uppercase;
-    letter-spacing:2px;border-radius:8px;transition:.3s;
-}
-.btn-zglos:hover{background:#ffd700;color:#000;box-shadow:0 0 25px rgba(255,215,0,.5)}
-
-/* ══ ZGŁOSZENIE OCZEKUJĄCE (dla zaangażowanej pary) ══ */
-.zgl-oczekuje{
-    background:rgba(221,136,255,.08);border:1px solid rgba(221,136,255,.4);
-    border-radius:10px;padding:20px;margin-bottom:20px;text-align:center;
-    animation:zgl-glow 3s infinite;
-}
-@keyframes zgl-glow{0%,100%{box-shadow:0 0 15px rgba(221,136,255,.15)}50%{box-shadow:0 0 30px rgba(221,136,255,.4)}}
-.zgl-tytul{font-family:'Oswald',sans-serif;color:#dd88ff;font-size:1.1em;
-    text-transform:uppercase;letter-spacing:2px;margin-bottom:10px}
-.zgl-status{color:#aaa;font-size:.95em;margin-bottom:10px}
-.zgl-status b{color:#dd88ff}
-
-/* ══ ZGŁOSZENIE DO POTWIERDZENIA (dla partnera) ══ */
-.zgl-potwierdz{
-    background:linear-gradient(135deg,rgba(255,51,102,.1),rgba(0,0,0,.3));
-    border:1px solid rgba(255,51,102,.5);border-radius:12px;padding:24px;margin-bottom:24px;
-    animation:zgl-pulse 2s infinite;
-}
-@keyframes zgl-pulse{0%,100%{box-shadow:0 0 20px rgba(255,51,102,.2)}50%{box-shadow:0 0 40px rgba(255,51,102,.5)}}
-.zp-head{display:flex;align-items:center;gap:14px;margin-bottom:14px}
-.zp-avatar{width:60px;height:60px;border-radius:50%;background-size:cover;
-    background-position:top center;border:2px solid #ff3366;flex-shrink:0}
-.zp-text{color:#ccc}
-.zp-text b{color:#ff3366;font-family:'Oswald',sans-serif;letter-spacing:.5px}
-.zp-narracja{background:rgba(0,0,0,.5);border-left:3px solid rgba(255,51,102,.6);
-    padding:16px 20px;color:#ccc;font-style:italic;font-size:.95em;line-height:1.7;margin-bottom:14px;
-    border-radius:0 6px 6px 0}
-.zp-akcje{display:flex;gap:10px}
-.btn-tak{flex:1;background:rgba(255,51,102,.15);color:#ff3366;border:1px solid rgba(255,51,102,.5);
-    padding:12px;font-family:'Oswald',sans-serif;font-size:1em;cursor:pointer;
-    text-transform:uppercase;letter-spacing:1.5px;border-radius:6px;font-weight:700}
-.btn-tak:hover{background:#ff3366;color:#fff;box-shadow:0 0 20px rgba(255,51,102,.5)}
-.btn-nie{background:transparent;border:1px solid rgba(255,255,255,.15);color:#888;
-    padding:12px 22px;font-family:'Oswald',sans-serif;cursor:pointer;text-transform:uppercase;border-radius:6px}
-.btn-nie:hover{background:rgba(255,68,68,.1);color:#ff6666;border-color:rgba(255,68,68,.3)}
-
-/* ══ JUŻ ŻONATY / ZAMĘŻNA ══ */
-.zwiazek-info{
-    background:linear-gradient(135deg,rgba(255,51,102,.08),rgba(221,136,255,.08));
-    border:1px solid rgba(255,51,102,.3);border-radius:12px;padding:24px;margin-bottom:24px;
-    text-align:center;
-}
-.z-serca{font-size:3em;margin-bottom:8px;filter:drop-shadow(0 0 20px #ff3366)}
-.z-para{font-family:'Oswald',sans-serif;font-size:1.5em;color:#fff;
-    margin-bottom:6px;letter-spacing:1px;text-transform:uppercase}
-.z-para span{color:#ff3366}
-.z-data{color:#aaa;font-size:.95em;margin-bottom:6px}
-.z-dni{color:#dd88ff;font-family:'Oswald',sans-serif;font-size:1.1em;text-transform:uppercase;letter-spacing:1.5px;margin-top:8px;
-    text-shadow:0 0 10px rgba(221,136,255,.4)}
-
-/* ══ PANEL ADMINISTRACJI ══ */
-.admin-panel{
-    background:rgba(0,0,0,.5);border:1px solid rgba(0,255,136,.3);
-    border-radius:12px;padding:4px;margin-bottom:24px;position:relative;
-}
-.admin-panel::before{
-    content:'⛪ PANEL PROBOSZCZA / MG';
-    position:absolute;top:-12px;left:20px;
-    background:#0a0a12;color:#00ff88;padding:2px 14px;border-radius:12px;
-    font-family:'Oswald',sans-serif;font-size:.8em;letter-spacing:2px;
-    border:1px solid rgba(0,255,136,.4);
-}
-.admin-inner{padding:22px}
-
-.admin-zgloszenie{
-    background:rgba(10,10,18,.6);border:1px solid rgba(255,255,255,.08);
-    border-radius:10px;padding:20px;margin-bottom:14px;
-}
-.az-para{display:flex;align-items:center;gap:15px;margin-bottom:14px;justify-content:center}
-.az-gracz{display:flex;align-items:center;gap:10px}
-.az-avatar{width:44px;height:44px;border-radius:50%;background-size:cover;background-position:top center;
-    border:1px solid rgba(255,215,0,.3)}
-.az-login{font-family:'Oswald',sans-serif;color:#fff;font-size:1em}
-.az-serce{font-size:1.5em;color:#ff3366;filter:drop-shadow(0 0 8px #ff3366)}
-.az-status{color:#ffaa00;font-size:.85em;font-family:'Oswald',sans-serif;text-transform:uppercase;text-align:center;margin-bottom:12px;letter-spacing:1px}
-.az-narracja{background:rgba(0,0,0,.4);padding:14px 18px;border-left:3px solid rgba(255,215,0,.4);
-    color:#bbb;font-style:italic;font-size:.9em;line-height:1.7;border-radius:0 6px 6px 0;margin-bottom:14px;
-    max-height:200px;overflow-y:auto}
-.az-akcje-admin{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-.az-akcje-admin input{background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.1);
-    color:#ddd;padding:8px 12px;border-radius:4px;font-family:'Open Sans',sans-serif;font-size:.9em}
-.btn-zatwierdz{flex:1;background:rgba(0,255,136,.15);color:#00ff88;border:1px solid rgba(0,255,136,.4);
-    padding:10px;font-family:'Oswald',sans-serif;cursor:pointer;border-radius:6px;text-transform:uppercase;letter-spacing:1px}
-.btn-zatwierdz:hover{background:#00ff88;color:#000}
-.btn-admin-odrzuc{background:transparent;border:1px solid rgba(255,68,68,.3);color:#ff6666;
-    padding:10px 16px;font-family:'Oswald',sans-serif;cursor:pointer;border-radius:6px;text-transform:uppercase;font-size:.9em}
-.btn-admin-odrzuc:hover{background:rgba(255,68,68,.15)}
-.btn-udziel{width:100%;background:rgba(255,215,0,.15);color:#ffd700;border:1px solid rgba(255,215,0,.5);
-    padding:12px;font-family:'Oswald',sans-serif;cursor:pointer;border-radius:6px;text-transform:uppercase;
-    letter-spacing:1.5px;font-size:1em;margin-top:10px;font-weight:700;animation:udziel-glow 2s infinite}
-@keyframes udziel-glow{0%,100%{box-shadow:0 0 10px rgba(255,215,0,.3)}50%{box-shadow:0 0 25px rgba(255,215,0,.6)}}
-.btn-udziel:hover{background:#ffd700;color:#000}
-
-/* ══ ZAPLANOWANE ŚLUBY ══ */
-.zaplanowany{
-    background:rgba(221,136,255,.05);border:1px solid rgba(221,136,255,.25);
-    border-radius:8px;padding:14px 18px;margin-bottom:10px;
-    display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;
-}
-.zap-para{font-family:'Oswald',sans-serif;color:#fff;font-size:1em;letter-spacing:.5px}
-.zap-para b{color:#dd88ff}
-.zap-data{color:#ffd700;font-family:'Oswald',sans-serif;font-size:.9em;
-    background:rgba(255,215,0,.08);padding:4px 12px;border-radius:14px;border:1px solid rgba(255,215,0,.2)}
-
-/* ══ SPIS MAŁŻEŃSTW ══ */
-.malzenstwa-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
-.malz-karta{
-    background:rgba(0,0,0,.4);border:1px solid rgba(255,51,102,.15);
-    border-radius:10px;padding:16px;transition:.25s;
-}
-.malz-karta:hover{border-color:rgba(255,51,102,.4);background:rgba(255,51,102,.05);transform:translateY(-2px)}
-.mk-para{display:flex;align-items:center;gap:10px;margin-bottom:10px}
-.mk-avatar{width:38px;height:38px;border-radius:50%;background-size:cover;background-position:top center;
-    border:1px solid rgba(255,51,102,.3)}
-.mk-serce{color:#ff3366;font-size:1.3em;filter:drop-shadow(0 0 6px #ff3366)}
-.mk-login{font-family:'Oswald',sans-serif;color:#fff;font-size:.95em;letter-spacing:.3px}
-.mk-info{display:flex;justify-content:space-between;font-size:.82em;color:#666;padding-top:10px;border-top:1px dashed rgba(255,255,255,.05)}
-.mk-info b{color:#dd88ff}
-
-.empty-box{padding:30px;text-align:center;color:#444;font-style:italic;
-    border:1px dashed rgba(255,255,255,.08);border-radius:10px;font-size:.9em}
-
-.sukces{background:rgba(0,255,136,.08);border:1px solid rgba(0,255,136,.4);color:#00ff88;
-    padding:14px 18px;margin-bottom:18px;border-radius:8px;text-align:center}
-.blad{background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.4);color:#ff6666;
-    padding:14px 18px;margin-bottom:18px;border-radius:8px;text-align:center}
+.kt{display:grid;gap:18px;--zl:#f2dc8c}
+.kt-2{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:18px}
+@media(max-width:900px){.kt-2{grid-template-columns:1fr}}
+.kt-panel{background:rgba(18,10,18,.5);border:1px solid var(--border-soft);border-radius:2px;padding:18px;position:relative;min-width:0}
+.kt-panel::before{content:'';position:absolute;top:0;left:0;width:28px;height:1px;background:var(--zl);box-shadow:0 0 6px var(--zl)}
+.kt-panel h2{font-family:'Oswald',sans-serif;font-weight:500;font-size:1.05em;letter-spacing:2px;text-transform:uppercase;color:#fff;margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.kt-panel h2 .tag{font-family:'JetBrains Mono',monospace;font-size:.65em;color:var(--zl);letter-spacing:2px;font-weight:400;padding:2px 6px;border:1px solid rgba(242,220,140,.3)}
+.kt-panel h2 .tag.r{color:var(--neon-red-hot);border-color:var(--border-mid)}
+.kt p{color:var(--txt-dim);line-height:1.55}
+.kt-lbl{display:block;font-family:'JetBrains Mono',monospace;font-size:.7em;letter-spacing:2px;color:var(--txt-mute);text-transform:uppercase;margin:0 0 6px}
+.kt input[type=text],.kt input[type=number],.kt textarea{width:100%;background:rgba(0,0,0,.5);border:1px solid var(--border-soft);color:#fff;padding:10px 12px;font-family:'Rajdhani',sans-serif;font-size:1em;border-radius:1px}
+.kt input[type=number]{font-family:'JetBrains Mono',monospace;padding-right:30px}
+.kt textarea{min-height:74px;resize:vertical}
+.kt input:focus,.kt textarea:focus{outline:none;border-color:var(--zl)!important;box-shadow:0 0 10px rgba(242,220,140,.2)}
+.kt-pole{margin-bottom:14px;position:relative}
+.kt-cena::after{content:'$';position:absolute;right:12px;bottom:11px;font-family:'JetBrains Mono',monospace;color:var(--txt-mute)}
+.kt-pola{display:grid;grid-template-columns:minmax(0,200px) minmax(0,1fr);gap:12px;margin-top:12px}
+@media(max-width:600px){.kt-pola{grid-template-columns:1fr}}
+.kt-akcje{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.kt-btn{padding:10px 18px;background:rgba(242,220,140,.08);border:1px solid rgba(242,220,140,.45);color:#fff;font-family:'Oswald',sans-serif;letter-spacing:2px;text-transform:uppercase;font-size:.85em;cursor:pointer;border-radius:1px;transition:all .25s}
+.kt-btn:hover{background:var(--zl);color:#140a08;box-shadow:0 0 18px rgba(242,220,140,.55)}
+.kt-btn.ghost{background:transparent;border-color:var(--border-soft);color:var(--txt-dim)}
+.kt-btn.ghost:hover{color:#fff;border-color:var(--neon-red);background:rgba(255,23,68,.1);box-shadow:none}
+.kt-btn.red{background:rgba(255,23,68,.08);border-color:var(--border-mid)}
+.kt-btn.red:hover{background:var(--neon-red);color:#fff;box-shadow:0 0 18px rgba(255,23,68,.7)}
+.kt-btn:disabled{opacity:.4;cursor:not-allowed;box-shadow:none}
+.kt-kom{padding:12px 14px;border:1px solid;font-family:'JetBrains Mono',monospace;font-size:.85em}
+.kt-kom.ok{color:var(--neon-green);border-color:rgba(90,255,154,.35);background:rgba(90,255,154,.05)}
+.kt-kom.blad{color:var(--neon-red-hot);border-color:var(--border-mid);background:rgba(255,23,68,.06)}
+.kt-para{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:1.1em;min-width:0}
+.kt-para .i{color:var(--zl);font-family:'Cormorant Garamond',serif;font-style:italic;font-size:1.3em}
+.kt-slowa{margin:12px 0;padding:12px 14px;border-left:2px solid rgba(242,220,140,.5);background:rgba(242,220,140,.04);color:var(--txt-main);font-family:'Cormorant Garamond',serif;font-style:italic;font-size:1.15em;line-height:1.45}
+.kt-stan{font-family:'JetBrains Mono',monospace;font-size:.75em;letter-spacing:2px;color:var(--zl);text-transform:uppercase;margin-bottom:10px}
+.kt-stan.r{color:var(--neon-red-hot)}
+.kt-meta{font-family:'JetBrains Mono',monospace;font-size:.75em;color:var(--txt-mute);margin-top:8px;line-height:1.6}
+.kt-kroki{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin-bottom:16px}
+.kt-kroki div{padding:8px 4px;text-align:center;font-family:'JetBrains Mono',monospace;font-size:.65em;letter-spacing:1px;text-transform:uppercase;border-top:2px solid var(--border-soft);color:var(--txt-mute);overflow:hidden;text-overflow:ellipsis}
+.kt-kroki div.ok{border-top-color:var(--neon-green);color:var(--neon-green)}
+.kt-kroki div.teraz{border-top-color:var(--zl);color:var(--zl)}
+.kt-kwota{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px;border:1px solid rgba(242,220,140,.3);background:rgba(242,220,140,.04);margin:12px 0;flex-wrap:wrap}
+.kt-kwota b{font-family:'JetBrains Mono',monospace;font-size:1.5em;color:var(--zl);font-weight:500;text-shadow:0 0 10px rgba(242,220,140,.4)}
+.kt-kwota .kt-lbl{margin-bottom:4px}
+.kt-lista{display:grid;gap:10px}
+.kt-wpis{padding:14px;border:1px solid var(--border-soft);background:rgba(0,0,0,.3)}
+.kt-info{padding:10px 12px;border:1px solid rgba(255,122,61,.35);background:rgba(255,122,61,.05);color:var(--neon-ember);line-height:1.45}
+.kt-roz summary{list-style:none;cursor:pointer;display:inline-block;margin-top:18px;font-family:'JetBrains Mono',monospace;font-size:.72em;letter-spacing:2px;color:var(--neon-red-hot);text-transform:uppercase}
+.kt-roz summary::-webkit-details-marker{display:none}
+.kt-roz summary::before{content:'▸ '}.kt-roz[open] summary::before{content:'▾ '}
+.kt-roz p{margin:10px 0 12px}
+.kt-pusto{color:var(--txt-mute);font-style:italic}
+.kt-os{position:relative;padding-left:26px}
+.kt-os::before{content:'';position:absolute;left:8px;top:6px;bottom:6px;width:1px;background:linear-gradient(to bottom,var(--zl),rgba(242,220,140,.1))}
+.kt-os-rok{font-family:'Oswald',sans-serif;letter-spacing:3px;color:#fff;margin:6px 0 2px -26px;font-size:.9em}
+.kt-os-w{position:relative;padding:10px 0 14px;display:grid;gap:4px}
+.kt-os-w::before{content:'';position:absolute;left:-22px;top:15px;width:9px;height:9px;border-radius:50%;background:#0a0508;border:1.5px solid var(--zl);box-shadow:0 0 8px rgba(242,220,140,.6)}
+.kt-os-w.roz::before{border-color:var(--neon-red-hot);box-shadow:0 0 8px rgba(255,23,68,.6)}
+.kt-os-w time{font-family:'JetBrains Mono',monospace;font-size:.72em;letter-spacing:1px;color:var(--txt-mute)}
+.kt-os-w .typ{font-family:'Oswald',sans-serif;letter-spacing:2px;text-transform:uppercase;font-size:.75em;color:var(--zl)}
+.kt-os-w.roz .typ{color:var(--neon-red-hot)}
+.kt-os-w.roz .kt-para{opacity:.75}
+.kt-os-w .kt-meta{margin-top:0}
+.kt-strony{display:flex;gap:10px;margin-top:6px}
+.kt-strony a{text-decoration:none}
 </style>
 
-<!-- ══ NAGŁÓWEK KATEDRY (z obrazkiem) ══ -->
-<div class="kat-header">
-    <div class="kat-header-content">
-        <div class="kat-ikona">⛪</div>
-        <h1 class="kat-nazwa">Katedra Świętego Dymu</h1>
-        <p class="kat-motto">❝ Gdzie dusze znajdują pokój, a serca łączą się na wieki ❞</p>
-    </div>
-</div>
+<div class="kt">
+  <div class="page-head">
+    <div class="eyebrow">// KATEDRA</div>
+    <h1>Katedra</h1>
+    <p class="lead">Stare mury pośród neonów. Tu dwoje obywateli może zgłosić chęć zawarcia małżeństwa. Gdy obie strony powiedzą „tak”, Proboszcz wycenia ceremonię, a po opłacie udziela ślubu.</p>
+  </div>
 
-<?php echo $komunikat; ?>
+  <?php if ($kom): ?><div class="kt-kom <?php echo $kom[0] ? 'ok' : 'blad'; ?>"><?php echo $kom[0] ? '✓ ' : '⚠ '; echo $kom[1]; ?></div><?php endif; ?>
 
-<!-- ══ PANEL ADMINISTRACJI (tylko dla MG/Proboszczów) ══ -->
-<?php if ($ma_uprawnienia): ?>
-<div class="admin-panel">
-    <div class="admin-inner">
-
-    <?php if (empty($zgloszenia_do_rozpatrzenia) && empty($zgloszenia_rozwodu)): ?>
-        <div class="empty-box">Brak zgłoszeń oczekujących na rozpatrzenie.</div>
-    <?php else:
-        foreach ($zgloszenia_do_rozpatrzenia as $z):
-            $av1 = !empty($z['avatar_1']) ? htmlspecialchars($z['avatar_1']) : "https://via.placeholder.com/80/0a0a0a/333?text=?";
-            $av2 = !empty($z['avatar_2']) ? htmlspecialchars($z['avatar_2']) : "https://via.placeholder.com/80/0a0a0a/333?text=?";
-            $czy_zatwierdzone = ($z['status'] == 'zatwierdzone');
-    ?>
-    <div class="admin-zgloszenie">
-        <div class="az-para">
-            <div class="az-gracz">
-                <div class="az-avatar" style="background-image:url('<?php echo $av1; ?>')"></div>
-                <div class="az-login"><?php echo htmlspecialchars($z['login_1']); ?></div>
-            </div>
-            <span class="az-serce">💕</span>
-            <div class="az-gracz">
-                <div class="az-avatar" style="background-image:url('<?php echo $av2; ?>')"></div>
-                <div class="az-login"><?php echo htmlspecialchars($z['login_2']); ?></div>
-            </div>
+  <?php if ($proboszcz): ?>
+  <section class="kt-panel">
+    <h2>Prośby do Proboszcza <span class="tag">PROBOSZCZ · <?php echo count($do_decyzji); ?></span></h2>
+    <?php if (!$do_decyzji): ?><p class="kt-pusto">Nikt nie czeka na Twoją decyzję.</p><?php else: ?>
+    <div class="kt-lista">
+      <?php foreach ($do_decyzji as $z): $wlasny = (int)$z['od_id'] === $id_gracza || (int)$z['do_id'] === $id_gracza; $slub = $z['typ'] === 'slub'; $zid = (int)$z['id']; ?>
+      <form class="kt-wpis" method="POST">
+        <input type="hidden" name="kt_id" value="<?php echo $zid; ?>">
+        <div class="kt-stan<?php echo $slub ? '' : ' r'; ?>"><?php echo $slub ? 'Ślub · obie strony powiedziały „tak”' : 'Rozwód · oboje się zgodzili'; ?></div>
+        <div class="kt-para"><?php echo nk_html(nk_wiersz($z, 'a_')); ?><span class="i">&amp;</span><?php echo nk_html(nk_wiersz($z, 'b_')); ?></div>
+        <?php if ($slub && $z['slowa'] !== ''): ?><div class="kt-slowa"><?php echo nk_h($z['slowa']); ?></div><?php endif; ?>
+        <div class="kt-meta"><?php echo $slub ? 'Zgłoszenie z ' . $data($z['kiedy']) : 'Małżeństwo od ' . $data($z['data_slubu']) . ' · ślub kosztował ' . kt_fmt((int)$z['cena_slubu']); ?></div>
+        <?php if ($wlasny): ?><p class="kt-meta">Dotyczy Ciebie. Decyzję podejmie inny Proboszcz.</p><?php else: ?>
+        <div class="kt-pola">
+          <div class="kt-pole kt-cena"><label class="kt-lbl" for="kt-c-<?php echo $zid; ?>"><?php echo $slub ? 'Cena ceremonii' : 'Opłata za rozwód'; ?></label><input type="number" id="kt-c-<?php echo $zid; ?>" name="kt_cena" min="0" step="100" value="0" required></div>
+          <?php if ($slub): ?><div class="kt-pole"><label class="kt-lbl" for="kt-uw-<?php echo $zid; ?>">Słowo od Proboszcza (przy odmowie wymagane)</label><input type="text" id="kt-uw-<?php echo $zid; ?>" name="kt_uwaga" maxlength="400"></div><?php endif; ?>
         </div>
-        <div class="az-status">
-            <?php if ($czy_zatwierdzone): ?>
-                ✅ ZATWIERDZONE — ślub zaplanowany na <?php echo date('d.m.Y H:i', strtotime($z['planowana_data_slubu'])); ?>
-            <?php else: ?>
-                ⏳ Oboje potwierdzili — czeka na decyzję
-            <?php endif; ?>
+        <div class="kt-akcje">
+          <?php if ($slub): ?><button class="kt-btn" type="submit" name="kt_zatwierdz" value="1">Zatwierdź i wyceń</button><button class="kt-btn ghost" type="submit" name="kt_odmow" value="1" formnovalidate>Odmów</button>
+          <?php else: ?><button class="kt-btn red" type="submit" name="kt_zatwierdz" value="1">Wyceń rozwód</button><?php endif; ?>
         </div>
-        <div class="az-narracja">❝ <?php echo nl2br(htmlspecialchars($z['narracja_zaręczyn'])); ?> ❞</div>
-
-        <?php if ($czy_zatwierdzone): ?>
-            <!-- Udzielenie ślubu -->
-            <form method="POST">
-                <input type="hidden" name="zgl_id" value="<?php echo $z['id']; ?>">
-                <button type="submit" name="udziel_slubu" class="btn-udziel">💒 Udziel sakramentu małżeństwa</button>
-            </form>
-        <?php else: ?>
-            <!-- Zatwierdzenie / odrzucenie -->
-            <form method="POST" class="az-akcje-admin" style="margin-bottom:8px">
-                <input type="hidden" name="zgl_id" value="<?php echo $z['id']; ?>">
-                <label style="color:#888;font-size:.82em;font-family:'Oswald',sans-serif">Data ślubu:</label>
-                <input type="datetime-local" name="data_slubu" required>
-                <button type="submit" name="zatwierdz_zgloszenie" class="btn-zatwierdz">✓ Zatwierdź</button>
-            </form>
-            <form method="POST" class="az-akcje-admin">
-                <input type="hidden" name="zgl_id" value="<?php echo $z['id']; ?>">
-                <input type="text" name="uzasadnienie" placeholder="Powód odrzucenia..." style="flex:1">
-                <button type="submit" name="admin_odrzuc_zgloszenie" class="btn-admin-odrzuc">✗ Odrzuć</button>
-            </form>
+        <div class="kt-meta"><?php echo $slub ? 'Po zatwierdzeniu ktoś z pary płaci podaną kwotę i dopiero wtedy zostaje zawarte małżeństwo. Pieniądze trafiają do Katedry. Cena 0 $ = ślub od razu.'
+                                                 : 'Rozwodu nie można odmówić. Ustalasz tylko opłatę, którą para dzieli pół na pół. 0 $ = rozwód od razu.'; ?></div>
         <?php endif; ?>
-    </div>
-    <?php endforeach; ?>
-
-    <!-- ══ ZGŁOSZENIA ROZWODOWE ══ -->
-    <?php if (!empty($zgloszenia_rozwodu)):
-        foreach($zgloszenia_rozwodu as $r):
-            $av1 = !empty($r['avatar_1']) ? htmlspecialchars($r['avatar_1']) : "https://via.placeholder.com/80/0a0a0a/333?text=?";
-            $av2 = !empty($r['avatar_2']) ? htmlspecialchars($r['avatar_2']) : "https://via.placeholder.com/80/0a0a0a/333?text=?";
-            $dni_razem = floor((time() - strtotime($r['data_slubu'])) / 86400);
-    ?>
-    <div class="admin-zgloszenie" style="border-color:rgba(255,68,68,.3);background:rgba(255,68,68,.04)">
-        <div style="text-align:center;font-family:'Oswald',sans-serif;color:#ff6666;font-size:.85em;text-transform:uppercase;letter-spacing:2px;margin-bottom:12px">
-            ⚖️ Wniosek rozwodowy
-        </div>
-        <div class="az-para">
-            <div class="az-gracz">
-                <div class="az-avatar" style="background-image:url('<?php echo $av1; ?>')"></div>
-                <div class="az-login"><?php echo htmlspecialchars($r['login_1']); ?></div>
-            </div>
-            <span class="az-serce" style="color:#ff4444;text-decoration:line-through">💔</span>
-            <div class="az-gracz">
-                <div class="az-avatar" style="background-image:url('<?php echo $av2; ?>')"></div>
-                <div class="az-login"><?php echo htmlspecialchars($r['login_2']); ?></div>
-            </div>
-        </div>
-        <div class="az-status" style="color:#ff6666">
-            Razem <?php echo $dni_razem; ?> dni · Wniosek złożył/a: <b><?php echo htmlspecialchars($r['zglaszajacy_login']); ?></b>
-        </div>
-        <div class="az-narracja" style="border-left-color:rgba(255,68,68,.5)">
-            <b style="color:#ff6666;display:block;margin-bottom:6px">Powód rozwodu:</b>
-            ❝ <?php echo nl2br(htmlspecialchars($r['powod'])); ?> ❞
-        </div>
-        <form method="POST" class="az-akcje-admin" style="margin-bottom:8px">
-            <input type="hidden" name="rozwod_id" value="<?php echo $r['id']; ?>">
-            <button type="submit" name="zatwierdz_rozwod" class="btn-admin-odrzuc" style="flex:1;background:rgba(255,68,68,.15);color:#ff6666;border-color:rgba(255,68,68,.5)"
-                onclick="return confirm('Na pewno rozwiązać to małżeństwo?')">
-                ⚖️ Zatwierdź rozwód
-            </button>
-        </form>
-        <form method="POST" class="az-akcje-admin">
-            <input type="hidden" name="rozwod_id" value="<?php echo $r['id']; ?>">
-            <input type="text" name="uzasadnienie_roz" placeholder="Dlaczego odrzucasz wniosek..." style="flex:1">
-            <button type="submit" name="odrzuc_rozwod" class="btn-zatwierdz">✗ Odrzuć wniosek</button>
-        </form>
-    </div>
-    <?php endforeach; endif; ?>
-
-    <?php endif; ?>
-
-    </div>
-</div>
-<?php endif; ?>
-
-<!-- ══ ZGŁOSZENIA DO POTWIERDZENIA (dla partnera) ══ -->
-<?php foreach($zgloszenia_do_potwierdzenia as $z):
-    $av = !empty($z['od_avatar']) ? htmlspecialchars($z['od_avatar']) : "https://via.placeholder.com/100/0a0a0a/333?text=?";
-?>
-<div class="zgl-potwierdz">
-    <div class="zp-head">
-        <div class="zp-avatar" style="background-image:url('<?php echo $av; ?>')"></div>
-        <div class="zp-text">
-            <b><?php echo htmlspecialchars($z['od_login']); ?></b> zgłosił/a do Katedry wolę zawarcia z Tobą związku małżeńskiego 💍
-            <div style="color:#888;font-size:.85em;margin-top:4px">Narracja zaręczyn poniżej:</div>
-        </div>
-    </div>
-    <div class="zp-narracja">❝ <?php echo nl2br(htmlspecialchars($z['narracja_zaręczyn'])); ?> ❞</div>
-    <form method="POST" class="zp-akcje">
-        <input type="hidden" name="zgl_id" value="<?php echo $z['id']; ?>">
-        <button type="submit" name="potwierdz_zgloszenie" class="btn-tak">💖 Potwierdzam wolę</button>
-        <button type="submit" name="odrzuc_zgloszenie" class="btn-nie">Odrzuć</button>
-    </form>
-</div>
-<?php endforeach; ?>
-
-<!-- ══ CO JA TU ROBIĘ ══ -->
-<?php if ($moje_malzenstwo):
-    $partner_login = ($moje_malzenstwo['malzonek_1_id'] == $id_gracza) ? $moje_malzenstwo['m2_login'] : $moje_malzenstwo['m1_login'];
-    $dni = floor((time() - strtotime($moje_malzenstwo['data_slubu'])) / 86400);
-?>
-<div class="zwiazek-info">
-    <div class="z-serca">💍</div>
-    <div class="z-para"><?php echo htmlspecialchars($moje_malzenstwo['m1_login']); ?> <span>& ❤️</span> <?php echo htmlspecialchars($moje_malzenstwo['m2_login']); ?></div>
-    <div class="z-data">Ślub: <?php echo date('d.m.Y', strtotime($moje_malzenstwo['data_slubu'])); ?></div>
-    <div class="z-dni">🕊️ Razem od <?php echo $dni; ?> <?php echo $dni==1?'dnia':'dni'; ?></div>
-</div>
-
-<!-- ══ ROZWÓD ══ -->
-<?php if ($moje_zgl_rozwodu): ?>
-<div class="zgl-oczekuje" style="border-color:rgba(255,68,68,.4);background:rgba(255,68,68,.06)">
-    <div class="zgl-tytul" style="color:#ff6666">⚖️ Wniosek rozwodowy w toku</div>
-    <div class="zgl-status" style="color:#aaa">
-        Wniosek złożony <b><?php echo date('d.m.Y H:i', strtotime($moje_zgl_rozwodu['data_zgloszenia'])); ?></b><br>
-        Czeka na rozpatrzenie przez Proboszcza lub Mistrza Gry.
-    </div>
-</div>
-<?php else: ?>
-<details style="background:rgba(255,68,68,.03);border:1px solid rgba(255,68,68,.15);border-radius:10px;padding:14px 18px;margin-bottom:20px">
-    <summary style="cursor:pointer;color:#ff6666;font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:1.5px;font-size:.9em;padding:4px 0">
-        💔 Chcesz złożyć wniosek rozwodowy?
-    </summary>
-    <div style="padding-top:14px">
-        <p style="color:#888;font-size:.88em;font-style:italic;margin-bottom:12px">
-            Rozwód jest poważną decyzją. Twój wniosek rozpatrzy Proboszcz lub Mistrz Gry po wysłuchaniu obu stron. Opisz powód w minimum 50 znakach.
-        </p>
-        <form method="POST">
-            <textarea name="powod_rozwodu" required minlength="50" maxlength="2000" placeholder="Opisz powód rozwodu. Może być narracyjnie, z opisem sytuacji w postaci. Np. 'Po aferze w klubie z Katarzyną moja postać straciła do niej zaufanie...'"
-                style="width:100%;background:rgba(0,0,0,.6);border:1px solid rgba(255,68,68,.3);color:#ddd;padding:12px;border-radius:6px;font-family:'Open Sans',sans-serif;font-size:.92em;min-height:120px;box-sizing:border-box;resize:vertical;margin-bottom:10px"></textarea>
-            <button type="submit" name="zglos_rozwod" onclick="return confirm('Na pewno złożyć wniosek rozwodowy?')"
-                style="width:100%;background:rgba(255,68,68,.12);color:#ff6666;border:1px solid rgba(255,68,68,.4);padding:12px;font-family:'Oswald',sans-serif;cursor:pointer;text-transform:uppercase;letter-spacing:1.5px;border-radius:6px;font-weight:700">
-                ⚖️ Złóż wniosek rozwodowy
-            </button>
-        </form>
-    </div>
-</details>
-<?php endif; ?>
-
-<?php elseif ($moje_zgloszenie):
-    $p_login = $moje_zgloszenie['partner_login'];
-    $status_tekst = match($moje_zgloszenie['status']){
-        'oczekuje'          => "⏳ Oczekiwanie na potwierdzenie przez <b>".htmlspecialchars($p_login)."</b>",
-        'partner_potwierdzil' => "✅ Oboje potwierdziliście! Czekacie na decyzję Proboszcza/MG",
-        'zatwierdzone'      => "💒 <b>Zatwierdzone!</b> Ślub zaplanowany na <b>".date('d.m.Y H:i', strtotime($moje_zgloszenie['planowana_data_slubu']))."</b>",
-        default             => ''
-    };
-?>
-<div class="zgl-oczekuje">
-    <div class="zgl-tytul">💍 Twoje zgłoszenie małżeńskie</div>
-    <div class="zgl-status"><?php echo $status_tekst; ?></div>
-</div>
-
-<?php else: ?>
-<!-- ══ FORMULARZ ZGŁOSZENIA ══ -->
-<div class="zglos-box">
-    <div class="zglos-tytul">💍 Zgłoś wolę wejścia w związek małżeński</div>
-    <div class="zglos-podtytul">Proboszcz lub Mistrz Gry rozpatrzy Twoje zgłoszenie i wyznaczy datę ceremonii w Centrum Opowieści</div>
-
-    <form method="POST" class="zglos-form">
-        <label>ID wybranka/wybranki</label>
-        <input type="number" name="partner_id" required min="1" placeholder="np. 42">
-
-        <label>Narracja zaręczyn</label>
-        <textarea name="narracja" id="narracja" required minlength="100" maxlength="3000"
-            placeholder="Opisz w formie narracyjnej jak wyglądały zaręczyny. Może być z dialogami. Przykład:
-
-*Marek klęknął pod starą latarnią przy moście brooklyńskim. Z kieszeni wyjął aksamitne pudełko.*
-
-— Od chwili, gdy cię ujrzałem w tej obskurnej melinie, wiedziałem, że jesteś tą jedyną. Nawet gdy strzelałaś do mnie w pierwszym naszym spotkaniu...
-
-*Anna parsknęła śmiechem, łzy spłynęły jej po policzku.*
-
-— Idioto. Tak, wyjdę za ciebie..."></textarea>
-        <div class="licznik-znakow" id="licznik">0 / 3000 znaków (min. 100)</div>
-
-        <button type="submit" name="zglos_slub" class="btn-zglos">⛪ Złóż zgłoszenie do Katedry</button>
-    </form>
-</div>
-
-<script>
-const ta = document.getElementById('narracja');
-const licznik = document.getElementById('licznik');
-ta.addEventListener('input', () => {
-    const len = ta.value.length;
-    licznik.innerText = len + ' / 3000 znaków (min. 100)';
-    licznik.className = 'licznik-znakow ' + (len >= 100 ? 'ok' : 'za-malo');
-});
-</script>
-<?php endif; ?>
-
-<!-- ══ ZAPLANOWANE ŚLUBY ══ -->
-<?php if (!empty($zaplanowane_sluby)): ?>
-<div class="sekcja-tytul">
-    📅 Zaplanowane ceremonie
-    <span class="licznik"><?php echo count($zaplanowane_sluby); ?></span>
-</div>
-<?php foreach($zaplanowane_sluby as $z): ?>
-<div class="zaplanowany">
-    <div class="zap-para">💒 <b><?php echo htmlspecialchars($z['login_1']); ?></b> & <b><?php echo htmlspecialchars($z['login_2']); ?></b></div>
-    <div class="zap-data">📅 <?php echo date('d.m.Y H:i', strtotime($z['planowana_data_slubu'])); ?></div>
-</div>
-<?php endforeach; ?>
-<?php endif; ?>
-
-<!-- ══ SPIS MAŁŻEŃSTW ══ -->
-<div class="sekcja-tytul">
-    💒 Zawarte małżeństwa
-    <span class="licznik"><?php echo count($malzenstwa_spis); ?></span>
-</div>
-
-<?php if (empty($malzenstwa_spis)): ?>
-    <div class="empty-box">Jeszcze żadna para nie stanęła na ślubnym kobiercu w naszej Katedrze.</div>
-<?php else: ?>
-<div class="malzenstwa-grid">
-<?php foreach($malzenstwa_spis as $m):
-    $av1 = !empty($m['m1_avatar']) ? htmlspecialchars($m['m1_avatar']) : "https://via.placeholder.com/80/0a0a0a/333?text=?";
-    $av2 = !empty($m['m2_avatar']) ? htmlspecialchars($m['m2_avatar']) : "https://via.placeholder.com/80/0a0a0a/333?text=?";
-?>
-<div class="malz-karta">
-    <div class="mk-para">
-        <div class="mk-avatar" style="background-image:url('<?php echo $av1; ?>')"></div>
-        <span class="mk-login"><?php echo htmlspecialchars($m['m1_login']); ?></span>
-        <span class="mk-serce">💕</span>
-        <span class="mk-login"><?php echo htmlspecialchars($m['m2_login']); ?></span>
-        <div class="mk-avatar" style="background-image:url('<?php echo $av2; ?>')"></div>
-    </div>
-    <div class="mk-info">
-        <span>Ślub: <?php echo date('d.m.Y', strtotime($m['data_slubu'])); ?></span>
-        <span>Razem: <b><?php echo $m['dni_razem']; ?> dni</b></span>
-    </div>
-    <?php if ($m['udzielajacy_login']): ?>
-    <div style="font-size:.75em;color:#444;margin-top:6px;text-align:center;font-style:italic">
-        Ślubu udzielił/a: <?php echo htmlspecialchars($m['udzielajacy_login']); ?>
+      </form>
+      <?php endforeach; ?>
     </div>
     <?php endif; ?>
+  </section>
+  <?php endif; ?>
+
+  <div class="kt-2">
+    <section class="kt-panel">
+    <?php if ($zg && $zg['typ'] === 'rozwod'):
+        $st = $zg['status']; ?>
+      <?php if ($st === 'oswiadczyny' && !$moje_od): ?>
+        <h2>Propozycja rozwodu <span class="tag r">DLA CIEBIE</span></h2>
+        <?php echo $kroki($K_ROZW, 0); ?>
+        <div class="kt-para"><?php echo nk_html($drugi); ?> <span style="color:var(--txt-dim)">proponuje rozwód.</span></div>
+        <form method="POST" class="kt-akcje" style="margin-top:14px"><input type="hidden" name="kt_id" value="<?php echo (int)$zg['id']; ?>"><button class="kt-btn red" type="submit" name="kt_tak" value="1">Zgadzam się</button><button class="kt-btn ghost" type="submit" name="kt_nie" value="1">Nie zgadzam się</button></form>
+      <?php elseif ($st === 'do_zaplaty'):
+          $moja_kol = $moje_od ? 'zaplacil_od' : 'zaplacil_do'; $jego_kol = $moje_od ? 'zaplacil_do' : 'zaplacil_od'; $moja = kt_polowa($zg, $moje_od); ?>
+        <h2>Rozwód wyceniony <span class="tag r">DO ZAPŁATY</span></h2>
+        <?php echo $kroki($K_ROZW, 2); ?>
+        <div class="kt-kwota"><div><span class="kt-lbl">Twoja połowa z <?php echo kt_fmt((int)$zg['cena']); ?></span><span style="color:var(--txt-dim)"><?php echo nk_h($drugi['login']); ?>: <?php echo (int)$zg[$jego_kol] ? '<span style="color:var(--neon-green)">✓ zapłacone</span>' : 'jeszcze nie zapłacił/a'; ?></span></div><b><?php echo kt_fmt($moja); ?></b></div>
+        <?php if ((int)$zg[$moja_kol]): ?><p>Swoją połowę już zapłaciłaś/eś. Rozwód zostanie orzeczony, gdy <?php echo nk_h($drugi['login']); ?> zapłaci swoją.</p>
+        <?php else: ?><form method="POST" class="kt-akcje"><input type="hidden" name="kt_id" value="<?php echo (int)$zg['id']; ?>"><button class="kt-btn red" type="submit" name="kt_zaplac" value="1"<?php echo $gotowka < $moja ? ' disabled' : ''; ?>>Zapłać swoją połowę</button><?php if (!(int)$zg[$jego_kol]): ?><button class="kt-btn ghost" type="submit" name="kt_wycofaj" value="1">Wycofaj</button><?php endif; ?></form>
+        <div class="kt-meta">Masz przy sobie <?php echo kt_fmt($gotowka); ?>. Wycenił <?php echo $wycenil ? nk_html($wycenil) : '?'; ?>.</div><?php endif; ?>
+      <?php else: ?>
+        <h2>Wniosek o rozwód <span class="tag r">W TOKU</span></h2>
+        <?php echo $kroki($K_ROZW, $st === 'oswiadczyny' ? 0 : 1); ?>
+        <div class="kt-stan r"><?php echo $st === 'oswiadczyny' ? 'Czeka na zgodę drugiej osoby' : 'Czeka na wycenę Proboszcza'; ?></div>
+        <div class="kt-para"><?php echo nk_html($drugi); ?></div>
+        <form method="POST" style="margin-top:14px"><input type="hidden" name="kt_id" value="<?php echo (int)$zg['id']; ?>"><button class="kt-btn ghost" type="submit" name="kt_wycofaj" value="1">Wycofaj wniosek</button></form>
+      <?php endif; ?>
+
+    <?php elseif ($mal): ?>
+      <h2>Twoje małżeństwo <span class="tag">ZAWARTE</span></h2>
+      <div class="kt-para"><?php echo nk_html($ja); ?><span class="i">&amp;</span><?php echo $partner ? nk_html($partner) : '?'; ?></div>
+      <div class="kt-meta">Ślub <?php echo $data($mal['data_slubu']); ?><?php if (!empty($udzielil)): ?> · udzielił <?php echo nk_html($udzielil); ?><?php endif; ?><?php if ((int)($mal['cena'] ?? 0) > 0) echo ' · ' . kt_fmt((int)$mal['cena']); ?></div>
+      <details class="kt-roz"><summary>Rozwód</summary>
+        <p>Rozwód wymaga zgody obojga. Proboszcz ustala opłatę, którą dzielicie pół na pół. Przez <?php echo KT_KARENCJA_DNI; ?> dni po rozwodzie nie można wziąć nowego ślubu. Rozwód trafi do Księgi i do Plotek na obu profilach.</p>
+        <form method="POST" onsubmit="return confirm('Zaproponować rozwód?')"><button class="kt-btn red" type="submit" name="kt_rozwod" value="1">Zaproponuj rozwód</button></form>
+      </details>
+
+    <?php elseif ($zg && (int)$zg['do_id'] === $id_gracza && $zg['status'] === 'oswiadczyny'): ?>
+      <h2>Oświadczyny <span class="tag">DLA CIEBIE</span></h2>
+      <?php echo $kroki($K_SLUB, 0); ?>
+      <div class="kt-stan">Prosi Cię o rękę</div>
+      <div class="kt-para"><?php echo nk_html($drugi); ?></div>
+      <?php if ($zg['slowa'] !== ''): ?><div class="kt-slowa"><?php echo nk_h($zg['slowa']); ?></div><?php endif; ?>
+      <form method="POST" class="kt-akcje" style="margin-top:12px"><input type="hidden" name="kt_id" value="<?php echo (int)$zg['id']; ?>"><button class="kt-btn" type="submit" name="kt_tak" value="1">Tak</button><button class="kt-btn ghost" type="submit" name="kt_nie" value="1">Nie</button></form>
+
+    <?php elseif ($zg && $zg['status'] === 'do_zaplaty'): ?>
+      <h2>Ceremonia zatwierdzona <span class="tag">DO ZAPŁATY</span></h2>
+      <?php echo $kroki($K_SLUB, 2); ?>
+      <div class="kt-para"><?php echo nk_html($drugi); ?></div>
+      <div class="kt-kwota"><div><span class="kt-lbl">Cenę ustalił/a</span><?php echo $wycenil ? nk_html($wycenil) : '?'; ?></div><b><?php echo kt_fmt((int)$zg['cena']); ?></b></div>
+      <?php if ($zg['uwaga'] !== ''): ?><div class="kt-slowa" style="margin-top:0"><?php echo nk_h($zg['uwaga']); ?></div><?php endif; ?>
+      <form method="POST" class="kt-akcje"><input type="hidden" name="kt_id" value="<?php echo (int)$zg['id']; ?>"><button class="kt-btn" type="submit" name="kt_zaplac" value="1"<?php echo $gotowka < (int)$zg['cena'] ? ' disabled' : ''; ?>>Zapłać i weź ślub</button><button class="kt-btn ghost" type="submit" name="kt_wycofaj" value="1">Wycofaj</button></form>
+      <div class="kt-meta">Zapłacić może każde z was. Gdy jedno zapłaci, ślub zostaje zawarty od razu. Masz przy sobie <?php echo kt_fmt($gotowka); ?>.</div>
+
+    <?php elseif ($zg): ?>
+      <h2>Zgłoszenie ślubu <span class="tag">W TOKU</span></h2>
+      <?php echo $kroki($K_SLUB, $zg['status'] === 'oswiadczyny' ? 0 : 1); ?>
+      <div class="kt-stan"><?php echo $zg['status'] === 'oswiadczyny' ? 'Czeka na odpowiedź' : 'Czeka na decyzję i wycenę Proboszcza'; ?></div>
+      <div class="kt-para"><?php echo nk_html($drugi); ?></div>
+      <?php if ($zg['slowa'] !== ''): ?><div class="kt-slowa"><?php echo nk_h($zg['slowa']); ?></div><?php endif; ?>
+      <div class="kt-meta">Zgłoszono <?php echo $data($zg['kiedy']); ?></div>
+      <form method="POST" style="margin-top:14px" onsubmit="return confirm('Wycofać zgłoszenie?')"><input type="hidden" name="kt_id" value="<?php echo (int)$zg['id']; ?>"><button class="kt-btn ghost" type="submit" name="kt_wycofaj" value="1">Wycofaj zgłoszenie</button></form>
+
+    <?php elseif ($karencja): ?>
+      <h2>Po rozwodzie <span class="tag r">KARENCJA</span></h2>
+      <?php $zost = $karencja - time(); ?>
+      <div class="kt-info">Nowy ślub możliwy od <b><?php echo date('d.m.Y, H:i', $karencja); ?></b>. Zostało <?php echo floor($zost / 86400); ?> dni <?php echo floor(($zost % 86400) / 3600); ?> godz.</div>
+      <?php if (!empty($ostatni)): ?><div class="kt-meta">Rozwód z <?php echo nk_h(kt_login($polaczenie, (int)$ostatni['ex'])); ?> · <?php echo $data($ostatni['data_rozwodu']); ?></div><?php endif; ?>
+
+    <?php else: ?>
+      <h2>Zgłoś chęć ślubu <span class="tag">OŚWIADCZYNY</span></h2>
+      <form method="POST">
+        <div class="kt-pole"><label class="kt-lbl" for="kt-login">Nick przyszłej żony lub męża</label><input type="text" id="kt-login" name="kt_login" maxlength="40" required autocomplete="off"></div>
+        <div class="kt-pole"><label class="kt-lbl" for="kt-slowa">Słowa oświadczyn (opcjonalnie)</label><textarea id="kt-slowa" name="kt_slowa" maxlength="400"></textarea></div>
+        <button class="kt-btn" type="submit" name="kt_oswiadcz" value="1">Złóż oświadczyny</button>
+      </form>
+      <p class="kt-meta" style="margin-top:12px">Druga osoba dostanie powiadomienie. Po jej zgodzie Proboszcz wyceni ceremonię.</p>
+    <?php endif; ?>
+    </section>
+
+    <section class="kt-panel">
+      <h2>Proboszczowie <span class="tag">KATEDRA</span></h2>
+      <?php if ($proboszczowie): ?><div class="kt-lista" style="gap:6px"><?php foreach ($proboszczowie as $p) echo '<div>' . nk_html($p) . '</div>'; ?></div>
+      <?php else: ?><p class="kt-pusto">Katedra nie ma teraz Proboszcza. Zgłoszenia poczekają, aż Administrator go wyznaczy.</p><?php endif; ?>
+    </section>
+  </div>
+
+  <section class="kt-panel">
+    <h2>Księga ślubów <span class="tag">OŚ CZASU</span></h2>
+    <?php if (!$ksiega): ?><p class="kt-pusto">Księga jest jeszcze pusta.</p><?php else: ?>
+    <div class="kt-os">
+      <?php $rok = null; foreach ($ksiega as $k): $r = date('Y', strtotime($k['kiedy'])); $roz = $k['typ'] === 'rozwod';
+        if ($r !== $rok) { $rok = $r; echo "<div class=\"kt-os-rok\">$r</div>"; } ?>
+      <div class="kt-os-w<?php echo $roz ? ' roz' : ''; ?>">
+        <time><?php echo $data($k['kiedy']); ?></time>
+        <span class="typ"><?php echo $roz ? 'Rozwód' : 'Ślub'; ?></span>
+        <div class="kt-para"><?php echo nk_html(nk_wiersz($k, 'a_')); ?><span class="i">&amp;</span><?php echo nk_html(nk_wiersz($k, 'b_')); ?></div>
+        <div class="kt-meta"><?php
+          if ($roz) { $d = max(1, (int)floor((strtotime($k['kiedy']) - strtotime($k['data_slubu'])) / 86400)); echo "Po $d " . ($d === 1 ? 'dniu' : 'dniach') . ' małżeństwa'; }
+          elseif (!empty($k['proboszcz_id'])) echo 'Udzielił ' . nk_h($ks_proboszcz[(int)$k['proboszcz_id']] ?? '?');
+        ?></div>
+      </div>
+      <?php endforeach; ?>
+    </div>
+    <?php if ($ks_str > 0 || $ks_dalej): ?><div class="kt-strony">
+      <?php if ($ks_str > 0): ?><a class="kt-btn ghost" href="game.php?page=katedra&amp;ks=<?php echo $ks_str - 1; ?>">← Nowsze</a><?php endif; ?>
+      <?php if ($ks_dalej): ?><a class="kt-btn ghost" href="game.php?page=katedra&amp;ks=<?php echo $ks_str + 1; ?>">Starsze wpisy →</a><?php endif; ?>
+    </div><?php endif; ?>
+    <?php endif; ?>
+  </section>
 </div>
-<?php endforeach; ?>
-</div>
-<?php endif; ?>

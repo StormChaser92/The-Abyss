@@ -15,6 +15,7 @@ if (empty($_SESSION['csrf_profil'])) {
 $csrf = $_SESSION['csrf_profil'];
 
 require_once __DIR__ . '/../includes/nick.php';
+require_once __DIR__ . '/../includes/formatuj.php';   // html_bezpieczny() dla Plotek
 
 function abyss_e($value): string {
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
@@ -166,7 +167,7 @@ $malzenstwo_profilu = null;
 if (abyss_table_exists($polaczenie, 'malzenstwa')) {
     $stmt_m = $polaczenie->prepare("SELECT m.*,
         g1.id AS m1_id, g1.login AS m1_login, g1.avatar AS m1_avatar,
-        g2.id AS m2_id, g2.login AS m2_login, g2.avatar AS m2_avatar
+        g2.id AS m2_id, g2.login AS m2_login, g2.avatar AS m2_avatar, " . nk_pola('g1', 'p1_') . ", " . nk_pola('g2', 'p2_') . "
         FROM malzenstwa m
         JOIN gracze g1 ON m.malzonek_1_id = g1.id
         JOIN gracze g2 ON m.malzonek_2_id = g2.id
@@ -203,6 +204,14 @@ $story_html = $story_public ? ($historia['historia_html'] ?? '') : '';
 .profil-avatar{width:100%;aspect-ratio:500/625;background:linear-gradient(160deg,#2a0a14,#0a0408 70%);background-position:top center!important;background-size:cover!important;border:1px solid var(--border-mid);border-radius:2px;margin-bottom:16px;box-shadow:0 0 22px rgba(255,23,68,.22),inset 0 0 30px rgba(0,0,0,.5);position:relative;overflow:hidden}
 .profil-avatar::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,transparent 60%,rgba(255,23,68,.12));pointer-events:none}
 .profil-nick{font-family:'Oswald',sans-serif;font-weight:500;font-size:1.9em;line-height:1.05;margin:0 0 6px;text-transform:uppercase;letter-spacing:3px;color:#fff;overflow-wrap:anywhere;text-shadow:0 0 4px rgba(255,255,255,.4),0 0 16px var(--neon-red),0 0 32px var(--neon-red-deep)}
+.malz-v2{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0}
+.malz-v2 .malz-label{font-family:'Rajdhani',sans-serif;letter-spacing:0;text-transform:none;font-size:1em;color:var(--txt-dim);margin:0}
+.malz-v2 .malz-mini-av{flex-shrink:0}
+.malz-obraczki{fill:none;stroke:#f2dc8c;stroke-width:1.8;filter:drop-shadow(0 0 4px rgba(242,220,140,.6));flex-shrink:0}
+.plotki-lista{display:grid;gap:8px}
+.plotka{display:grid;gap:4px;padding:12px 14px;border-left:2px solid var(--neon-red-hot);background:rgba(255,23,68,.05)}
+.plotka time{font-family:'JetBrains Mono',monospace;font-size:.72em;color:var(--txt-mute);letter-spacing:1px}
+.plotka div{color:var(--txt-main);line-height:1.5}
 .profil-nick-rangi{display:inline-flex;gap:5px;margin-left:8px;vertical-align:middle}
 .profil-nick-rangi:empty{display:none}
 .profil-nick-rangi .nk-r svg{width:20px;height:20px}
@@ -304,20 +313,21 @@ $story_html = $story_public ? ($historia['historia_html'] ?? '') : '';
                 $partner_id_mal = (int)$malzenstwo_profilu['m2_id'];
                 $partner_login_mal = $malzenstwo_profilu['m2_login'];
                 $partner_avatar_mal = $malzenstwo_profilu['m2_avatar'];
+                $partner_nk_mal = nk_wiersz($malzenstwo_profilu, 'p2_');
             } else {
                 $partner_id_mal = (int)$malzenstwo_profilu['m1_id'];
                 $partner_login_mal = $malzenstwo_profilu['m1_login'];
                 $partner_avatar_mal = $malzenstwo_profilu['m1_avatar'];
+                $partner_nk_mal = nk_wiersz($malzenstwo_profilu, 'p1_');
             }
             $av_par = abyss_e(avatar_url($partner_avatar_mal ?? ''));
         ?>
         <div class="malz-baner">
-            <div class="malz-info">
-                <div class="malz-label">// W związku z</div>
-                <a href="game.php?page=profil&id=<?php echo $partner_id_mal; ?>" class="malz-nick">
-                    <div class="malz-mini-av"<?php if ($av_par): ?> style="background-image:url('<?php echo $av_par; ?>')"<?php endif; ?>></div>
-                    <?php echo abyss_e($partner_login_mal); ?>
-                </a>
+            <div class="malz-info malz-v2">
+                <a href="game.php?page=profil&id=<?php echo $partner_id_mal; ?>" class="malz-mini-av" title="<?php echo abyss_e($partner_login_mal); ?>"<?php if ($av_par): ?> style="background-image:url('<?php echo $av_par; ?>')"<?php endif; ?>></a>
+                <svg class="malz-obraczki" viewBox="0 0 26 18" width="26" height="18" aria-hidden="true"><circle cx="9" cy="9" r="6.5"/><circle cx="17" cy="9" r="6.5"/></svg>
+                <span class="malz-label">W związku z</span>
+                <?php echo nk_html($partner_nk_mal); ?>
             </div>
             <div class="malz-dni"><b><?php echo $dni_razem; ?></b><br><?php echo $dni_razem==1?'dzień':'dni'; ?> razem</div>
         </div>
@@ -360,6 +370,15 @@ $story_html = $story_public ? ($historia['historia_html'] ?? '') : '';
             <div class="karta-info">
                 <h3>Kolor nicka <span class="tag">RANGA</span></h3>
                 <?php include __DIR__ . '/../includes/nick_edytor.php'; ?>
+            </div>
+        <?php elseif ($tab === 'plotki'):
+            $plotki = abyss_table_exists($polaczenie, 'plotki') ? db_wiersze($polaczenie, "SELECT tresc, kiedy FROM plotki WHERE gracz_id = ? ORDER BY kiedy DESC LIMIT 30", [$cel_id]) : []; ?>
+            <div class="karta-info">
+                <h3>Plotki <span class="tag">NA MIEŚCIE</span></h3>
+                <?php if (!$plotki): ?><p style="color:var(--txt-mute);font-style:italic">Nikt jeszcze o tej postaci nie plotkuje.</p>
+                <?php else: ?><div class="plotki-lista"><?php foreach ($plotki as $pl): ?>
+                    <div class="plotka"><time><?php echo date('d.m.Y', strtotime($pl['kiedy'])); ?></time><div><?php echo html_bezpieczny((string)$pl['tresc']); ?></div></div>
+                <?php endforeach; ?></div><?php endif; ?>
             </div>
         <?php elseif ($tab === 'kartoteka' || $tab === 'nick'): ?>
             <div class="karta-info">
